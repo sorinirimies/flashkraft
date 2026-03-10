@@ -23,6 +23,7 @@ use crate::domain::{DriveInfo, ImageInfo};
 use crate::view;
 use flashkraft_core::commands::watch_usb_events;
 use futures::StreamExt as _;
+use iced::Color;
 use iced::{stream, Element, Subscription, Task, Theme};
 use std::sync::{atomic::AtomicBool, Arc};
 
@@ -50,17 +51,43 @@ pub struct FlashKraft {
     /// Current transfer speed in MB/s
     pub flash_speed_mb_s: f32,
 
+    /// Current pipeline stage label (e.g. "Writing image to device…", "Verifying written data…")
+    pub flash_stage: String,
+
+    /// Verification overall progress (0.0–1.0 across both image-hash and device read-back passes).
+    /// `None` when verification has not started yet.
+    pub verify_progress: Option<f32>,
+
+    /// Current verification read speed in MB/s (0.0 when not verifying).
+    pub verify_speed_mb_s: f32,
+
+    /// Which verification pass is active: `"image"` or `"device"`. Empty when not verifying.
+    pub verify_phase: &'static str,
+
     /// Error message if an error occurred
     pub error_message: Option<String>,
 
     /// Whether the device selection view is currently open
     pub device_selection_open: bool,
 
-    /// Whether a flash operation is currently active (for subscription)
+    /// Whether a flash operation is currently active (for subscription).
+    /// Remains true through the entire pipeline including verification —
+    /// only set to false when `FlashCompleted` arrives.
     pub flashing_active: bool,
+
+    /// Set to true when `FlashCompleted(Ok(()))` arrives.
+    /// Distinct from `flashing_active` so the view can show the complete
+    /// screen without killing the subscription prematurely.
+    pub flash_complete: bool,
 
     /// Cancellation token for flash operation
     pub flash_cancel_token: Arc<AtomicBool>,
+
+    /// Monotonically increasing counter incremented on every new flash attempt.
+    /// Included in the subscription ID hash so that flashing the same image to
+    /// the same device a second time always creates a fresh subscription instead
+    /// of reusing the completed (pending) one from the previous run.
+    pub flash_run_id: u64,
 
     /// Currently selected theme
     pub theme: Theme,
@@ -70,6 +97,9 @@ pub struct FlashKraft {
 
     /// Animated progress bar for flash operations
     pub animated_progress: AnimatedProgress,
+
+    /// Separate green animated progress bar shown during verification.
+    pub verify_animated_progress: AnimatedProgress,
 
     /// Animation time for progress line glow effects (0.0 to infinity)
     pub animation_time: f32,
@@ -89,6 +119,10 @@ impl FlashKraft {
         let mut animated_progress = AnimatedProgress::new();
         animated_progress.set_theme(theme.clone());
 
+        // Verification bar is always green regardless of theme.
+        let verify_animated_progress =
+            AnimatedProgress::new_with_color(Color::from_rgb(0.18, 0.78, 0.45));
+
         Self {
             selected_image: None,
             selected_target: None,
@@ -96,13 +130,20 @@ impl FlashKraft {
             flash_progress: None,
             flash_bytes_written: 0,
             flash_speed_mb_s: 0.0,
+            flash_stage: String::new(),
+            verify_progress: None,
+            verify_speed_mb_s: 0.0,
+            verify_phase: "",
             error_message: None,
             device_selection_open: false,
             flashing_active: false,
+            flash_complete: false,
             flash_cancel_token: Arc::new(AtomicBool::new(false)),
+            flash_run_id: 0,
             theme,
             storage,
             animated_progress,
+            verify_animated_progress,
             animation_time: 0.0,
         }
     }
@@ -119,9 +160,9 @@ impl FlashKraft {
         self.flash_progress.is_some()
     }
 
-    /// Check if the flash operation is complete
+    /// Check if the flash operation is complete (pipeline finished successfully).
     pub fn is_flash_complete(&self) -> bool {
-        matches!(self.flash_progress, Some(progress) if progress >= 1.0)
+        self.flash_complete
     }
 
     /// Check if there is an error
@@ -136,10 +177,17 @@ impl FlashKraft {
         self.flash_progress = None;
         self.flash_bytes_written = 0;
         self.flash_speed_mb_s = 0.0;
+        self.flash_stage = String::new();
+        self.verify_progress = None;
+        self.verify_speed_mb_s = 0.0;
+        self.verify_phase = "";
         self.error_message = None;
         self.device_selection_open = false;
         self.flashing_active = false;
+        self.flash_complete = false;
         self.flash_cancel_token = Arc::new(AtomicBool::new(false));
+        // Do NOT reset flash_run_id — it must keep incrementing across resets
+        // so that a re-flash after Reset always gets a fresh subscription.
     }
 
     /// Cancel current selections
@@ -149,10 +197,16 @@ impl FlashKraft {
         self.flash_progress = None;
         self.flash_bytes_written = 0;
         self.flash_speed_mb_s = 0.0;
+        self.flash_stage = String::new();
+        self.verify_progress = None;
+        self.verify_speed_mb_s = 0.0;
+        self.verify_phase = "";
         self.error_message = None;
         self.device_selection_open = false;
         self.flashing_active = false;
+        self.flash_complete = false;
         self.flash_cancel_token = Arc::new(AtomicBool::new(false));
+        // Do NOT reset flash_run_id here either.
     }
 }
 
@@ -250,11 +304,25 @@ impl FlashKraft {
                     image.path.clone(),
                     target.device_path.clone().into(),
                     self.flash_cancel_token.clone(),
+                    self.flash_run_id,
                 )
                 .map(|progress| match progress {
                     FlashProgress::Progress(p, bytes, speed) => {
                         Message::FlashProgressUpdate(p, bytes, speed)
                     }
+                    FlashProgress::VerifyProgress {
+                        phase,
+                        overall,
+                        bytes_read,
+                        total_bytes,
+                        speed_mb_s,
+                    } => Message::VerifyProgressUpdate(
+                        overall,
+                        phase,
+                        bytes_read,
+                        total_bytes,
+                        speed_mb_s,
+                    ),
                     FlashProgress::Message(msg) => Message::Status(msg),
                     FlashProgress::Completed => Message::FlashCompleted(Ok(())),
                     FlashProgress::Failed(err) => Message::FlashCompleted(Err(err)),

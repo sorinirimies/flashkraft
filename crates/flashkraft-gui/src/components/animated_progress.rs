@@ -17,6 +17,9 @@ pub struct AnimatedProgress {
     cache: Cache,
     /// Theme for color palette
     theme: Theme,
+    /// Optional color override — when `Some`, replaces the theme primary color.
+    /// Used to render the verification bar in green instead of the accent color.
+    color_override: Option<Color>,
 }
 
 impl AnimatedProgress {
@@ -27,7 +30,25 @@ impl AnimatedProgress {
             animation_time: 0.0,
             cache: Cache::new(),
             theme: Theme::Dark,
+            color_override: None,
         }
+    }
+
+    /// Create a new animated progress bar with a fixed color override.
+    pub fn new_with_color(color: Color) -> Self {
+        Self {
+            progress: 0.0,
+            animation_time: 0.0,
+            cache: Cache::new(),
+            theme: Theme::Dark,
+            color_override: Some(color),
+        }
+    }
+
+    /// Set or clear the color override at runtime.
+    pub fn set_color_override(&mut self, color: Option<Color>) {
+        self.color_override = color;
+        self.cache.clear();
     }
 
     /// Update the progress value
@@ -45,11 +66,11 @@ impl AnimatedProgress {
     /// * `speed_mb_s` - Current transfer speed in MB/s to scale animation speed
     pub fn tick(&mut self, speed_mb_s: f32) {
         // Scale animation speed based on transfer rate
-        // - At 1 MB/s: 0.3x speed (slow)
-        // - At 20 MB/s: 1.0x speed (baseline)
-        // - At 100+ MB/s: 3.0x speed (fast, capped)
-        let speed_multiplier = (speed_mb_s / 20.0).clamp(0.3, 3.0);
-        self.animation_time += 0.05 * speed_multiplier;
+        // - At 1 MB/s: 0.15x speed (slow)
+        // - At 20 MB/s: 0.5x speed (baseline)
+        // - At 100+ MB/s: 1.2x speed (fast, capped)
+        let speed_multiplier = (speed_mb_s / 20.0).clamp(0.15, 1.2);
+        self.animation_time += 0.016 * speed_multiplier;
         if self.animation_time > 1000.0 {
             self.animation_time = 0.0;
         }
@@ -60,6 +81,11 @@ impl AnimatedProgress {
     pub fn set_theme(&mut self, theme: Theme) {
         self.theme = theme;
         self.cache.clear();
+    }
+
+    /// Return a clone of this bar's color override (if any).
+    pub fn color_override(&self) -> Option<Color> {
+        self.color_override
     }
 
     /// Create the widget view
@@ -95,6 +121,7 @@ impl<Message> canvas::Program<Message, Theme, Renderer> for AnimatedProgress {
                 self.progress,
                 self.animation_time,
                 &self.theme,
+                self.color_override,
             );
         });
 
@@ -103,7 +130,14 @@ impl<Message> canvas::Program<Message, Theme, Renderer> for AnimatedProgress {
 }
 
 /// Draw the animated progress bar with effects
-fn draw_animated_progress(frame: &mut Frame, size: Size, progress: f32, time: f32, theme: &Theme) {
+fn draw_animated_progress(
+    frame: &mut Frame,
+    size: Size,
+    progress: f32,
+    time: f32,
+    theme: &Theme,
+    color_override: Option<Color>,
+) {
     let width = size.width;
     let height = size.height;
 
@@ -115,7 +149,7 @@ fn draw_animated_progress(frame: &mut Frame, size: Size, progress: f32, time: f3
         let progress_width = width * progress;
 
         // Main progress bar with gradient effect
-        draw_gradient_progress(frame, progress_width, height, time, theme);
+        draw_gradient_progress(frame, progress_width, height, time, theme, color_override);
 
         // Add shimmer/shine effect
         draw_shimmer_effect(frame, progress_width, height, time);
@@ -137,12 +171,19 @@ fn draw_animated_progress(frame: &mut Frame, size: Size, progress: f32, time: f3
 }
 
 /// Draw gradient progress fill
-fn draw_gradient_progress(frame: &mut Frame, width: f32, height: f32, time: f32, theme: &Theme) {
-    // Get theme colors
-    let palette = theme.palette();
-    let primary = palette.primary;
+fn draw_gradient_progress(
+    frame: &mut Frame,
+    width: f32,
+    height: f32,
+    time: f32,
+    theme: &Theme,
+    color_override: Option<Color>,
+) {
+    // Use override color when provided (e.g. green for verification),
+    // otherwise fall back to the theme primary.
+    let primary = color_override.unwrap_or_else(|| theme.palette().primary);
 
-    // Create color variants from theme
+    // Create color variants from the base color
     let color_start = Color::from_rgb(primary.r, primary.g, primary.b);
     let color_end = Color::from_rgb(
         (primary.r * 0.7 + 0.3).min(1.0),
@@ -157,8 +198,8 @@ fn draw_gradient_progress(frame: &mut Frame, width: f32, height: f32, time: f32,
         let x = i as f32 * segment_width;
         let progress_ratio = i as f32 / segments as f32;
 
-        // Animated color shifting (slower)
-        let hue_shift = (time * 0.2 + progress_ratio * 2.0).sin() * 0.08;
+        // Animated color shifting
+        let hue_shift = (time * 0.12 + progress_ratio * 2.0).sin() * 0.06;
 
         // Theme-based gradient with animation
         let base_color = interpolate_color(color_start, color_end, progress_ratio);
@@ -177,8 +218,8 @@ fn draw_gradient_progress(frame: &mut Frame, width: f32, height: f32, time: f32,
 
 /// Draw shimmer/shine effect
 fn draw_shimmer_effect(frame: &mut Frame, width: f32, height: f32, time: f32) {
-    // Moving shine effect (slower sweep)
-    let shine_position = (time * 0.3).fract();
+    // Moving shine effect
+    let shine_position = (time * 0.18).fract();
     let shine_x = width * shine_position;
     let shine_width = width * 0.15;
 
@@ -213,7 +254,7 @@ fn draw_shimmer_effect(frame: &mut Frame, width: f32, height: f32, time: f32) {
 
 /// Draw pulsing effect at the leading edge
 fn draw_edge_pulse(frame: &mut Frame, width: f32, height: f32, time: f32) {
-    let pulse = (time * 3.0).sin() * 0.5 + 0.5;
+    let pulse = (time * 1.8).sin() * 0.5 + 0.5;
     let pulse_width = 4.0 + pulse * 2.0;
 
     // Glowing edge

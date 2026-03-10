@@ -29,6 +29,11 @@ iced_aw    = { workspace = true }
 iced_fonts = { workspace = true }
 rfd        = { workspace = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Explicitly enable both Wayland and X11 backends so the app works on any
+# Linux display server without needing env vars pre-set at build time.
+iced_winit = { version = "0.13", features = ["x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"] }
+
 # ── Async utilities ───────────────────────────────────────────────────────────
 futures       = { workspace = true }
 futures-timer = { workspace = true }

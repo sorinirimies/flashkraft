@@ -29,6 +29,19 @@ use super::theme::{all_app_themes, TuiPalette};
 pub enum FlashEvent {
     /// `(progress 0.0–1.0, bytes_written, speed_mb_s)`
     Progress(f32, u64, f32),
+    /// Verification read-back progress.
+    ///
+    /// `phase` is `"image"` for the source-hash pass and `"device"` for the
+    /// device read-back pass. `overall` spans both passes:
+    ///   - image pass:  `bytes_read / total * 0.5`
+    ///   - device pass: `0.5 + bytes_read / total * 0.5`
+    VerifyProgress {
+        phase: &'static str,
+        overall: f32,
+        bytes_read: u64,
+        total_bytes: u64,
+        speed_mb_s: f32,
+    },
     /// Stage / status message (e.g. "WRITING", "VERIFYING")
     Stage(String),
     /// Informational log line
@@ -176,6 +189,14 @@ pub struct App {
     /// Channel receiving [`FlashEvent`]s from the background flash task.
     pub flash_rx: Option<mpsc::UnboundedReceiver<FlashEvent>>,
 
+    // ── Verification ──────────────────────────────────────────────────────────
+    /// Overall verification progress 0.0–1.0 across both passes (None = not yet started).
+    pub verify_progress: Option<f32>,
+    /// Current verification read speed in MB/s.
+    pub verify_speed: f32,
+    /// Active verification pass: "image", "device", or "" when not verifying.
+    pub verify_phase: &'static str,
+
     // ── Completion ────────────────────────────────────────────────────────────
     /// File/directory entries found on the USB drive after flashing.
     pub usb_contents: Vec<UsbEntry>,
@@ -246,6 +267,9 @@ impl App {
             flash_log: Vec::new(),
             cancel_token: Arc::new(AtomicBool::new(false)),
             flash_rx: None,
+            verify_progress: None,
+            verify_speed: 0.0,
+            verify_phase: "",
             usb_contents: Vec::new(),
             contents_scroll: 0,
             file_explorer: FileExplorer::new(start_dir, vec!["iso".into(), "img".into()]),
@@ -375,11 +399,51 @@ impl App {
     fn apply_flash_event(&mut self, event: FlashEvent) {
         match event {
             FlashEvent::Progress(p, bytes, speed) => {
-                self.flash_progress = p;
+                // Writing phase occupies 0–80 % of the overall progress bar.
+                // Clamp to 0.80 so the bar never jumps back when post-write
+                // stages set a stage-floor above the raw write percentage.
+                self.flash_progress = (p * 0.80).clamp(0.0, 0.80);
                 self.flash_bytes = bytes;
                 self.flash_speed = speed;
             }
+            FlashEvent::VerifyProgress {
+                phase,
+                overall,
+                bytes_read: _,
+                total_bytes: _,
+                speed_mb_s,
+            } => {
+                self.verify_progress = Some(overall);
+                self.verify_speed = speed_mb_s;
+                self.verify_phase = phase;
+                // Drive the main bar through the verify window (92–100 %).
+                let bar = 0.92 + overall * 0.08;
+                if bar > self.flash_progress {
+                    self.flash_progress = bar;
+                }
+            }
             FlashEvent::Stage(s) => {
+                // Advance the progress bar floor for post-write stages so it
+                // keeps moving rather than sitting at 80 % (or 100 % from the
+                // final write-progress event) while sync / verify are running.
+                //
+                // Stage → overall-progress floor mapping:
+                //   Unmounting  →  0 %   (pre-write housekeeping)
+                //   Writing     →  0 %   (real progress comes from Progress events)
+                //   Syncing     → 80 %   (flushing write-back caches)
+                //   Rereading   → 88 %   (kernel re-reads partition table)
+                //   Verifying   → 92 %   (SHA-256 read-back comparison)
+                //   Done        → 99 %   (pipeline Done event sets 100 %)
+                let floor: f32 = match s.as_str() {
+                    "Flushing write buffers…" => 0.80,
+                    "Refreshing partition table…" => 0.88,
+                    "Verifying written data…" => 0.92,
+                    _ => 0.0,
+                };
+                // Only ever move forward — never reduce progress.
+                if floor > self.flash_progress {
+                    self.flash_progress = floor;
+                }
                 self.flash_stage = s.clone();
                 self.push_log(s);
             }
@@ -568,6 +632,9 @@ impl App {
         self.flash_stage = "Starting…".to_string();
         self.flash_log.clear();
         self.cancel_token = Arc::new(AtomicBool::new(false));
+        self.verify_progress = None;
+        self.verify_speed = 0.0;
+        self.verify_phase = "";
 
         let (tx, rx) = mpsc::unbounded_channel::<FlashEvent>();
         self.flash_rx = Some(rx);

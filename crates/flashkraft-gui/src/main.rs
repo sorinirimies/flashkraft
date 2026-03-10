@@ -110,9 +110,14 @@ fn main() -> iced::Result {
 /// Attempt to re-exec the current binary with elevated privileges.
 ///
 /// Tries, in order:
-/// 1. `pkexec <self> [args…]` — integrates with the desktop polkit agent
-///    (GNOME, KDE, XFCE, …).  Produces a graphical password dialog.
-/// 2. `sudo -E <self> [args…]` — terminal/tty fallback.
+/// 1. `sudo -E <self> [args…]` — preserves the full environment (including
+///    `DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`) so the GUI can connect
+///    to the display server after re-exec.
+/// 2. `pkexec <self> [args…]` — polkit graphical agent fallback.  **Note:**
+///    pkexec intentionally strips display-related env vars for security; when
+///    it is used the re-execed process will receive `DISPLAY`/`WAYLAND_DISPLAY`
+///    only if a polkit `allow_gui` action is configured, otherwise the GUI will
+///    start without a display and show a clear error.
 ///
 /// Both calls use `execvp`, which **replaces** the current process on success.
 /// If this function returns, neither helper is available or the user declined.
@@ -145,12 +150,30 @@ fn try_reexec_as_root() {
     // Collect original argv (skip argv[0] — we replace it with self_exe).
     let extra_args: Vec<String> = std::env::args().skip(1).collect();
 
-    // Set the escalation guard in the child's environment.
-    // We do this before exec so the new process image inherits it.
-    // (`sudo -E` preserves env; pkexec preserves a safe subset.)
+    // Set the escalation guard so the re-execed process does not loop.
     std::env::set_var("FLASHKRAFT_ESCALATED", "1");
 
-    // ── Try pkexec ────────────────────────────────────────────────────────────
+    // ── Try sudo first ────────────────────────────────────────────────────────
+    // `sudo -E` preserves the caller's full environment, which means
+    // DISPLAY, WAYLAND_DISPLAY, XDG_RUNTIME_DIR, etc. all survive the exec.
+    // This is essential for the GUI to connect to the display server.
+    if which_exists("sudo") {
+        let mut argv: Vec<CString> = Vec::new();
+        argv.push(c_str("sudo"));
+        argv.push(c_str("-E")); // preserve full environment
+        argv.push(c_str(&self_exe_str));
+        for arg in &extra_args {
+            argv.push(c_str(arg));
+        }
+        // execvp replaces the process; only returns on error.
+        let _ = nix::unistd::execvp(&c_str("sudo"), &argv);
+    }
+
+    // ── Fall back to pkexec ───────────────────────────────────────────────────
+    // pkexec provides a graphical polkit dialog but intentionally strips display
+    // env vars. It will work on systems where a polkit `allow_gui` action is
+    // configured for flashkraft, or when running under X11 with XAUTHORITY set
+    // via the polkit action annotation.
     if which_exists("pkexec") {
         let mut argv: Vec<CString> = Vec::new();
         argv.push(c_str("pkexec"));
@@ -158,23 +181,10 @@ fn try_reexec_as_root() {
         for arg in &extra_args {
             argv.push(c_str(arg));
         }
-        // execvp replaces the process; only returns on error.
         let _ = nix::unistd::execvp(&c_str("pkexec"), &argv);
     }
 
-    // ── Try sudo ──────────────────────────────────────────────────────────────
-    if which_exists("sudo") {
-        let mut argv: Vec<CString> = Vec::new();
-        argv.push(c_str("sudo"));
-        argv.push(c_str("-E")); // preserve environment (including DISPLAY, WAYLAND_DISPLAY)
-        argv.push(c_str(&self_exe_str));
-        for arg in &extra_args {
-            argv.push(c_str(arg));
-        }
-        let _ = nix::unistd::execvp(&c_str("sudo"), &argv);
-    }
-
-    // Neither helper available — unset the guard and fall through.
+    // Neither helper available — unset the guard and fall through unprivileged.
     std::env::remove_var("FLASHKRAFT_ESCALATED");
 }
 

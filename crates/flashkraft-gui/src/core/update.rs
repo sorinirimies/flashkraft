@@ -85,10 +85,15 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
                 state.flash_cancel_token =
                     std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
 
+                // Bump the run counter so the subscription gets a fresh unique
+                // ID even if the same image+device pair is flashed again.
+                state.flash_run_id = state.flash_run_id.wrapping_add(1);
+
                 // Start flashing - activate subscription
                 state.flash_progress = Some(0.0);
                 state.error_message = None;
                 state.flashing_active = true;
+                state.flash_complete = false;
 
                 Task::none()
             } else {
@@ -122,9 +127,15 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             // error (and the setuid install instructions) rather than nothing.
             state.flash_cancel_token =
                 std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+            // Bump the run counter here too so a re-exec retry always starts
+            // with a fresh subscription.
+            state.flash_run_id = state.flash_run_id.wrapping_add(1);
+
             state.flash_progress = Some(0.0);
             state.error_message = None;
             state.flashing_active = true;
+            state.flash_complete = false;
 
             Task::none()
         }
@@ -185,12 +196,17 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
         }
 
         Message::FlashProgressUpdate(progress, bytes, speed) => {
-            // Update flash progress from subscription
-            state.flash_progress = Some(progress);
+            // Update flash progress from subscription.
+            // Writing phase is mapped to 0–80 % so post-write stages have room.
+            let mapped = (progress * 0.80).clamp(0.0, 0.80);
+            // Only advance — never go backwards.
+            let current = state.flash_progress.unwrap_or(0.0);
+            let new_progress = mapped.max(current);
+            state.flash_progress = Some(new_progress);
             state.flash_bytes_written = bytes;
             state.flash_speed_mb_s = speed;
             // Update animated progress bar
-            state.animated_progress.set_progress(progress);
+            state.animated_progress.set_progress(new_progress);
             Task::none()
         }
 
@@ -198,33 +214,111 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             // Tick animation for progress bar effects with speed-based scaling
             state.animated_progress.tick(state.flash_speed_mb_s);
 
+            // Tick the green verification bar during the verify phase.
+            if state.verify_progress.is_some() {
+                state.verify_animated_progress.tick(state.verify_speed_mb_s);
+            }
+
             // Increment animation time for progress line glow effects
             // Scale based on transfer speed for dynamic animations
-            let speed_multiplier = (state.flash_speed_mb_s / 20.0).clamp(0.3, 3.0);
-            state.animation_time += 0.016 * speed_multiplier; // ~60 FPS baseline
+            let speed_multiplier = (state.flash_speed_mb_s / 20.0).clamp(0.15, 1.2);
+            state.animation_time += 0.016 * speed_multiplier; // ~60 FPS baseline, slowed down
             Task::none()
         }
 
-        Message::Status(_message) => {
+        Message::VerifyProgressUpdate(overall, phase, bytes_read, total_bytes, speed_mb_s) => {
+            // Update verification progress fields.
+            state.verify_progress = Some(overall);
+            state.verify_speed_mb_s = speed_mb_s;
+            state.verify_phase = phase;
+
+            // Drive the green verification bar (0–100 %).
+            state.verify_animated_progress.set_progress(overall);
+            state.verify_animated_progress.tick(speed_mb_s);
+
+            // Also nudge the main bar through the verify window (92–100 %)
+            // so the overall bar keeps moving while the verify bar is the
+            // primary visual focus.
+            let bar_progress = 0.92 + overall * 0.08;
+            let current = state.flash_progress.unwrap_or(0.0);
+            if bar_progress > current {
+                state.flash_progress = Some(bar_progress);
+                state.animated_progress.set_progress(bar_progress);
+            }
+
+            #[cfg(debug_assertions)]
+            println!(
+                "[VERIFY] phase={phase} overall={:.1}% ({bytes_read}/{total_bytes}) @ {speed_mb_s:.1} MB/s",
+                overall * 100.0
+            );
+
+            Task::none()
+        }
+
+        Message::Status(message) => {
             // Log status message in debug builds
             #[cfg(debug_assertions)]
-            println!("[STATUS] {}", _message);
+            println!("[STATUS] {}", message);
+
+            // Advance the overall progress bar floor for post-write pipeline
+            // stages so the bar keeps moving after writing finishes.
+            //
+            // Stage → overall-progress floor:
+            //   "Flushing write buffers…"      → 80 %
+            //   "Refreshing partition table…"  → 88 %
+            //   "Verifying written data…"      → 92 %
+            //   (92–100 % is driven by VerifyProgressUpdate events instead)
+            let floor: Option<f32> = match message.as_str() {
+                "Flushing write buffers…" => Some(0.80),
+                "Refreshing partition table…" => Some(0.88),
+                "Verifying written data…" => Some(0.92),
+                _ => None,
+            };
+            if let Some(floor) = floor {
+                let current = state.flash_progress.unwrap_or(0.0);
+                if floor > current {
+                    state.flash_progress = Some(floor);
+                    state.animated_progress.set_progress(floor);
+                }
+            }
+
+            // Track the current stage label so the flashing view can show it.
+            // Only update for the meaningful stage transitions, not raw log lines.
+            let is_stage = matches!(
+                message.as_str(),
+                "Unmounting partitions…"
+                    | "Writing image to device…"
+                    | "Flushing write buffers…"
+                    | "Refreshing partition table…"
+                    | "Verifying written data…"
+                    | "Flash complete!"
+            );
+            if is_stage {
+                state.flash_stage = message;
+            }
+
             Task::none()
         }
 
         Message::FlashCompleted(result) => {
-            // Deactivate subscription
+            // The pipeline is fully done (write + sync + reread + verify).
+            // Now it is safe to deactivate the subscription.
             state.flashing_active = false;
 
             match result {
                 Ok(()) => {
-                    // Flash succeeded
+                    // Drive progress to exactly 100 % and mark complete.
                     state.flash_progress = Some(1.0);
+                    state.animated_progress.set_progress(1.0);
+                    state.flash_stage = "Flash complete!".to_string();
+                    state.flash_complete = true;
                     state.error_message = None;
                 }
                 Err(error_message) => {
-                    // Flash failed
+                    // Flash failed — clear progress so the error view is shown.
                     state.flash_progress = None;
+                    state.flash_stage = String::new();
+                    state.flash_complete = false;
                     state.error_message = Some(error_message);
                 }
             }

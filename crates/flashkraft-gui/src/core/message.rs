@@ -81,6 +81,11 @@ pub enum Message {
     /// Contains (progress 0.0-1.0, bytes_written, speed_mb_per_sec)
     FlashProgressUpdate(f32, u64, f32),
 
+    /// Verification read-back progress update.
+    ///
+    /// Contains (overall 0.0–1.0 across both passes, phase, bytes_read, total_bytes, speed_mb_s)
+    VerifyProgressUpdate(f32, &'static str, u64, u64, f32),
+
     /// Status message from flash operation
     Status(String),
 

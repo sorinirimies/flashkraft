@@ -1146,16 +1146,35 @@ fn render_flashing(
     render_header(frame, hdr, "Flashing…", theme_name, pal);
     render_footer(frame, ftr, &[("C / Esc", "Cancel flash")], pal);
 
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(1), // stage label
-            Constraint::Length(5), // tui-slider block
-            Constraint::Length(8), // stats + log
-            Constraint::Min(0),
-        ])
-        .split(body);
+    let is_verifying = app.verify_progress.is_some();
+
+    // When verifying we need an extra block for the verify panel.
+    let rows = if is_verifying {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(0),
+                Constraint::Length(1), // stage label
+                Constraint::Length(5), // overall progress slider
+                Constraint::Length(7), // verify panel (two sub-bars)
+                Constraint::Length(8), // stats + log
+                Constraint::Min(0),
+            ])
+            .split(body)
+    } else {
+        // Pad with a dummy last segment so indexing stays consistent below.
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(0),
+                Constraint::Length(1), // stage label
+                Constraint::Length(5), // overall progress slider
+                Constraint::Length(0), // (hidden verify panel)
+                Constraint::Length(8), // stats + log
+                Constraint::Min(0),
+            ])
+            .split(body)
+    };
 
     // ── Stage label ───────────────────────────────────────────────────────────
     let stage_label = app.flash_stage.trim().to_string();
@@ -1171,14 +1190,12 @@ fn render_flashing(
         rows[1],
     );
 
-    // ── tui-slider progress bar ───────────────────────────────────────────────
+    // ── Overall progress slider ───────────────────────────────────────────────
     let pct = app.flash_progress;
     let pct_label = format!("{:.1}%", pct * 100.0);
 
-    // SliderState holds the value (0–100).
     let slider_state = SliderState::new((pct * 100.0) as f64, 0.0, 100.0);
 
-    // Outer border block rendered with our ratatui types.
     let slider_outer = Block::default()
         .title(Span::styled(
             format!(" ⚡  Flashing  {pct_label} "),
@@ -1192,12 +1209,10 @@ fn render_flashing(
     let slider_inner = slider_outer.inner(rows[2]);
     frame.render_widget(slider_outer, rows[2]);
 
-    // tui-slider rendered into the inner area so we never cross type
-    // boundaries — .block() / .filled_color() accept the lib's own types.
     let slider = Slider::from_state(&slider_state)
         .orientation(SliderOrientation::Horizontal)
         .show_value(true)
-        .show_handle(false) // pure progress-bar style
+        .show_handle(false)
         .filled_symbol("━")
         .empty_symbol("─")
         .filled_color(pal.brand)
@@ -1205,11 +1220,106 @@ fn render_flashing(
 
     frame.render_widget(slider, slider_inner);
 
+    // ── Verification panel ────────────────────────────────────────────────────
+    // Shown only while the verify stage is active. Contains two sub-bars:
+    // one for the image-hash pass and one for the device read-back pass.
+    if is_verifying && rows[3].height > 0 {
+        let v_overall = app.verify_progress.unwrap_or(0.0);
+
+        // image pass: overall 0.0–0.5 maps to 0–100 %
+        let image_pct: f64 = if app.verify_phase == "image" {
+            (v_overall * 2.0).clamp(0.0, 1.0) as f64 * 100.0
+        } else {
+            // image pass finished
+            100.0
+        };
+
+        // device pass: overall 0.5–1.0 maps to 0–100 %
+        let device_pct: f64 = if app.verify_phase == "device" {
+            ((v_overall - 0.5) * 2.0).clamp(0.0, 1.0) as f64 * 100.0
+        } else if app.verify_phase == "image" {
+            0.0
+        } else {
+            100.0
+        };
+
+        let verify_speed_label = if app.verify_speed > 0.0 {
+            format!(" {:.1} MB/s", app.verify_speed)
+        } else {
+            String::new()
+        };
+
+        let verify_outer = Block::default()
+            .title(Span::styled(
+                format!(
+                    " 🔍  Verifying  {:.1}%{} ",
+                    v_overall * 100.0,
+                    verify_speed_label
+                ),
+                Style::default()
+                    .fg(pal.success)
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .title_alignment(Alignment::Center)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(pal.success));
+
+        let verify_inner = verify_outer.inner(rows[3]);
+        frame.render_widget(verify_outer, rows[3]);
+
+        // Split inner area into two rows: image bar and device bar.
+        let sub_rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(2), Constraint::Length(2)])
+            .split(verify_inner);
+
+        // Image hash sub-bar
+        let img_state = SliderState::new(image_pct, 0.0, 100.0);
+        let img_label = format!(" Image hash  {image_pct:.1}% ");
+        let img_block = Block::default()
+            .title(Span::styled(img_label, Style::default().fg(pal.dim)))
+            .borders(Borders::NONE);
+        let img_inner = img_block.inner(sub_rows[0]);
+        frame.render_widget(img_block, sub_rows[0]);
+        frame.render_widget(
+            Slider::from_state(&img_state)
+                .orientation(SliderOrientation::Horizontal)
+                .show_value(false)
+                .show_handle(false)
+                .filled_symbol("─")
+                .empty_symbol("─")
+                .filled_color(pal.success)
+                .empty_color(pal.dim),
+            img_inner,
+        );
+
+        // Device read-back sub-bar
+        let dev_state = SliderState::new(device_pct, 0.0, 100.0);
+        let dev_label = format!(" Device read  {device_pct:.1}% ");
+        let dev_block = Block::default()
+            .title(Span::styled(dev_label, Style::default().fg(pal.dim)))
+            .borders(Borders::NONE);
+        let dev_inner = dev_block.inner(sub_rows[1]);
+        frame.render_widget(dev_block, sub_rows[1]);
+        frame.render_widget(
+            Slider::from_state(&dev_state)
+                .orientation(SliderOrientation::Horizontal)
+                .show_value(false)
+                .show_handle(false)
+                .filled_symbol("─")
+                .empty_symbol("─")
+                .filled_color(pal.accent)
+                .empty_color(pal.dim),
+            dev_inner,
+        );
+    }
+
     // ── Stats + log ───────────────────────────────────────────────────────────
     let stats_log_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
-        .split(rows[3]);
+        .split(rows[4]);
 
     let fmt_bytes = |b: u64| -> String {
         if b >= 1_000_000_000 {
@@ -1220,6 +1330,14 @@ fn render_flashing(
     };
 
     let total = app.image_size_bytes();
+
+    // During verification, swap "Speed" to show the verify read speed.
+    let speed_label = if is_verifying && app.verify_speed > 0.0 {
+        format!("{:.1} MB/s", app.verify_speed)
+    } else {
+        format!("{:.1} MB/s", app.flash_speed)
+    };
+
     let stats_lines = vec![
         Line::from(vec![
             Span::styled("Written:  ", Style::default().fg(pal.dim)),
@@ -1235,7 +1353,7 @@ fn render_flashing(
         Line::from(vec![
             Span::styled("Speed:    ", Style::default().fg(pal.dim)),
             Span::styled(
-                format!("{:.1} MB/s", app.flash_speed),
+                speed_label,
                 Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
             ),
         ]),
@@ -1272,7 +1390,12 @@ fn render_flashing(
         .map(|l| {
             let style = if l.to_lowercase().contains("error") {
                 Style::default().fg(pal.err)
-            } else if l.to_lowercase().contains("complete") || l.to_lowercase().contains("done") {
+            } else if l.to_lowercase().contains("verification passed")
+                || l.to_lowercase().contains("complete")
+                || l.to_lowercase().contains("done")
+            {
+                Style::default().fg(pal.success)
+            } else if l.to_lowercase().contains("verif") {
                 Style::default().fg(pal.success)
             } else if l.to_uppercase() == *l && !l.is_empty() {
                 Style::default().fg(pal.accent)

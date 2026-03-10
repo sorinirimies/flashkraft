@@ -137,6 +137,31 @@ async fn run_flash_inner(
                     let _ = tx.send(FlashEvent::Progress(p, bytes_written, speed_mb_s));
                 }
 
+                Ok(CoreFlashEvent::VerifyProgress {
+                    phase,
+                    bytes_read,
+                    total_bytes,
+                    speed_mb_s,
+                }) => {
+                    let pass_fraction = if total_bytes > 0 {
+                        (bytes_read as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
+                    } else {
+                        0.0
+                    };
+                    let overall = if phase == "image" {
+                        pass_fraction * 0.5
+                    } else {
+                        0.5 + pass_fraction * 0.5
+                    };
+                    let _ = tx.send(FlashEvent::VerifyProgress {
+                        phase,
+                        overall,
+                        bytes_read,
+                        total_bytes,
+                        speed_mb_s,
+                    });
+                }
+
                 Ok(CoreFlashEvent::Log(msg)) => {
                     let _ = tx.send(FlashEvent::Log(msg));
                 }

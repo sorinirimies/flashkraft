@@ -246,6 +246,23 @@ pub enum FlashEvent {
         total_bytes: u64,
         speed_mb_s: f32,
     },
+    /// Verification read-back progress update.
+    ///
+    /// Emitted during both the image-hash pass and the device read-back pass.
+    /// `phase` is `"image"` for the source-hash pass and `"device"` for the
+    /// read-back pass.  `bytes_read` and `total_bytes` are the counts for the
+    /// current pass only; the overall verify progress should be computed as:
+    ///
+    /// ```text
+    /// if phase == "image"  { bytes_read / total_bytes * 0.5 }
+    /// if phase == "device" { 0.5 + bytes_read / total_bytes * 0.5 }
+    /// ```
+    VerifyProgress {
+        phase: &'static str,
+        bytes_read: u64,
+        total_bytes: u64,
+        speed_mb_s: f32,
+    },
     /// Informational log message (not an error).
     Log(String),
     /// The pipeline finished successfully.
@@ -848,7 +865,7 @@ fn verify(
         tx,
         FlashEvent::Log("Computing SHA-256 of source image".into()),
     );
-    let image_hash = sha256_first_n_bytes(image_path, image_size)?;
+    let image_hash = sha256_with_progress(image_path, image_size, "image", tx)?;
 
     send(
         tx,
@@ -856,7 +873,7 @@ fn verify(
             "Reading back {image_size} bytes from device for verification"
         )),
     );
-    let device_hash = sha256_first_n_bytes(device_path, image_size)?;
+    let device_hash = sha256_with_progress(device_path, image_size, "device", tx)?;
 
     if image_hash != device_hash {
         return Err(format!(
@@ -872,7 +889,18 @@ fn verify(
     Ok(())
 }
 
-fn sha256_first_n_bytes(path: &str, max_bytes: u64) -> Result<String, String> {
+/// Compute the SHA-256 digest of the first `max_bytes` of `path`, emitting
+/// [`FlashEvent::VerifyProgress`] events at [`PROGRESS_INTERVAL`] intervals.
+///
+/// `phase` is forwarded verbatim into every `VerifyProgress` event so the
+/// UI can distinguish the image-hash pass (`"image"`) from the device
+/// read-back pass (`"device"`).
+fn sha256_with_progress(
+    path: &str,
+    max_bytes: u64,
+    phase: &'static str,
+    tx: &mpsc::Sender<FlashEvent>,
+) -> Result<String, String> {
     use sha2::{Digest, Sha256};
 
     let file =
@@ -882,6 +910,10 @@ fn sha256_first_n_bytes(path: &str, max_bytes: u64) -> Result<String, String> {
     let mut reader = io::BufReader::with_capacity(BLOCK_SIZE, file);
     let mut buf = vec![0u8; BLOCK_SIZE];
     let mut remaining = max_bytes;
+    let mut bytes_read: u64 = 0;
+
+    let start = Instant::now();
+    let mut last_report = Instant::now();
 
     while remaining > 0 {
         let to_read = (remaining as usize).min(buf.len());
@@ -892,10 +924,38 @@ fn sha256_first_n_bytes(path: &str, max_bytes: u64) -> Result<String, String> {
             break;
         }
         hasher.update(&buf[..n]);
+        bytes_read += n as u64;
         remaining -= n as u64;
+
+        let now = Instant::now();
+        if now.duration_since(last_report) >= PROGRESS_INTERVAL || remaining == 0 {
+            let elapsed_s = now.duration_since(start).as_secs_f32();
+            let speed_mb_s = if elapsed_s > 0.001 {
+                (bytes_read as f32 / (1024.0 * 1024.0)) / elapsed_s
+            } else {
+                0.0
+            };
+            send(
+                tx,
+                FlashEvent::VerifyProgress {
+                    phase,
+                    bytes_read,
+                    total_bytes: max_bytes,
+                    speed_mb_s,
+                },
+            );
+            last_report = now;
+        }
     }
 
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Legacy non-progress variant kept for unit tests that don't need a channel.
+#[cfg(test)]
+fn sha256_first_n_bytes(path: &str, max_bytes: u64) -> Result<String, String> {
+    let (tx, _rx) = mpsc::channel();
+    sha256_with_progress(path, max_bytes, "image", &tx)
 }
 
 // ---------------------------------------------------------------------------

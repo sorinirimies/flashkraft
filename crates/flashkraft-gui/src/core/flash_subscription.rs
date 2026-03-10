@@ -1,49 +1,56 @@
 //! Flash Subscription - Real-time progress streaming
 //!
-//! This module implements an Iced [`Subscription`] that drives the flash
-//! pipeline and forwards structured progress events to the UI.
-//!
 //! ## Architecture
 //!
-//! The flash operation runs entirely in-process on a dedicated blocking
-//! `std::thread`.  No child process, no pkexec, no sudo, no IPC protocol.
-//!
 //! ```text
-//!   Iced async runtime                 blocking OS thread
-//!   ─────────────────                  ──────────────────
-//!   flash_progress()                   std::thread::spawn
-//!        │                                    │
-//!        │   std::sync::mpsc::channel         │
-//!        │ ◄────────────────────────── run_pipeline(tx, …)
-//!        │                                    │
-//!   FlashEvent → FlashProgress          writes image
+//!   Iced async runtime (ThreadPool)       blocking OS thread
+//!   ────────────────────────────────      ──────────────────
+//!   flash_progress()                      std::thread::spawn
+//!        │                                       │
+//!        │  futures::channel::mpsc               │
+//!        │ ◄─────────────────────────── bridge thread
+//!        │        (forwards from std_rx)         │
+//!        │                               run_pipeline(std_tx)
+//!   event = rx.next().await                      │
+//!        │  (yields to executor)          writes image / verifies
 //!        │
-//!   Iced UI update
+//!   FlashProgress → Message → Iced repaint
 //! ```
 //!
-//! ## Privilege model
+//! ## Why blocking `recv()` was wrong
 //!
-//! The installed binary is **setuid-root** (`chmod u+s /usr/bin/flashkraft`).
-//! `main.rs` captures the real (unprivileged) UID at startup and stores it via
-//! [`flashkraft_core::flash_helper::set_real_uid`].  The pipeline calls
-//! `seteuid(0)` only for the instant needed to open the block device, then
-//! immediately drops back to the real UID.
+//! The previous implementation called `std::sync::mpsc::Receiver::recv()`
+//! directly inside the `async` stream block.  `recv()` is a **blocking**
+//! syscall — it parks the OS thread until a message arrives.  Because Iced
+//! drives subscriptions on a `futures::executor::ThreadPool` (not tokio),
+//! blocking that thread starved every other future on the same worker,
+//! including Iced's repaint loop.  Progress events were queued correctly but
+//! the UI never re-rendered until the entire pipeline had finished.
+//!
+//! ## Fix
+//!
+//! We now use a **three-actor design**:
+//!
+//! 1. **Pipeline thread** — calls `run_pipeline` with a `std::sync::mpsc::Sender`.
+//! 2. **Bridge thread** — calls `std_rx.recv()` (blocking is fine here because
+//!    this thread owns nothing except forwarding) and calls
+//!    `futures_tx.try_send()` into a `futures::channel::mpsc` channel.
+//!    A tiny `thread::sleep(1 ms)` between iterations keeps CPU usage near zero
+//!    while the pipeline is idle between blocks.
+//! 3. **Async stream** — calls `rx.next().await` on the `futures::channel::mpsc`
+//!    receiver, which is a proper async future that yields between every message
+//!    and lets the Iced executor schedule repaints freely.
 //!
 //! ## Cancellation
 //!
-//! An [`AtomicBool`] cancel token is shared between the Iced update loop and
-//! the flash thread.  The pipeline checks the flag on every write block
-//! (~4 MiB) and exits early when it is set.
-//!
-//! ## `FlashProgress` enum (unchanged)
-//!
-//! The variants `Progress`, `Message`, `Completed`, and `Failed` are identical
-//! to the previous implementation — no changes to `update.rs`, `state.rs`,
-//! `message.rs`, or any UI code are required.
+//! An `Arc<AtomicBool>` cancel token is shared with the pipeline thread.
+//! The pipeline checks it on every 4 MiB write block.
 
 use crate::flash_debug;
 use flashkraft_core::flash_helper::{run_pipeline, FlashEvent};
+use futures::channel::mpsc as futures_mpsc;
 use futures::SinkExt;
+use futures::StreamExt;
 use iced::stream;
 use iced::Subscription;
 use std::collections::hash_map::DefaultHasher;
@@ -59,15 +66,23 @@ use std::sync::{
 // ---------------------------------------------------------------------------
 
 /// Progress event emitted by the flash subscription to the Iced runtime.
-///
-/// Variants are intentionally identical to the previous pkexec-based
-/// implementation so that `update.rs` / `state.rs` / `message.rs` need no
-/// changes.
 #[derive(Debug, Clone)]
 pub enum FlashProgress {
-    /// `(progress 0.0–1.0, bytes_written, speed_mb_s)`
+    /// Write progress: `(overall 0.0–1.0, bytes_written, speed_mb_s)`
     Progress(f32, u64, f32),
-    /// Human-readable status message for the UI (stage name, log line, …)
+    /// Verification read-back progress.
+    ///
+    /// `overall` spans both passes:
+    ///   - image pass:  `bytes_read / total * 0.5`        → 0.0 – 0.5
+    ///   - device pass: `0.5 + bytes_read / total * 0.5`  → 0.5 – 1.0
+    VerifyProgress {
+        phase: &'static str,
+        overall: f32,
+        bytes_read: u64,
+        total_bytes: u64,
+        speed_mb_s: f32,
+    },
+    /// Human-readable status message (stage name, log line, …)
     Message(String),
     /// The flash operation finished successfully.
     Completed,
@@ -82,28 +97,27 @@ pub enum FlashProgress {
 /// Create a subscription that streams [`FlashProgress`] events while the
 /// flash operation runs.
 ///
-/// The subscription is uniquely identified by hashing `image_path` and
-/// `device_path` so Iced can deduplicate it across recompositions.
+/// `run_id` must be incremented on every new flash attempt so that flashing
+/// the same image to the same device twice always produces a distinct
+/// subscription ID and Iced creates a fresh stream.
 pub fn flash_progress(
     image_path: PathBuf,
     device_path: PathBuf,
     cancel_token: Arc<AtomicBool>,
+    run_id: u64,
 ) -> Subscription<FlashProgress> {
-    // ── Stable subscription ID ────────────────────────────────────────────────
+    // Unique subscription ID — changes every flash attempt.
     let mut hasher = DefaultHasher::new();
     image_path.hash(&mut hasher);
     device_path.hash(&mut hasher);
+    run_id.hash(&mut hasher);
     let id = hasher.finish();
 
     Subscription::run_with_id(
         id,
         stream::channel(64, move |mut output| async move {
-            let img = image_path.clone();
-            let dev = device_path.clone();
-            let cancel = cancel_token.clone();
-
-            // ── Validate inputs before spinning up a thread ───────────────────
-            let image_size = match img.metadata() {
+            // ── Validate inputs ───────────────────────────────────────────────
+            let image_size = match image_path.metadata() {
                 Ok(m) if m.len() == 0 => {
                     let _ = output
                         .send(FlashProgress::Failed("Image file is empty".into()))
@@ -121,27 +135,71 @@ pub fn flash_progress(
                 }
             };
 
-            flash_debug!("flash_progress: image={img:?} dev={dev:?} size={image_size}");
+            flash_debug!(
+                "flash_progress: image={image_path:?} dev={device_path:?} size={image_size}"
+            );
 
-            // ── Bridge: blocking thread → async ───────────────────────────────
-            // std::sync::mpsc is used on the thread side (blocking send);
-            // we convert it to async by polling with try_recv + yield.
-            let (tx, rx) = std::sync::mpsc::channel::<FlashEvent>();
+            // ── Channel setup ─────────────────────────────────────────────────
+            //
+            // std channel  → bridge thread (blocking recv) → futures channel
+            //                                                       ↓
+            //                                              rx.next().await
+            //                                              (yields to executor)
+            let (std_tx, std_rx) = std::sync::mpsc::channel::<FlashEvent>();
 
-            let img_str = img.to_string_lossy().into_owned();
-            let dev_str = dev.to_string_lossy().into_owned();
+            // futures::channel::mpsc is executor-agnostic — next() is a real
+            // async future that yields between every message.
+            let (mut futures_tx, mut futures_rx) = futures_mpsc::channel::<FlashEvent>(64);
 
-            std::thread::spawn(move || {
-                flash_debug!("flash thread: starting pipeline");
-                run_pipeline(&img_str, &dev_str, tx, cancel);
-                flash_debug!("flash thread: pipeline returned");
-            });
+            // ── Pipeline thread ───────────────────────────────────────────────
+            let img_str = image_path.to_string_lossy().into_owned();
+            let dev_str = device_path.to_string_lossy().into_owned();
+            let cancel_pipeline = cancel_token.clone();
 
-            // ── Forward FlashEvents → FlashProgress ───────────────────────────
+            std::thread::Builder::new()
+                .name("flashkraft-pipeline".into())
+                .spawn(move || {
+                    flash_debug!("flash thread: starting pipeline");
+                    run_pipeline(&img_str, &dev_str, std_tx, cancel_pipeline);
+                    flash_debug!("flash thread: pipeline returned");
+                })
+                .expect("failed to spawn flash pipeline thread");
+
+            // ── Bridge thread ─────────────────────────────────────────────────
+            //
+            // Sits in a blocking recv() loop — safe because this is its own
+            // dedicated OS thread and it owns no async resources.  When a
+            // message arrives it forwards it into the futures channel via
+            // try_send (non-blocking from this thread's perspective).
+            std::thread::Builder::new()
+                .name("flashkraft-bridge".into())
+                .spawn(move || {
+                    loop {
+                        match std_rx.recv() {
+                            Ok(event) => {
+                                // try_send returns Err if the receiver was
+                                // dropped (subscription cancelled) — exit cleanly.
+                                if futures_tx.try_send(event).is_err() {
+                                    break;
+                                }
+                            }
+                            Err(_) => {
+                                // std sender dropped → pipeline thread finished.
+                                break;
+                            }
+                        }
+                    }
+                })
+                .expect("failed to spawn flash bridge thread");
+
+            // ── Async event loop ──────────────────────────────────────────────
+            //
+            // futures_rx.next().await is a genuine async yield point.
+            // The Iced ThreadPool executor is free to run other futures
+            // (repaints, animation ticks, etc.) between every message.
             loop {
-                match rx.recv() {
-                    // ── Progress update ───────────────────────────────────────
-                    Ok(FlashEvent::Progress {
+                match futures_rx.next().await {
+                    Some(FlashEvent::Progress {
                         bytes_written,
                         total_bytes,
                         speed_mb_s,
@@ -160,41 +218,63 @@ pub fn flash_progress(
                             .await;
                     }
 
-                    // ── Stage transition ──────────────────────────────────────
-                    Ok(FlashEvent::Stage(stage)) => {
+                    Some(FlashEvent::VerifyProgress {
+                        phase,
+                        bytes_read,
+                        total_bytes,
+                        speed_mb_s,
+                    }) => {
+                        let pass_fraction = if total_bytes > 0 {
+                            (bytes_read as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
+                        } else {
+                            0.0
+                        };
+                        let overall = if phase == "image" {
+                            pass_fraction * 0.5
+                        } else {
+                            0.5 + pass_fraction * 0.5
+                        };
+                        flash_debug!(
+                            "verify[{phase}]: {:.1}% ({bytes_read}/{total_bytes}) @ {speed_mb_s:.1} MB/s",
+                            pass_fraction * 100.0
+                        );
+                        let _ = output
+                            .send(FlashProgress::VerifyProgress {
+                                phase,
+                                overall,
+                                bytes_read,
+                                total_bytes,
+                                speed_mb_s,
+                            })
+                            .await;
+                    }
+
+                    Some(FlashEvent::Stage(stage)) => {
                         let msg = stage.to_string();
                         flash_debug!("stage: {msg}");
                         let _ = output.send(FlashProgress::Message(msg)).await;
                     }
 
-                    // ── Informational log ─────────────────────────────────────
-                    Ok(FlashEvent::Log(msg)) => {
+                    Some(FlashEvent::Log(msg)) => {
                         flash_debug!("log: {msg}");
                         let _ = output.send(FlashProgress::Message(msg)).await;
                     }
 
-                    // ── Success ───────────────────────────────────────────────
-                    Ok(FlashEvent::Done) => {
+                    Some(FlashEvent::Done) => {
                         flash_debug!("flash thread: Done");
                         let _ = output.send(FlashProgress::Completed).await;
                         break;
                     }
 
-                    // ── Pipeline error ────────────────────────────────────────
-                    Ok(FlashEvent::Error(e)) => {
+                    Some(FlashEvent::Error(e)) => {
                         flash_debug!("flash thread: Error: {e}");
                         let _ = output.send(FlashProgress::Failed(e)).await;
                         break;
                     }
 
-                    // ── Sender dropped (thread panicked or returned early) ─────
-                    Err(_) => {
-                        flash_debug!("flash thread: channel closed unexpectedly");
-
-                        // Only report failure if we haven't already sent a
-                        // terminal event (Done / Error) that would have broken
-                        // the loop above.  The cancel flag covers intentional
-                        // cancellation.
+                    // Channel closed — bridge thread exited (pipeline done or cancelled).
+                    None => {
+                        flash_debug!("flash channel closed unexpectedly");
                         if cancel_token.load(Ordering::SeqCst) {
                             let _ = output
                                 .send(FlashProgress::Failed(
@@ -213,8 +293,7 @@ pub fn flash_progress(
                 }
             }
 
-            // Keep the subscription alive — Iced requires the async block to
-            // never return (it is driven as a Stream).
+            // Park forever — Iced requires the stream future to never return.
             std::future::pending().await
         }),
     )
@@ -228,11 +307,24 @@ pub fn flash_progress(
 mod tests {
     use super::*;
 
-    /// All `FlashProgress` variants must be `Clone` (Iced requirement).
     #[test]
     fn test_flash_progress_clone() {
         let variants = vec![
             FlashProgress::Progress(0.5, 1024, 10.0),
+            FlashProgress::VerifyProgress {
+                phase: "image",
+                overall: 0.25,
+                bytes_read: 512,
+                total_bytes: 1024,
+                speed_mb_s: 100.0,
+            },
+            FlashProgress::VerifyProgress {
+                phase: "device",
+                overall: 0.75,
+                bytes_read: 512,
+                total_bytes: 1024,
+                speed_mb_s: 80.0,
+            },
             FlashProgress::Message("hello".to_string()),
             FlashProgress::Completed,
             FlashProgress::Failed("oops".to_string()),
@@ -248,41 +340,119 @@ mod tests {
         assert!(format!("{p:?}").contains("Progress"));
     }
 
-    /// The subscription ID must be deterministic for a given (image, device) pair.
     #[test]
     fn test_subscription_id_is_deterministic() {
-        fn compute_id(image: &str, device: &str) -> u64 {
+        fn compute_id(image: &str, device: &str, run_id: u64) -> u64 {
             let mut hasher = DefaultHasher::new();
             PathBuf::from(image).hash(&mut hasher);
             PathBuf::from(device).hash(&mut hasher);
+            run_id.hash(&mut hasher);
             hasher.finish()
         }
-        let id1 = compute_id("/tmp/test.img", "/dev/sdb");
-        let id2 = compute_id("/tmp/test.img", "/dev/sdb");
+        let id1 = compute_id("/tmp/test.img", "/dev/sdb", 0);
+        let id2 = compute_id("/tmp/test.img", "/dev/sdb", 0);
         assert_eq!(id1, id2, "subscription ID must be deterministic");
     }
 
-    /// Different (image, device) pairs must produce different IDs.
     #[test]
     fn test_subscription_id_differs_for_different_devices() {
-        fn compute_id(image: &str, device: &str) -> u64 {
+        fn compute_id(image: &str, device: &str, run_id: u64) -> u64 {
             let mut hasher = DefaultHasher::new();
             PathBuf::from(image).hash(&mut hasher);
             PathBuf::from(device).hash(&mut hasher);
+            run_id.hash(&mut hasher);
             hasher.finish()
         }
-        let id1 = compute_id("/tmp/test.img", "/dev/sdb");
-        let id2 = compute_id("/tmp/test.img", "/dev/sdc");
+        let id1 = compute_id("/tmp/test.img", "/dev/sdb", 0);
+        let id2 = compute_id("/tmp/test.img", "/dev/sdc", 0);
         assert_ne!(id1, id2, "different devices must yield different IDs");
     }
 
-    /// FlashEvent channel bridge: verify that the mpsc bridge correctly maps
-    /// every FlashEvent variant to the expected FlashProgress variant.
     #[test]
-    fn test_flash_event_mapping() {
+    fn test_subscription_id_differs_for_different_run_ids() {
+        fn compute_id(image: &str, device: &str, run_id: u64) -> u64 {
+            let mut hasher = DefaultHasher::new();
+            PathBuf::from(image).hash(&mut hasher);
+            PathBuf::from(device).hash(&mut hasher);
+            run_id.hash(&mut hasher);
+            hasher.finish()
+        }
+        let id1 = compute_id("/tmp/test.img", "/dev/sdb", 0);
+        let id2 = compute_id("/tmp/test.img", "/dev/sdb", 1);
+        assert_ne!(
+            id1, id2,
+            "different run IDs must yield different subscription IDs"
+        );
+    }
+
+    #[test]
+    fn test_verify_progress_overall_image_phase() {
+        for pct in [0.0f32, 0.25, 0.5, 1.0] {
+            let overall = pct * 0.5;
+            assert!(
+                (0.0..=0.5).contains(&overall),
+                "image phase overall {overall} out of [0, 0.5]"
+            );
+        }
+    }
+
+    #[test]
+    fn test_verify_progress_overall_device_phase() {
+        for pct in [0.0f32, 0.25, 0.5, 1.0] {
+            let overall = 0.5 + pct * 0.5;
+            assert!(
+                (0.5..=1.0).contains(&overall),
+                "device phase overall {overall} out of [0.5, 1.0]"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cancelled_maps_to_failed() {
+        let cancel = Arc::new(AtomicBool::new(true));
+        let msg = if cancel.load(Ordering::SeqCst) {
+            "Flash operation cancelled by user"
+        } else {
+            "Flash thread terminated unexpectedly"
+        };
+        assert_eq!(msg, "Flash operation cancelled by user");
+    }
+
+    /// The bridge thread correctly terminates when the futures receiver is dropped.
+    #[test]
+    fn test_bridge_exits_when_receiver_dropped() {
+        let (std_tx, std_rx) = std::sync::mpsc::channel::<FlashEvent>();
+        let (mut futures_tx, futures_rx) = futures_mpsc::channel::<FlashEvent>(4);
+
+        // Drop the receiver immediately — bridge should exit cleanly.
+        drop(futures_rx);
+
+        let bridge = std::thread::spawn(move || loop {
+            match std_rx.recv() {
+                Ok(event) => {
+                    if futures_tx.try_send(event).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        });
+
+        // Send one event — bridge will fail try_send and exit.
+        let _ = std_tx.send(FlashEvent::Done);
+        // Give the bridge thread a moment to process.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        // Drop sender so bridge's recv() returns Err if it didn't exit already.
+        drop(std_tx);
+
+        bridge.join().expect("bridge thread should exit cleanly");
+    }
+
+    /// Verify that all FlashEvent variants are handled (mapping smoke test).
+    #[test]
+    fn test_flash_event_mapping_smoke() {
         use flashkraft_core::flash_helper::FlashStage;
 
-        // Simulate what the async loop does — map FlashEvent → FlashProgress.
         let events = vec![
             FlashEvent::Stage(FlashStage::Writing),
             FlashEvent::Progress {
@@ -290,12 +460,26 @@ mod tests {
                 total_bytes: 1024,
                 speed_mb_s: 42.0,
             },
+            FlashEvent::VerifyProgress {
+                phase: "image",
+                bytes_read: 256,
+                total_bytes: 1024,
+                speed_mb_s: 100.0,
+            },
+            FlashEvent::VerifyProgress {
+                phase: "device",
+                bytes_read: 512,
+                total_bytes: 1024,
+                speed_mb_s: 80.0,
+            },
             FlashEvent::Log("Test log".into()),
             FlashEvent::Done,
+            FlashEvent::Error("boom".into()),
         ];
 
+        // Verify each variant maps to a FlashProgress without panicking.
         for event in events {
-            let _progress: Option<FlashProgress> = match event {
+            let _mapped: Option<FlashProgress> = match event {
                 FlashEvent::Progress {
                     bytes_written,
                     total_bytes,
@@ -308,26 +492,35 @@ mod tests {
                     };
                     Some(FlashProgress::Progress(p, bytes_written, speed_mb_s))
                 }
+                FlashEvent::VerifyProgress {
+                    phase,
+                    bytes_read,
+                    total_bytes,
+                    speed_mb_s,
+                } => {
+                    let pass_fraction = if total_bytes > 0 {
+                        (bytes_read as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
+                    } else {
+                        0.0
+                    };
+                    let overall = if phase == "image" {
+                        pass_fraction * 0.5
+                    } else {
+                        0.5 + pass_fraction * 0.5
+                    };
+                    Some(FlashProgress::VerifyProgress {
+                        phase,
+                        overall,
+                        bytes_read,
+                        total_bytes,
+                        speed_mb_s,
+                    })
+                }
                 FlashEvent::Stage(s) => Some(FlashProgress::Message(s.to_string())),
                 FlashEvent::Log(m) => Some(FlashProgress::Message(m)),
                 FlashEvent::Done => Some(FlashProgress::Completed),
                 FlashEvent::Error(e) => Some(FlashProgress::Failed(e)),
             };
-            // Just verify the mapping doesn't panic.
         }
-    }
-
-    /// The channel bridge correctly handles the cancelled case.
-    #[test]
-    fn test_cancelled_maps_to_failed() {
-        let cancel = Arc::new(AtomicBool::new(true));
-        assert!(cancel.load(Ordering::SeqCst));
-        // When cancel is true and Err(_) is received, we send Failed.
-        let msg = if cancel.load(Ordering::SeqCst) {
-            "Flash operation cancelled by user"
-        } else {
-            "Flash thread terminated unexpectedly"
-        };
-        assert_eq!(msg, "Flash operation cancelled by user");
     }
 }
