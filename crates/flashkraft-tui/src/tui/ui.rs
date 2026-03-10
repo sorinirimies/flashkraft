@@ -1390,12 +1390,10 @@ fn render_flashing(
         .map(|l| {
             let style = if l.to_lowercase().contains("error") {
                 Style::default().fg(pal.err)
-            } else if l.to_lowercase().contains("verification passed")
+            } else if l.to_lowercase().contains("verif")
                 || l.to_lowercase().contains("complete")
                 || l.to_lowercase().contains("done")
             {
-                Style::default().fg(pal.success)
-            } else if l.to_lowercase().contains("verif") {
                 Style::default().fg(pal.success)
             } else if l.to_uppercase() == *l && !l.is_empty() {
                 Style::default().fg(pal.accent)

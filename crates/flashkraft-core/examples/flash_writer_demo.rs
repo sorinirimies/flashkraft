@@ -221,6 +221,24 @@ fn print_event(event: &FlashEvent) {
                  @ {speed_mb_s:.1} MB/s"
             );
         }
+        FlashEvent::VerifyProgress {
+            phase,
+            bytes_read,
+            total_bytes,
+            speed_mb_s,
+        } => {
+            let pct = if *total_bytes > 0 {
+                (*bytes_read as f64 / *total_bytes as f64 * 100.0) as u32
+            } else {
+                0
+            };
+            let bar = progress_bar(pct);
+            println!(
+                "  {GREEN}[VERIFY  ]{RESET}  {bar} {pct:>3}%  \
+                 [{phase}]  {bytes_read}/{total_bytes} bytes  \
+                 @ {speed_mb_s:.1} MB/s"
+            );
+        }
         FlashEvent::Log(msg) => {
             println!("  {DIM}[LOG     ]{RESET}  {msg}");
         }

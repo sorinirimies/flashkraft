@@ -174,19 +174,11 @@ pub fn flash_progress(
             std::thread::Builder::new()
                 .name("flashkraft-bridge".into())
                 .spawn(move || {
-                    loop {
-                        match std_rx.recv() {
-                            Ok(event) => {
-                                // try_send returns Err if the receiver was
-                                // dropped (subscription cancelled) — exit cleanly.
-                                if futures_tx.try_send(event).is_err() {
-                                    break;
-                                }
-                            }
-                            Err(_) => {
-                                // std sender dropped → pipeline thread finished.
-                                break;
-                            }
+                    while let Ok(event) = std_rx.recv() {
+                        // try_send returns Err if the receiver was
+                        // dropped (subscription cancelled) — exit cleanly.
+                        if futures_tx.try_send(event).is_err() {
+                            break;
                         }
                     }
                 })
@@ -427,14 +419,11 @@ mod tests {
         // Drop the receiver immediately — bridge should exit cleanly.
         drop(futures_rx);
 
-        let bridge = std::thread::spawn(move || loop {
-            match std_rx.recv() {
-                Ok(event) => {
-                    if futures_tx.try_send(event).is_err() {
-                        break;
-                    }
+        let bridge = std::thread::spawn(move || {
+            while let Ok(event) = std_rx.recv() {
+                if futures_tx.try_send(event).is_err() {
+                    break;
                 }
-                Err(_) => break,
             }
         });
 
