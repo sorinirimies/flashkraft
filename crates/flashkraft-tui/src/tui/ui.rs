@@ -976,8 +976,11 @@ fn render_confirm_flash(
         pal,
     );
 
-    // Centre a dialog box
-    let dialog = centred_rect(body, 64, 18);
+    // Centre a dialog box — use most of the available width so long image
+    // names and drive descriptions never wrap.
+    let dialog_w = body.width.saturating_sub(8).max(60);
+    let dialog_h = 22u16.min(body.height.saturating_sub(4));
+    let dialog = centred_rect(body, dialog_w, dialog_h);
     frame.render_widget(Clear, dialog);
 
     let image_name = app
@@ -1001,23 +1004,18 @@ fn render_confirm_flash(
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(0),
-            Constraint::Length(5), // tui-checkbox confirmation area
+            Constraint::Length(7), // tui-checkbox confirmation area (3 rows + padding)
         ])
         .split(dialog);
 
-    // Main warning text
+    // Main warning text — image name and size on separate lines so long
+    // filenames never cause wrapping.
     let text = vec![
         Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                "  ⚠  ",
-                Style::default().fg(pal.warn).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                "ALL DATA ON THE TARGET DRIVE WILL BE ERASED",
-                Style::default().fg(pal.warn).add_modifier(Modifier::BOLD),
-            ),
-        ]),
+        Line::from(vec![Span::styled(
+            "  ⚠   ALL DATA ON THE TARGET DRIVE WILL BE ERASED",
+            Style::default().fg(pal.warn).add_modifier(Modifier::BOLD),
+        )]),
         Line::from(""),
         Line::from(vec![
             Span::styled("  Image:   ", Style::default().fg(pal.dim)),
@@ -1025,8 +1023,12 @@ fn render_confirm_flash(
                 image_name,
                 Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(format!("  ({})", image_size), Style::default().fg(pal.dim)),
         ]),
+        Line::from(vec![
+            Span::styled("  Size:    ", Style::default().fg(pal.dim)),
+            Span::styled(image_size, Style::default().fg(pal.dim)),
+        ]),
+        Line::from(""),
         Line::from(vec![
             Span::styled("  Target:  ", Style::default().fg(pal.dim)),
             Span::styled(
@@ -1069,21 +1071,34 @@ fn render_confirm_flash(
     frame.render_widget(para, dialog_rows[0]);
 
     // ── tui-checkbox confirmation checklist ───────────────────────────────────
-    // Three visual checkboxes rendered in a horizontal row to confirm the
-    // three key facts the user should have acknowledged.
+    // Three checkboxes stacked vertically — one per row — so the labels are
+    // never truncated regardless of terminal width.
     let cb_area = dialog_rows[1];
-    let cb_cols = Layout::default()
-        .direction(Direction::Horizontal)
+    let cb_rows = Layout::default()
+        .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(33),
-            Constraint::Percentage(33),
-            Constraint::Percentage(34),
+            Constraint::Length(1), // top padding
+            Constraint::Length(1), // checkbox 1
+            Constraint::Length(1), // checkbox 2
+            Constraint::Length(1), // checkbox 3
+            Constraint::Min(0),    // bottom padding
         ])
         .split(cb_area);
 
-    // We treat all three as "checked" (confirmed) since the user arrived here
-    // by actively choosing image + drive; these are read-only acknowledgement
-    // indicators, styled green to signal everything is configured.
+    // Indent the checkboxes to align with the text above.
+    let indent = |area: Rect| -> Rect {
+        Rect {
+            x: area.x + 2,
+            width: area.width.saturating_sub(2),
+            ..area
+        }
+    };
+
+    let drive_ready = app
+        .selected_drive
+        .as_ref()
+        .is_some_and(|d| !d.is_system && !d.is_read_only);
+
     let cb_image = Checkbox::new(
         format!("Image ready: {image_name}"),
         app.selected_image.is_some(),
@@ -1096,11 +1111,6 @@ fn render_confirm_flash(
     .label_style(Style::default().fg(pal.dim))
     .checked_symbol("☑ ")
     .unchecked_symbol("☐ ");
-
-    let drive_ready = app
-        .selected_drive
-        .as_ref()
-        .is_some_and(|d| !d.is_system && !d.is_read_only);
 
     let cb_drive = Checkbox::new(
         format!(
@@ -1127,9 +1137,9 @@ fn render_confirm_flash(
         .checked_symbol("☑ ")
         .unchecked_symbol("☐ ");
 
-    frame.render_widget(cb_image, cb_cols[0]);
-    frame.render_widget(cb_drive, cb_cols[1]);
-    frame.render_widget(cb_warn, cb_cols[2]);
+    frame.render_widget(cb_image, indent(cb_rows[1]));
+    frame.render_widget(cb_drive, indent(cb_rows[2]));
+    frame.render_widget(cb_warn, indent(cb_rows[3]));
 }
 
 // ── Screen: Flashing ──────────────────────────────────────────────────────────
