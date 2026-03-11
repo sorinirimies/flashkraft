@@ -1517,7 +1517,7 @@ mod tests {
     fn test_apply_flash_event_progress_updates_fields() {
         let mut app = App::new();
         app.apply_flash_event(FlashEvent::Progress(0.42, 1_048_576, 28.5));
-        assert_eq!(app.flash_progress, 0.42);
+        assert!((app.flash_progress - 0.42 * 0.80).abs() < 1e-5);
         assert_eq!(app.flash_bytes, 1_048_576);
         assert_eq!(app.flash_speed, 28.5);
     }
@@ -1527,7 +1527,7 @@ mod tests {
         let mut app = App::new();
         app.apply_flash_event(FlashEvent::Progress(0.2, 512, 10.0));
         app.apply_flash_event(FlashEvent::Progress(0.7, 2048, 35.0));
-        assert_eq!(app.flash_progress, 0.7);
+        assert!((app.flash_progress - 0.7 * 0.80).abs() < 1e-5);
         assert_eq!(app.flash_bytes, 2048);
         assert_eq!(app.flash_speed, 35.0);
     }
@@ -1671,7 +1671,7 @@ mod tests {
         app.flash_rx = Some(rx);
         app.poll_flash();
 
-        assert_eq!(app.flash_progress, 0.5);
+        assert!((app.flash_progress - 0.5 * 0.80).abs() < 1e-5);
         assert_eq!(app.flash_bytes, 1024);
         assert_eq!(app.flash_speed, 22.0);
     }
@@ -1689,7 +1689,7 @@ mod tests {
         app.poll_flash();
 
         assert_eq!(app.flash_stage, "WRITING");
-        assert_eq!(app.flash_progress, 0.25);
+        assert!((app.flash_progress - 0.25 * 0.80).abs() < 1e-5);
         // Stage event also logs, then Log event adds another entry
         assert!(app.flash_log.len() >= 2);
     }

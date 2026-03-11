@@ -63,6 +63,9 @@ fn main() -> iced::Result {
             // cancelled the prompt.  In that case we fall through and start
             // the GUI unprivileged; a clear error will be shown when the user
             // attempts to flash a drive.
+            // Skip privilege escalation when running under `cargo test` —
+            // sudo/pkexec would block the test runner waiting for a password.
+            #[cfg(not(test))]
             try_reexec_as_root();
 
             // Still here → escalation not available / declined.

@@ -1192,13 +1192,12 @@ fn render_flashing(
 
     // ── Overall progress slider ───────────────────────────────────────────────
     let pct = app.flash_progress;
-    let pct_label = format!("{:.1}%", pct * 100.0);
 
     let slider_state = SliderState::new((pct * 100.0) as f64, 0.0, 100.0);
 
     let slider_outer = Block::default()
         .title(Span::styled(
-            format!(" ⚡  Flashing  {pct_label} "),
+            " ⚡  Flashing ",
             Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
         ))
         .title_alignment(Alignment::Center)
@@ -1251,11 +1250,7 @@ fn render_flashing(
 
         let verify_outer = Block::default()
             .title(Span::styled(
-                format!(
-                    " 🔍  Verifying  {:.1}%{} ",
-                    v_overall * 100.0,
-                    verify_speed_label
-                ),
+                format!(" 🔍  Verifying{} ", verify_speed_label),
                 Style::default()
                     .fg(pal.success)
                     .add_modifier(Modifier::BOLD),
@@ -1360,7 +1355,7 @@ fn render_flashing(
         Line::from(vec![
             Span::styled("Progress: ", Style::default().fg(pal.dim)),
             Span::styled(
-                pct_label,
+                format!("{:.1}%", pct * 100.0),
                 Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
             ),
         ]),

@@ -106,6 +106,17 @@ pub fn is_privileged() -> bool {
 /// the flash subscription starts) satisfies this requirement.
 #[cfg(unix)]
 pub fn reexec_as_root() {
+    // Never attempt privilege escalation during `cargo test` — sudo/pkexec
+    // would block the test runner waiting for a password prompt.
+    #[cfg(test)]
+    return;
+
+    #[cfg(not(test))]
+    reexec_as_root_inner();
+}
+
+#[cfg(unix)]
+fn reexec_as_root_inner() {
     use std::ffi::CString;
 
     // Guard: the re-exec'd copy sets this so we don't loop forever.
