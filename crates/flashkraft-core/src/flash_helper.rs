@@ -400,6 +400,30 @@ fn flash_pipeline(
         return Err("Image file is empty".to_string());
     }
 
+    // ── Check device is not already in use ───────────────────────────────────
+    // Open the device O_RDONLY | O_EXCL — if another process (e.g. a second
+    // flashkraft instance) already has it open for writing this fails
+    // immediately with EBUSY, giving the user a clear message instead of
+    // appearing to hang during unmount.
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let busy = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_EXCL)
+            .open(device_path);
+        if let Err(e) = busy {
+            if e.raw_os_error() == Some(libc::EBUSY) {
+                return Err(format!(
+                    "Device '{device_path}' is already in use by another process.\n\
+                     Is another flash operation already running?"
+                ));
+            }
+            // Any other error (EPERM, EACCES) is fine here — we will handle
+            // it properly when we open for writing later.
+        }
+    }
+
     // ── Step 1: Unmount ──────────────────────────────────────────────────────
     send(tx, FlashEvent::Stage(FlashStage::Unmounting));
     unmount_device(device_path, tx);
@@ -589,17 +613,24 @@ fn find_mounted_partitions(
             .or_else(|_| std::fs::read_to_string("/proc/self/mounts"))
             .unwrap_or_default();
 
-        let mut partitions = Vec::new();
+        let mut mount_points = Vec::new();
         for line in mounts.lines() {
-            let dev = match line.split_whitespace().next() {
+            let mut fields = line.split_whitespace();
+            let dev = match fields.next() {
                 Some(d) => d,
                 None => continue,
             };
+            // Second field in /proc/mounts is the mount point directory —
+            // that is what umount2 requires, not the device path.
+            let mount_point = match fields.next() {
+                Some(m) => m,
+                None => continue,
+            };
             if dev == device_path || is_partition_of(dev, device_name) {
-                partitions.push(dev.to_string());
+                mount_points.push(mount_point.to_string());
             }
         }
-        partitions
+        mount_points
     }
 
     #[cfg(target_os = "windows")]
@@ -627,23 +658,103 @@ fn is_partition_of(dev: &str, device_name: &str) -> bool {
     first.is_ascii_digit() || (first == 'p' && suffix.len() > 1)
 }
 
+/// Return `true` if `name` resolves to an executable on `PATH`.
+/// Used by `do_unmount` to prefer `udisksctl` when available.
+#[cfg(target_os = "linux")]
+fn which_exists(name: &str) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::env::var("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .any(|dir| {
+            let p = std::path::Path::new(dir).join(name);
+            std::fs::metadata(&p)
+                .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+                .unwrap_or(false)
+        })
+}
+
 fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
     #[cfg(target_os = "linux")]
     {
         use nix::unistd::seteuid;
         use std::ffi::CString;
 
-        // Need root to unmount.
+        // ── Strategy 1: udisksctl ─────────────────────────────────────────────
+        // Prefer udisksctl when available — it signals udisks2/systemd-mount to
+        // properly release the mount and prevents the automounter from
+        // immediately re-mounting the partition after we detach it.
+        // `--no-user-interaction` prevents it from blocking on a password prompt.
+        if which_exists("udisksctl") {
+            send(
+                tx,
+                FlashEvent::Log(format!("Unmounting {partition} via udisksctl…")),
+            );
+
+            // Spawn with a timeout — udisksctl can stall if udisks2 is busy.
+            // We give it 5 seconds before falling through to umount2.
+            let result = std::process::Command::new("udisksctl")
+                .args(["unmount", "--no-user-interaction", "-b", partition])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+
+            let udisks_ok = match result {
+                Ok(mut child) => {
+                    // Poll for up to 5 s in 100 ms increments.
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                    loop {
+                        match child.try_wait() {
+                            Ok(Some(status)) => break status.success(),
+                            Ok(None) if std::time::Instant::now() < deadline => {
+                                std::thread::sleep(std::time::Duration::from_millis(100));
+                            }
+                            _ => {
+                                // Timed out or error — kill and fall through.
+                                let _ = child.kill();
+                                send(
+                                    tx,
+                                    FlashEvent::Log(
+                                        "udisksctl timed out — falling back to umount2".into(),
+                                    ),
+                                );
+                                break false;
+                            }
+                        }
+                    }
+                }
+                Err(_) => false,
+            };
+
+            if udisks_ok {
+                return;
+            }
+        }
+
+        // ── Strategy 2: umount2 MNT_DETACH (fallback) ────────────────────────
+        // Lazy unmount: detaches the filesystem immediately even if busy.
+        // umount2 never blocks — MNT_DETACH returns right away.
         let _ = seteuid(nix::unistd::Uid::from_raw(0));
 
         if let Ok(c_path) = CString::new(partition) {
             let ret = unsafe { libc::umount2(c_path.as_ptr(), libc::MNT_DETACH) };
             if ret != 0 {
-                let err = std::io::Error::last_os_error();
-                send(
-                    tx,
-                    FlashEvent::Log(format!("Warning — could not unmount {partition}: {err}")),
-                );
+                let raw = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+                match raw {
+                    // EINVAL — not a mount point or already unmounted, harmless.
+                    libc::EINVAL => {}
+                    // ENOENT — path doesn't exist, also harmless.
+                    libc::ENOENT => {}
+                    _ => {
+                        let err = std::io::Error::from_raw_os_error(raw);
+                        send(
+                            tx,
+                            FlashEvent::Log(format!(
+                                "Warning — could not unmount {partition}: {err}"
+                            )),
+                        );
+                    }
+                }
             }
         }
 
@@ -2200,18 +2311,23 @@ mod tests {
         }
     }
 
-    /// On Linux, do_unmount on a path that is not mounted must emit a
-    /// warning log (umount2 will fail with EINVAL) but must not panic.
+    /// On Linux, do_unmount on a path that is not mounted must not panic.
+    /// EINVAL (not a mount point) and ENOENT (path doesn't exist) are both
+    /// silenced — they are normal/harmless conditions, not warnings to surface
+    /// to the user.
     #[test]
     #[cfg(target_os = "linux")]
-    fn test_do_unmount_not_mounted_emits_warning() {
+    fn test_do_unmount_not_mounted_does_not_panic() {
         let (tx, rx) = make_channel();
         do_unmount("/dev/fk_nonexistent_part", &tx);
         let events = drain(&rx);
-        // Should emit a warning log — the unmount will fail because the
-        // path doesn't exist, but the function must not panic.
-        let has_log = events.iter().any(|e| matches!(e, FlashEvent::Log(_)));
-        assert!(has_log, "do_unmount must emit a Log event on failure");
+        // EINVAL / ENOENT must NOT produce a warning log — they are expected
+        // silent outcomes when a partition is already detached or never mounted.
+        let has_warning = events.iter().any(|e| matches!(e, FlashEvent::Log(_)));
+        assert!(
+            !has_warning,
+            "do_unmount must not emit a warning for EINVAL/ENOENT: {events:?}"
+        );
     }
 
     // ── macOS-specific tests ─────────────────────────────────────────────────

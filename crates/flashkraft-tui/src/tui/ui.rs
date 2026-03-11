@@ -1374,43 +1374,104 @@ fn render_flashing(
     );
     frame.render_widget(stats, stats_log_cols[0]);
 
-    // Log panel — tail of the flash log
-    let log_height = stats_log_cols[1].height.saturating_sub(2) as usize;
-    let log_lines: Vec<Line> = app
-        .flash_log
-        .iter()
-        .rev()
-        .take(log_height)
-        .rev()
-        .map(|l| {
-            let style = if l.to_lowercase().contains("error") {
-                Style::default().fg(pal.err)
-            } else if l.to_lowercase().contains("verif")
-                || l.to_lowercase().contains("complete")
-                || l.to_lowercase().contains("done")
-            {
-                Style::default().fg(pal.success)
-            } else if l.to_uppercase() == *l && !l.is_empty() {
-                Style::default().fg(pal.accent)
-            } else {
-                Style::default().fg(pal.dim)
-            };
-            Line::from(Span::styled(l.as_str(), style))
-        })
-        .collect();
+    // ── Log panel + Zed-style spinner ────────────────────────────────────────
+    //
+    // The log panel is split into two columns:
+    //   • left  : the scrolling log text  (fills available width)
+    //   • right : a 1-cell wide spinner column (3 stacked dots, one "lit")
+    //
+    // The spinner travels: dot 0 → dot 1 → dot 2 → dot 1 → dot 0 … (bounce)
+    // giving the same feel as Zed / Copilot activity indicators.
 
-    let log = Paragraph::new(log_lines).block(
-        Block::default()
-            .title(Span::styled(
-                " Log ",
-                Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
-            ))
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.dim))
-            .padding(Padding::horizontal(1)),
-    );
-    frame.render_widget(log, stats_log_cols[1]);
+    // Spinner state — bounce 0→1→2→1→0→…
+    const BOUNCE: &[usize] = &[0, 1, 2, 1];
+    let active_dot = BOUNCE[(app.tick_count as usize / 3) % BOUNCE.len()];
+
+    // Three dot styles: dim ·  bright ●
+    let dot = |idx: usize| -> Span<'static> {
+        if idx == active_dot {
+            Span::styled(
+                "●",
+                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled("·", Style::default().fg(pal.dim))
+        }
+    };
+
+    // The log block — rendered first so we can measure the inner height.
+    let log_block = Block::default()
+        .title(Span::styled(
+            " Log ",
+            Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
+        ))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(pal.dim))
+        .padding(Padding::horizontal(1));
+
+    let log_inner = log_block.inner(stats_log_cols[1]);
+
+    // Split the inner area: log text on the left, 1-cell spinner on the right.
+    let log_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(log_inner);
+
+    let log_height = log_cols[0].height as usize;
+
+    let log_lines: Vec<Line> = {
+        let mut lines: Vec<Line> = app
+            .flash_log
+            .iter()
+            .rev()
+            .take(log_height)
+            .rev()
+            .map(|l| {
+                let style = if l.to_lowercase().contains("error") {
+                    Style::default().fg(pal.err)
+                } else if l.to_lowercase().contains("verif")
+                    || l.to_lowercase().contains("complete")
+                    || l.to_lowercase().contains("done")
+                {
+                    Style::default().fg(pal.success)
+                } else if l.to_uppercase() == *l && !l.is_empty() {
+                    Style::default().fg(pal.accent)
+                } else {
+                    Style::default().fg(pal.dim)
+                };
+                Line::from(Span::styled(l.as_str(), style))
+            })
+            .collect();
+        // Pad top with blank lines so text stays pinned to the bottom.
+        while lines.len() < log_height {
+            lines.insert(0, Line::from(""));
+        }
+        lines
+    };
+
+    // Spinner column — 3 dots centred vertically in the available height.
+    // Place them in the bottom 3 rows so they sit next to the latest log line.
+    let spinner_lines: Vec<Line> = {
+        let h = log_cols[1].height as usize;
+        let mut lines: Vec<Line> = vec![Line::from(""); h];
+        if h >= 3 {
+            let start = h - 3;
+            lines[start] = Line::from(dot(0));
+            lines[start + 1] = Line::from(dot(1));
+            lines[start + 2] = Line::from(dot(2));
+        } else {
+            // Fallback for very short panels.
+            for (i, line) in lines.iter_mut().enumerate() {
+                *line = Line::from(dot(i));
+            }
+        }
+        lines
+    };
+
+    frame.render_widget(log_block, stats_log_cols[1]);
+    frame.render_widget(Paragraph::new(log_lines), log_cols[0]);
+    frame.render_widget(Paragraph::new(spinner_lines), log_cols[1]);
 }
 
 // ── Screen: Complete ──────────────────────────────────────────────────────────
