@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.6 - 2026-03-11
+### 📦 Other Changes
+- Move nix dependency to unix-specific section
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.5...v0.7.6
 ## 0.7.5 - 2026-03-11
 ### ➕ Added
 - Add example targets to GUI and TUI Cargo.toml files
+### 🔧 Chores
+- chore: bump version to 0.7.5
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.4...v0.7.5
 ## 0.7.4 - 2026-03-11
 ### ➕ Added
