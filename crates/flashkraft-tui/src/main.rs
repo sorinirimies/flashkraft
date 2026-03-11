@@ -98,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
 /// `FLASHKRAFT_ESCALATED=1` is added to the environment of the child so that
 /// if somehow we end up in a re-exec loop (escalation tool present but keeps
 /// failing) we stop after one attempt.
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn try_reexec_as_root() {
     use std::ffi::CString;
 
@@ -156,7 +156,7 @@ fn try_reexec_as_root() {
 }
 
 /// Return `true` if `name` resolves to an executable file via `PATH`.
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn which_exists(name: &str) -> bool {
     if let Ok(path_var) = std::env::var("PATH") {
         for dir in path_var.split(':') {
@@ -175,7 +175,7 @@ fn which_exists(name: &str) -> bool {
 }
 
 /// Build a `CString` from a `&str`, replacing any embedded NUL bytes with `?`.
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn c_str(s: &str) -> std::ffi::CString {
     let sanitised: Vec<u8> = s.bytes().map(|b| if b == 0 { b'?' } else { b }).collect();
     std::ffi::CString::new(sanitised).unwrap_or_else(|_| std::ffi::CString::new("?").unwrap())

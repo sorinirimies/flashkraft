@@ -115,7 +115,7 @@ pub fn reexec_as_root() {
     reexec_as_root_inner();
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn reexec_as_root_inner() {
     use std::ffi::CString;
 
@@ -170,7 +170,7 @@ fn reexec_as_root_inner() {
 pub fn reexec_as_root() {}
 
 /// Return `true` if `name` is an executable file reachable via `PATH`.
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn unix_which_exists(name: &str) -> bool {
     use std::os::unix::fs::PermissionsExt;
     if let Ok(path_var) = std::env::var("PATH") {
@@ -187,7 +187,7 @@ fn unix_which_exists(name: &str) -> bool {
 }
 
 /// Build a `CString`, replacing embedded NUL bytes with `?`.
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn unix_c_str(s: &str) -> std::ffi::CString {
     let sanitised: Vec<u8> = s.bytes().map(|b| if b == 0 { b'?' } else { b }).collect();
     std::ffi::CString::new(sanitised).unwrap_or_else(|_| std::ffi::CString::new("?").unwrap())

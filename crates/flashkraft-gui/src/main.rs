@@ -128,7 +128,7 @@ fn main() -> iced::Result {
 /// `FLASHKRAFT_ESCALATED=1` is added to the environment of the child so that
 /// if somehow we end up in a re-exec loop (escalation tool present but keeps
 /// failing) we stop after one attempt.
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn try_reexec_as_root() {
     use std::ffi::CString;
 
@@ -192,7 +192,7 @@ fn try_reexec_as_root() {
 }
 
 /// Return `true` if `name` resolves to an executable via `PATH`.
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn which_exists(name: &str) -> bool {
     if let Ok(path_var) = std::env::var("PATH") {
         for dir in path_var.split(':') {
@@ -212,7 +212,7 @@ fn which_exists(name: &str) -> bool {
 }
 
 /// Convenience: build a `CString`, replacing interior NULs with `?`.
-#[cfg(unix)]
+#[cfg(all(unix, not(test)))]
 fn c_str(s: &str) -> std::ffi::CString {
     // CString::new only fails on embedded NUL bytes — sanitise defensively.
     let sanitised: Vec<u8> = s.bytes().map(|b| if b == 0 { b'?' } else { b }).collect();
