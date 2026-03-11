@@ -52,3 +52,20 @@ tempfile = "3"
 # The target gate means it is not even fetched on Linux / macOS.
 [target.'cfg(target_os = "windows")'.build-dependencies]
 winres = "0.1"
+
+# ── Examples ──────────────────────────────────────────────────────────────────
+# These examples open a Ratatui terminal UI and must not be executed as
+# test harnesses by `cargo test --all-targets` — they need a TTY and block forever.
+# headless_demo runs to completion and is safe to test (default test = true).
+
+[[example]]
+name = "tui_demo"
+test = false
+
+[[example]]
+name = "flash_progress_demo"
+test = false
+
+[[example]]
+name = "theme_demo"
+test = false

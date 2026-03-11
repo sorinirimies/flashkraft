@@ -49,3 +49,15 @@ dirs = { workspace = true }
 # The target gate means it is not even fetched on Linux / macOS.
 [target.'cfg(target_os = "windows")'.build-dependencies]
 winres = "0.1"
+
+# ── Examples ──────────────────────────────────────────────────────────────────
+# These examples launch a full Iced GUI window and must not be executed as
+# test harnesses by `cargo test --all-targets` — they would block forever.
+
+[[example]]
+name = "basic_usage"
+test = false
+
+[[example]]
+name = "custom_theme"
+test = false
