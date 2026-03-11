@@ -137,6 +137,7 @@ pub fn reexec_as_root() {
 ///
 /// This is needed because `#[cfg(test)]` is **not** propagated to dependency
 /// crates — only the root crate being tested gets the flag.
+#[cfg(unix)]
 fn is_running_under_test_harness() -> bool {
     // Explicit opt-out env var — tests can set this if needed.
     if std::env::var("FLASHKRAFT_NO_REEXEC").is_ok() {
