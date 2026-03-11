@@ -2,11 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.4 - 2026-03-11
+### ➕ Added
+- Add verification progress reporting to GUI and TUI
+- Add verify progress event handling and simplify thread loops
+- Add runtime test harness detection to reexec_as_root
+### 📦 Other Changes
+- Replace nusb with notify for hotplug and privilege escalation
+- Skip privilege escalation during tests and update progress display
+- Restrict Unix-specific functions to non-test builds
+### 🔧 Chores
+- chore: nightly dependency update 2026-03-05
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.3...v0.7.4
 ## 0.7.3 - 2026-03-04
 ### ➕ Added
 - Add USB hotplug detection via nusb and update error view
 ### 📈 Improvements
 - Improve command line detection and clean up comments in status_views
+### 🔧 Chores
+- chore: bump version to 0.7.3
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.2...v0.7.3
 ## 0.7.2 - 2026-03-04
 ### 📦 Other Changes
