@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.5 - 2026-03-11
+### ➕ Added
+- Add example targets to GUI and TUI Cargo.toml files
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.4...v0.7.5
 ## 0.7.4 - 2026-03-11
 ### ➕ Added
 - Add verification progress reporting to GUI and TUI
@@ -13,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Restrict Unix-specific functions to non-test builds
 ### 🔧 Chores
 - chore: nightly dependency update 2026-03-05
+- chore: bump version to 0.7.4
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.3...v0.7.4
 ## 0.7.3 - 2026-03-04
 ### ➕ Added
