@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.7 - 2026-03-11
+### 📦 Other Changes
+- Reorder Linux-specific dependencies in Cargo.toml
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.6...v0.7.7
 ## 0.7.6 - 2026-03-11
 ### 📦 Other Changes
 - Move nix dependency to unix-specific section
+### 🔧 Chores
+- chore: bump version to 0.7.6
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.5...v0.7.6
 ## 0.7.5 - 2026-03-11
 ### ➕ Added
