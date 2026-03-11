@@ -108,11 +108,66 @@ pub fn is_privileged() -> bool {
 pub fn reexec_as_root() {
     // Never attempt privilege escalation during `cargo test` — sudo/pkexec
     // would block the test runner waiting for a password prompt.
+    //
+    // IMPORTANT: `#[cfg(test)]` is only set on the *root* crate being tested.
+    // When `flashkraft-core` is compiled as a *dependency* of another crate's
+    // test binary (e.g. `flashkraft-gui`'s tests), it is compiled in normal
+    // (non-test) mode, so `#[cfg(test)]` does NOT fire here.
+    //
+    // We therefore use a runtime heuristic: cargo test binary paths contain
+    // a hash-suffixed name under `target/debug/deps/`, e.g.:
+    //   …/target/debug/deps/flashkraft_gui-a76f74e119b55607
+    // We also check for the FLASHKRAFT_NO_REEXEC env var as an explicit opt-out,
+    // and for NEXTEST_TEST_FILTER which nextest sets.
+    if is_running_under_test_harness() {
+        return;
+    }
+
+    // Compile-time guard for crate-local unit tests (when core IS the root
+    // test crate and #[cfg(test)] IS honoured).
     #[cfg(test)]
     return;
 
     #[cfg(not(test))]
     reexec_as_root_inner();
+}
+
+/// Returns `true` when the current process appears to be a `cargo test` (or
+/// nextest) test-runner binary, based on runtime evidence.
+///
+/// This is needed because `#[cfg(test)]` is **not** propagated to dependency
+/// crates — only the root crate being tested gets the flag.
+fn is_running_under_test_harness() -> bool {
+    // Explicit opt-out env var — tests can set this if needed.
+    if std::env::var("FLASHKRAFT_NO_REEXEC").is_ok() {
+        return true;
+    }
+
+    // nextest sets this in every test process.
+    if std::env::var("NEXTEST_TEST_FILTER").is_ok() {
+        return true;
+    }
+
+    // cargo test passes `--test-threads` (or related flags) on argv.
+    // More importantly, the test binary itself is passed the test filter as
+    // a positional argv — but the most reliable signal is the executable path:
+    // cargo always places test binaries under `target/debug/deps/<name>-<hash>`
+    // or `target/<profile>/deps/<name>-<hash>`.
+    //
+    // We look for `/deps/` in the executable path as a strong indicator.
+    if let Ok(exe) = std::env::current_exe() {
+        let path_str = exe.to_string_lossy();
+        // All cargo test binaries live under a `deps` directory.
+        if path_str.contains("/deps/") {
+            return true;
+        }
+        // Also catch `target\deps\` on Windows.
+        if path_str.contains("\\deps\\") {
+            return true;
+        }
+    }
+
+    false
 }
 
 #[cfg(all(unix, not(test)))]

@@ -515,7 +515,11 @@ mod tests {
         state.flash_cancel_token.store(true, Ordering::SeqCst);
         let old_token = state.flash_cancel_token.clone();
 
-        let _ = update(&mut state, Message::FlashClicked);
+        // When not running as root, FlashClicked dispatches EscalateAndFlash
+        // without modifying the token yet. EscalateAndFlash is the handler
+        // that actually resets the token and activates the flash subscription
+        // (after reexec_as_root() returns without exec-ing in test mode).
+        let _ = update(&mut state, Message::EscalateAndFlash);
 
         // Verify a new token was created (different Arc)
         assert!(!std::sync::Arc::ptr_eq(
