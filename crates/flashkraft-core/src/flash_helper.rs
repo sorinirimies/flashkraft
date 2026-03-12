@@ -686,11 +686,6 @@ fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
         // immediately re-mounting the partition after we detach it.
         // `--no-user-interaction` prevents it from blocking on a password prompt.
         if which_exists("udisksctl") {
-            send(
-                tx,
-                FlashEvent::Log(format!("Unmounting {partition} via udisksctl…")),
-            );
-
             // Spawn with a timeout — udisksctl can stall if udisks2 is busy.
             // We give it 5 seconds before falling through to umount2.
             let result = std::process::Command::new("udisksctl")
@@ -727,6 +722,10 @@ fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
             };
 
             if udisks_ok {
+                send(
+                    tx,
+                    FlashEvent::Log(format!("Unmounted {partition} via udisksctl")),
+                );
                 return;
             }
         }
