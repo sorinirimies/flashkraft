@@ -2,9 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.8 - 2026-03-12
+### ➕ Added
+- Add Zed-style spinner to log panel in flashing UI
+### 📈 Improvements
+- Improve confirm flash dialog layout for long names and labels
+### 📦 Other Changes
+- Log successful udisksctl unmount instead of start
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.7...v0.7.8
 ## 0.7.7 - 2026-03-11
 ### 📦 Other Changes
 - Reorder Linux-specific dependencies in Cargo.toml
+### 🔧 Chores
+- chore: bump version to 0.7.7
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.6...v0.7.7
 ## 0.7.6 - 2026-03-11
 ### 📦 Other Changes
