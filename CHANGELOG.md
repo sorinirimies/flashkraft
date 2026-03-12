@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 - Improve confirm flash dialog layout for long names and labels
 ### 📦 Other Changes
 - Log successful udisksctl unmount instead of start
+### 🔧 Chores
+- chore: bump version to 0.7.8
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.7...v0.7.8
 ## 0.7.7 - 2026-03-11
 ### 📦 Other Changes
