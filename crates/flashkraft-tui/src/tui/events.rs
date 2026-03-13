@@ -279,6 +279,9 @@ fn handle_browse_image(app: &mut App, key: KeyEvent) -> bool {
         }
         ExplorerOutcome::Pending => true,
         ExplorerOutcome::Unhandled => false,
+        ExplorerOutcome::MkdirCreated(_)
+        | ExplorerOutcome::TouchCreated(_)
+        | ExplorerOutcome::RenameCompleted(_) => true,
     }
 }
 
