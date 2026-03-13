@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.0 - 2026-03-13
+### 📦 Other Changes
+- Handle additional ExplorerOutcome variants in image browser
+### 🔄 Updated
+- Update tui-file-explorer to version 0.6.0
+- Update tui-file-explorer to version 0.6.0
+### 🔧 Chores
+- chore: nightly dependency update 2026-03-12
+- chore: nightly dependency update 2026-03-13
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.9...v0.8.0
+## 0.7.9 - 2026-03-12
+### 🔧 Chores
+- chore: bump version to 0.7.9
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.8...v0.7.9
 ## 0.7.8 - 2026-03-12
 ### ➕ Added
 - Add Zed-style spinner to log panel in flashing UI
