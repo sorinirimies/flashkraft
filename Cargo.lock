@@ -4845,12 +4845,13 @@ dependencies = [
 
 [[package]]
 name = "tui-file-explorer"
-version = "0.1.10"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9c247e21980e6939e52baafa9282c095c953b2a23288f1ac982bd0681b2a63c"
+checksum = "c252fb36e4156f5a3fe2d7688fe07f1317bb0dca20694b52802d371edd0aef68"
 dependencies = [
  "clap",
  "crossterm",
+ "libc",
  "ratatui",
 ]
 
