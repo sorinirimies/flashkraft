@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.2 - 2026-03-13
+### 📦 Other Changes
+- Bump tui-file-explorer to 0.6.1 and tui-slider to 0.3.2
+- Bump tui-file-explorer to 0.6.1
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.0...v0.8.2
 ## 0.8.0 - 2026-03-13
 ### 📦 Other Changes
 - Handle additional ExplorerOutcome variants in image browser
@@ -11,6 +16,7 @@ All notable changes to this project will be documented in this file.
 ### 🔧 Chores
 - chore: nightly dependency update 2026-03-12
 - chore: nightly dependency update 2026-03-13
+- chore: bump version to 0.8.0
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.9...v0.8.0
 ## 0.7.9 - 2026-03-12
 ### 🔧 Chores
