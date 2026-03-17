@@ -75,6 +75,36 @@ macro_rules! debug_if {
     };
 }
 
+/// Format a byte count as a compact human-readable string.
+///
+/// Uses binary prefixes (1 KiB = 1024 bytes) and one decimal place.
+/// Output examples: `"1.5G"`, `"512.0M"`, `"3.2K"`, `"42B"`.
+///
+/// # Example
+/// ```
+/// use flashkraft_core::fmt_bytes;
+/// assert_eq!(fmt_bytes(0),              "0B");
+/// assert_eq!(fmt_bytes(1_023),          "1023B");
+/// assert_eq!(fmt_bytes(1_024),          "1.0K");
+/// assert_eq!(fmt_bytes(1_048_576),      "1.0M");
+/// assert_eq!(fmt_bytes(1_073_741_824),  "1.0G");
+/// ```
+pub fn fmt_bytes(bytes: u64) -> String {
+    const GIB: u64 = 1_073_741_824;
+    const MIB: u64 = 1_048_576;
+    const KIB: u64 = 1_024;
+
+    if bytes >= GIB {
+        format!("{:.1}G", bytes as f64 / GIB as f64)
+    } else if bytes >= MIB {
+        format!("{:.1}M", bytes as f64 / MIB as f64)
+    } else if bytes >= KIB {
+        format!("{:.1}K", bytes as f64 / KIB as f64)
+    } else {
+        format!("{bytes}B")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -84,5 +114,37 @@ mod tests {
         flash_debug!("Flash test: {}", 42);
         status_log!("Status test");
         debug_if!(true, "Conditional test");
+    }
+
+    // ── fmt_bytes ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn fmt_bytes_zero() {
+        assert_eq!(super::fmt_bytes(0), "0B");
+    }
+
+    #[test]
+    fn fmt_bytes_bytes_range() {
+        assert_eq!(super::fmt_bytes(1), "1B");
+        assert_eq!(super::fmt_bytes(1_023), "1023B");
+    }
+
+    #[test]
+    fn fmt_bytes_kib_boundary() {
+        assert_eq!(super::fmt_bytes(1_024), "1.0K");
+        assert_eq!(super::fmt_bytes(1_536), "1.5K");
+        assert_eq!(super::fmt_bytes(1_047_552), "1023.0K");
+    }
+
+    #[test]
+    fn fmt_bytes_mib_boundary() {
+        assert_eq!(super::fmt_bytes(1_048_576), "1.0M");
+        assert_eq!(super::fmt_bytes(524_288_000), "500.0M");
+    }
+
+    #[test]
+    fn fmt_bytes_gib_boundary() {
+        assert_eq!(super::fmt_bytes(1_073_741_824), "1.0G");
+        assert_eq!(super::fmt_bytes(32_212_254_720), "30.0G");
     }
 }

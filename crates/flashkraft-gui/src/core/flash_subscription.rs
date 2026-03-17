@@ -221,11 +221,10 @@ pub fn flash_progress(
                         } else {
                             0.0
                         };
-                        let overall = if phase == "image" {
-                            pass_fraction * 0.5
-                        } else {
-                            0.5 + pass_fraction * 0.5
-                        };
+                        let overall = flashkraft_core::flash_helper::verify_overall_progress(
+                            phase,
+                            pass_fraction,
+                        );
                         flash_debug!(
                             "verify[{phase}]: {:.1}% ({bytes_read}/{total_bytes}) @ {speed_mb_s:.1} MB/s",
                             pass_fraction * 100.0

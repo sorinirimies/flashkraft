@@ -33,7 +33,9 @@ pub use flashkraft_core::domain;
 
 // Re-export the `flash_debug!` macro from flashkraft_core so that
 // `use crate::flash_debug;` in flash_subscription.rs resolves correctly.
+pub use flashkraft_core::debug_log;
 pub use flashkraft_core::flash_debug;
+pub use flashkraft_core::status_log;
 
 // Re-export Iced app entry points
 pub use core::{FlashKraft, Message};

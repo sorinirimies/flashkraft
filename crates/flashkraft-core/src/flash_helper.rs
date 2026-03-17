@@ -299,6 +299,54 @@ impl std::fmt::Display for FlashStage {
     }
 }
 
+impl FlashStage {
+    /// Map this pipeline stage to the minimum overall-progress-bar floor
+    /// it should hold when it starts.
+    ///
+    /// The write phase occupies 0–80 % via [`FlashEvent::Progress`] events;
+    /// post-write stages advance the floor so the bar keeps moving:
+    ///
+    /// | Stage        | Floor |
+    /// |--------------|-------|
+    /// | Syncing      | 80 %  |
+    /// | Rereading    | 88 %  |
+    /// | Verifying    | 92 %  |
+    /// | everything else | 0 % |
+    pub fn progress_floor(&self) -> f32 {
+        match self {
+            FlashStage::Syncing => 0.80,
+            FlashStage::Rereading => 0.88,
+            FlashStage::Verifying => 0.92,
+            _ => 0.0,
+        }
+    }
+}
+
+/// Compute the overall verification progress (0.0–1.0) from a single-pass
+/// fraction.
+///
+/// The verify pipeline runs two passes:
+/// - `"image"` pass  → hashes the source image file    (contributes 0.0–0.5)
+/// - `"device"` pass → reads back the written device   (contributes 0.5–1.0)
+///
+/// `pass_fraction` must already be clamped to `[0.0, 1.0]`.
+///
+/// # Example
+/// ```
+/// use flashkraft_core::flash_helper::verify_overall_progress;
+/// assert_eq!(verify_overall_progress("image",  0.0), 0.0);
+/// assert_eq!(verify_overall_progress("image",  1.0), 0.5);
+/// assert_eq!(verify_overall_progress("device", 0.0), 0.5);
+/// assert_eq!(verify_overall_progress("device", 1.0), 1.0);
+/// ```
+pub fn verify_overall_progress(phase: &str, pass_fraction: f32) -> f32 {
+    if phase == "image" {
+        pass_fraction * 0.5
+    } else {
+        0.5 + pass_fraction * 0.5
+    }
+}
+
 /// A typed event emitted by the flash pipeline.
 ///
 /// Sent over [`std::sync::mpsc`] to the async Iced subscription — no
@@ -2457,5 +2505,75 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&img);
+    }
+    // ── FlashStage::progress_floor ────────────────────────────────────────────
+
+    #[test]
+    fn flash_stage_progress_floor_syncing() {
+        assert!((FlashStage::Syncing.progress_floor() - 0.80).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn flash_stage_progress_floor_rereading() {
+        assert!((FlashStage::Rereading.progress_floor() - 0.88).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn flash_stage_progress_floor_verifying() {
+        assert!((FlashStage::Verifying.progress_floor() - 0.92).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn flash_stage_progress_floor_other_stages_are_zero() {
+        for stage in [
+            FlashStage::Starting,
+            FlashStage::Unmounting,
+            FlashStage::Writing,
+            FlashStage::Done,
+        ] {
+            assert_eq!(
+                stage.progress_floor(),
+                0.0,
+                "{stage:?} should have floor 0.0"
+            );
+        }
+    }
+
+    // ── verify_overall_progress ───────────────────────────────────────────────
+
+    #[test]
+    fn verify_overall_image_phase_start() {
+        assert_eq!(verify_overall_progress("image", 0.0), 0.0);
+    }
+
+    #[test]
+    fn verify_overall_image_phase_end() {
+        assert!((verify_overall_progress("image", 1.0) - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn verify_overall_image_phase_midpoint() {
+        assert!((verify_overall_progress("image", 0.5) - 0.25).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn verify_overall_device_phase_start() {
+        assert!((verify_overall_progress("device", 0.0) - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn verify_overall_device_phase_end() {
+        assert!((verify_overall_progress("device", 1.0) - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn verify_overall_device_phase_midpoint() {
+        assert!((verify_overall_progress("device", 0.5) - 0.75).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn verify_overall_unknown_phase_treated_as_device() {
+        // Any phase that is not "image" falls into the device branch.
+        assert!((verify_overall_progress("other", 0.0) - 0.5).abs() < f32::EPSILON);
     }
 }

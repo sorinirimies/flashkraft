@@ -110,11 +110,16 @@ fn view_device_row<'a>(
     };
 
     let size_text = if is_disabled {
-        text(format!("{:.2} GB", drive.size_gb))
-            .size(14)
-            .color(Color::from_rgb(0.5, 0.5, 0.5))
+        text(flashkraft_core::fmt_bytes(
+            (drive.size_gb * 1_073_741_824.0) as u64,
+        ))
+        .size(14)
+        .color(Color::from_rgb(0.5, 0.5, 0.5))
     } else {
-        text(format!("{:.2} GB", drive.size_gb)).size(14)
+        text(flashkraft_core::fmt_bytes(
+            (drive.size_gb * 1_073_741_824.0) as u64,
+        ))
+        .size(14)
     };
 
     let mount_text = if is_disabled {

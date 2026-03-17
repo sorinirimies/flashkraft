@@ -4,6 +4,8 @@
 //! and updates the application state. This is the core of The Elm
 //! Architecture where all state transitions occur.
 
+use crate::flash_debug;
+use crate::status_log;
 use iced::Task;
 
 use crate::core::commands;
@@ -246,9 +248,8 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
                 state.animated_progress.set_progress(bar_progress);
             }
 
-            #[cfg(debug_assertions)]
-            println!(
-                "[VERIFY] phase={phase} overall={:.1}% ({bytes_read}/{total_bytes}) @ {speed_mb_s:.1} MB/s",
+            flash_debug!(
+                "verify phase={phase} overall={:.1}% ({bytes_read}/{total_bytes}) @ {speed_mb_s:.1} MB/s",
                 overall * 100.0
             );
 
@@ -257,8 +258,7 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
 
         Message::Status(message) => {
             // Log status message in debug builds
-            #[cfg(debug_assertions)]
-            println!("[STATUS] {}", message);
+            status_log!("{}", message);
 
             // Advance the overall progress bar floor for post-write pipeline
             // stages so the bar keeps moving after writing finishes.
@@ -268,11 +268,19 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             //   "Refreshing partition table…"  → 88 %
             //   "Verifying written data…"      → 92 %
             //   (92–100 % is driven by VerifyProgressUpdate events instead)
-            let floor: Option<f32> = match message.as_str() {
-                "Flushing write buffers…" => Some(0.80),
-                "Refreshing partition table…" => Some(0.88),
-                "Verifying written data…" => Some(0.92),
-                _ => None,
+            let floor: Option<f32> = {
+                let syncing_str = flashkraft_core::FlashStage::Syncing.to_string();
+                let rereading_str = flashkraft_core::FlashStage::Rereading.to_string();
+                let verifying_str = flashkraft_core::FlashStage::Verifying.to_string();
+                if message == syncing_str {
+                    Some(flashkraft_core::FlashStage::Syncing.progress_floor())
+                } else if message == rereading_str {
+                    Some(flashkraft_core::FlashStage::Rereading.progress_floor())
+                } else if message == verifying_str {
+                    Some(flashkraft_core::FlashStage::Verifying.progress_floor())
+                } else {
+                    None
+                }
             };
             if let Some(floor) = floor {
                 let current = state.flash_progress.unwrap_or(0.0);

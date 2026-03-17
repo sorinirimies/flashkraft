@@ -1567,7 +1567,7 @@ fn render_usb_contents(app: &App, frame: &mut Frame, area: Rect, pal: &TuiPalett
                 let indent = "  ".repeat(e.depth);
                 let icon = if e.is_dir { "📁" } else { file_icon(&e.name) };
                 let size_str = if e.size_bytes > 0 {
-                    format!("  {}", fmt_size(e.size_bytes))
+                    format!("  {}", flashkraft_core::fmt_bytes(e.size_bytes))
                 } else {
                     String::new()
                 };
@@ -1834,15 +1834,3 @@ fn build_filetype_piechart(
 }
 
 // ── Size formatting ───────────────────────────────────────────────────────────
-
-fn fmt_size(bytes: u64) -> String {
-    if bytes >= 1_073_741_824 {
-        format!("{:.1}G", bytes as f64 / 1_073_741_824.0)
-    } else if bytes >= 1_048_576 {
-        format!("{:.1}M", bytes as f64 / 1_048_576.0)
-    } else if bytes >= 1_024 {
-        format!("{:.1}K", bytes as f64 / 1_024.0)
-    } else {
-        format!("{bytes}B")
-    }
-}

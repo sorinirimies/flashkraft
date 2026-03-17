@@ -434,11 +434,17 @@ impl App {
                 //   Rereading   → 88 %   (kernel re-reads partition table)
                 //   Verifying   → 92 %   (SHA-256 read-back comparison)
                 //   Done        → 99 %   (pipeline Done event sets 100 %)
-                let floor: f32 = match s.as_str() {
-                    "Flushing write buffers…" => 0.80,
-                    "Refreshing partition table…" => 0.88,
-                    "Verifying written data…" => 0.92,
-                    _ => 0.0,
+                let syncing_str = flashkraft_core::FlashStage::Syncing.to_string();
+                let rereading_str = flashkraft_core::FlashStage::Rereading.to_string();
+                let verifying_str = flashkraft_core::FlashStage::Verifying.to_string();
+                let floor: f32 = if s == syncing_str {
+                    flashkraft_core::FlashStage::Syncing.progress_floor()
+                } else if s == rereading_str {
+                    flashkraft_core::FlashStage::Rereading.progress_floor()
+                } else if s == verifying_str {
+                    flashkraft_core::FlashStage::Verifying.progress_floor()
+                } else {
+                    0.0
                 };
                 // Only ever move forward — never reduce progress.
                 if floor > self.flash_progress {

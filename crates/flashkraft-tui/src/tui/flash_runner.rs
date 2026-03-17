@@ -148,11 +148,10 @@ async fn run_flash_inner(
                     } else {
                         0.0
                     };
-                    let overall = if phase == "image" {
-                        pass_fraction * 0.5
-                    } else {
-                        0.5 + pass_fraction * 0.5
-                    };
+                    let overall = flashkraft_core::flash_helper::verify_overall_progress(
+                        phase,
+                        pass_fraction,
+                    );
                     let _ = tx.send(FlashEvent::VerifyProgress {
                         phase,
                         overall,

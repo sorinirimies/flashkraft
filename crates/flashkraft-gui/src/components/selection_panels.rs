@@ -52,13 +52,9 @@ fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
         column![
             icons::icon(Bootstrap::CheckCircle, 50.0),
             text(&img.name).size(16),
-            text({
-                if img.size_mb >= 1024.0 {
-                    format!("{:.2} GB", img.size_mb / 1024.0)
-                } else {
-                    format!("{:.2} MB", img.size_mb)
-                }
-            })
+            text(flashkraft_core::fmt_bytes(
+                (img.size_mb * 1_048_576.0) as u64
+            ))
             .size(12),
         ]
     } else {
@@ -87,15 +83,9 @@ fn view_target_section(selected: &Option<DriveInfo>) -> Element<'_, Message> {
         column![
             icons::icon(Bootstrap::CheckCircle, 50.0),
             text(&target.name).size(16),
-            text({
-                if target.size_gb >= 1.0 {
-                    format!("{:.2} GB", target.size_gb)
-                } else if target.size_gb >= 0.001 {
-                    format!("{:.2} MB", target.size_gb * 1024.0)
-                } else {
-                    format!("{:.2} KB", target.size_gb * 1024.0 * 1024.0)
-                }
-            })
+            text(flashkraft_core::fmt_bytes(
+                (target.size_gb * 1_073_741_824.0) as u64
+            ))
             .size(12),
             text(&target.mount_point).size(10),
         ]
