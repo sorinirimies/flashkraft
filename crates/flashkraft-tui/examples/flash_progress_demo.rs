@@ -166,22 +166,24 @@ async fn simulate_flash(tx: mpsc::UnboundedSender<FlashEvent>) {
 
     // ── Stage 1: Preparing ────────────────────────────────────────────────────
     sleep(Duration::from_millis(400)).await;
-    send(&tx, FlashEvent::Stage("Preparing…".to_string()));
+    send(&tx, FlashEvent::Message("Preparing…".to_string()));
     send(
         &tx,
-        FlashEvent::Log("Opened image: ubuntu-24.04-desktop-amd64.iso (1.4 GB)".to_string()),
+        FlashEvent::Message("Opened image: ubuntu-24.04-desktop-amd64.iso (1.4 GB)".to_string()),
     );
     send(
         &tx,
-        FlashEvent::Log("Target device: /dev/sdb (Samsung USB 3.1 Flash Drive, 32 GB)".to_string()),
+        FlashEvent::Message(
+            "Target device: /dev/sdb (Samsung USB 3.1 Flash Drive, 32 GB)".to_string(),
+        ),
     );
     sleep(Duration::from_millis(600)).await;
 
     // ── Stage 2: Writing ─────────────────────────────────────────────────────
-    send(&tx, FlashEvent::Stage("Writing…".to_string()));
+    send(&tx, FlashEvent::Message("Writing…".to_string()));
     send(
         &tx,
-        FlashEvent::Log("dd: writing to /dev/sdb …".to_string()),
+        FlashEvent::Message("dd: writing to /dev/sdb …".to_string()),
     );
 
     // Simulate progress ticks — accelerate slightly through the middle.
@@ -201,21 +203,28 @@ async fn simulate_flash(tx: mpsc::UnboundedSender<FlashEvent>) {
 
         let bytes_written = (total_bytes as f32 * frac) as u64;
 
-        send(&tx, FlashEvent::Progress(frac, bytes_written, speed_mb));
+        send(
+            &tx,
+            FlashEvent::Progress {
+                progress: frac,
+                bytes_written,
+                speed_mb_s: speed_mb,
+            },
+        );
 
         // Occasional log lines to fill the log panel.
         match step {
             10 => send(
                 &tx,
-                FlashEvent::Log(format!(
+                FlashEvent::Message(format!(
                     "Written {:.0} MB — buffer ok",
                     bytes_written / 1_048_576
                 )),
             ),
-            25 => send(&tx, FlashEvent::Log("Write speed stable.".to_string())),
+            25 => send(&tx, FlashEvent::Message("Write speed stable.".to_string())),
             40 => send(
                 &tx,
-                FlashEvent::Log(format!(
+                FlashEvent::Message(format!(
                     "{:.0} MB / {:.0} MB written",
                     bytes_written / 1_048_576,
                     total_bytes / 1_048_576
@@ -223,13 +232,16 @@ async fn simulate_flash(tx: mpsc::UnboundedSender<FlashEvent>) {
             ),
             55 => send(
                 &tx,
-                FlashEvent::Log("Halfway — no errors detected.".to_string()),
+                FlashEvent::Message("Halfway — no errors detected.".to_string()),
             ),
             70 => send(
                 &tx,
-                FlashEvent::Log(format!("Write speed: {speed_mb:.1} MB/s")),
+                FlashEvent::Message(format!("Write speed: {speed_mb:.1} MB/s")),
             ),
-            78 => send(&tx, FlashEvent::Log("Flushing kernel buffers…".to_string())),
+            78 => send(
+                &tx,
+                FlashEvent::Message("Flushing kernel buffers…".to_string()),
+            ),
             _ => {}
         }
 
@@ -238,22 +250,22 @@ async fn simulate_flash(tx: mpsc::UnboundedSender<FlashEvent>) {
     }
 
     // ── Stage 3: Verifying ────────────────────────────────────────────────────
-    send(&tx, FlashEvent::Stage("Verifying…".to_string()));
+    send(&tx, FlashEvent::Message("Verifying…".to_string()));
     send(
         &tx,
-        FlashEvent::Log("Checksumming written data…".to_string()),
+        FlashEvent::Message("Checksumming written data…".to_string()),
     );
     sleep(Duration::from_millis(800)).await;
     send(
         &tx,
-        FlashEvent::Log("SHA-256 checksum: match ✓".to_string()),
+        FlashEvent::Message("SHA-256 checksum: match ✓".to_string()),
     );
     sleep(Duration::from_millis(400)).await;
 
     // ── Done ──────────────────────────────────────────────────────────────────
     send(
         &tx,
-        FlashEvent::Log("Flash complete — device is safe to remove.".to_string()),
+        FlashEvent::Message("Flash complete — device is safe to remove.".to_string()),
     );
     send(&tx, FlashEvent::Completed);
 }

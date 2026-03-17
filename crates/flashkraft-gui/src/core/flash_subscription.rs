@@ -48,6 +48,7 @@
 
 use crate::flash_debug;
 use flashkraft_core::flash_helper::{run_pipeline, FlashEvent};
+use flashkraft_core::FlashUpdate;
 use futures::channel::mpsc as futures_mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -66,29 +67,11 @@ use std::sync::{
 // ---------------------------------------------------------------------------
 
 /// Progress event emitted by the flash subscription to the Iced runtime.
-#[derive(Debug, Clone)]
-pub enum FlashProgress {
-    /// Write progress: `(overall 0.0–1.0, bytes_written, speed_mb_s)`
-    Progress(f32, u64, f32),
-    /// Verification read-back progress.
-    ///
-    /// `overall` spans both passes:
-    ///   - image pass:  `bytes_read / total * 0.5`        → 0.0 – 0.5
-    ///   - device pass: `0.5 + bytes_read / total * 0.5`  → 0.5 – 1.0
-    VerifyProgress {
-        phase: &'static str,
-        overall: f32,
-        bytes_read: u64,
-        total_bytes: u64,
-        speed_mb_s: f32,
-    },
-    /// Human-readable status message (stage name, log line, …)
-    Message(String),
-    /// The flash operation finished successfully.
-    Completed,
-    /// The flash operation failed; the string is a human-readable error.
-    Failed(String),
-}
+///
+/// This is a type alias for [`flashkraft_core::FlashUpdate`] — the unified
+/// frontend event defined in core so both the GUI and TUI share the same
+/// representation without duplicating the type.
+pub use flashkraft_core::FlashUpdate as FlashProgress;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -191,76 +174,22 @@ pub fn flash_progress(
             // (repaints, animation ticks, etc.) between every message.
             loop {
                 match futures_rx.next().await {
-                    Some(FlashEvent::Progress {
-                        bytes_written,
-                        total_bytes,
-                        speed_mb_s,
-                    }) => {
-                        let progress = if total_bytes > 0 {
-                            (bytes_written as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
-                        } else {
-                            0.0
-                        };
-                        flash_debug!(
-                            "progress: {:.1}% ({bytes_written}/{total_bytes}) @ {speed_mb_s:.1} MB/s",
-                            progress * 100.0
-                        );
-                        let _ = output
-                            .send(FlashProgress::Progress(progress, bytes_written, speed_mb_s))
-                            .await;
-                    }
-
-                    Some(FlashEvent::VerifyProgress {
-                        phase,
-                        bytes_read,
-                        total_bytes,
-                        speed_mb_s,
-                    }) => {
-                        let pass_fraction = if total_bytes > 0 {
-                            (bytes_read as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
-                        } else {
-                            0.0
-                        };
-                        let overall = flashkraft_core::flash_helper::verify_overall_progress(
-                            phase,
-                            pass_fraction,
-                        );
-                        flash_debug!(
-                            "verify[{phase}]: {:.1}% ({bytes_read}/{total_bytes}) @ {speed_mb_s:.1} MB/s",
-                            pass_fraction * 100.0
-                        );
-                        let _ = output
-                            .send(FlashProgress::VerifyProgress {
-                                phase,
-                                overall,
-                                bytes_read,
-                                total_bytes,
-                                speed_mb_s,
-                            })
-                            .await;
-                    }
-
-                    Some(FlashEvent::Stage(stage)) => {
-                        let msg = stage.to_string();
-                        flash_debug!("stage: {msg}");
-                        let _ = output.send(FlashProgress::Message(msg)).await;
-                    }
-
-                    Some(FlashEvent::Log(msg)) => {
-                        flash_debug!("log: {msg}");
-                        let _ = output.send(FlashProgress::Message(msg)).await;
-                    }
-
                     Some(FlashEvent::Done) => {
                         flash_debug!("flash thread: Done");
-                        let _ = output.send(FlashProgress::Completed).await;
+                        let _ = output.send(FlashUpdate::Completed).await;
                         break;
                     }
 
                     Some(FlashEvent::Error(e)) => {
                         flash_debug!("flash thread: Error: {e}");
-                        let _ = output.send(FlashProgress::Failed(e)).await;
+                        let _ = output.send(FlashUpdate::Failed(e)).await;
                         break;
+                    }
+
+                    Some(core_event) => {
+                        let update = FlashUpdate::from(core_event);
+                        flash_debug!("flash event: {update:?}");
+                        let _ = output.send(update).await;
                     }
 
                     // Channel closed — bridge thread exited (pipeline done or cancelled).
@@ -268,13 +197,13 @@ pub fn flash_progress(
                         flash_debug!("flash channel closed unexpectedly");
                         if cancel_token.load(Ordering::SeqCst) {
                             let _ = output
-                                .send(FlashProgress::Failed(
+                                .send(FlashUpdate::Failed(
                                     "Flash operation cancelled by user".into(),
                                 ))
                                 .await;
                         } else {
                             let _ = output
-                                .send(FlashProgress::Failed(
+                                .send(FlashUpdate::Failed(
                                     "Flash thread terminated unexpectedly".into(),
                                 ))
                                 .await;
@@ -301,7 +230,11 @@ mod tests {
     #[test]
     fn test_flash_progress_clone() {
         let variants = vec![
-            FlashProgress::Progress(0.5, 1024, 10.0),
+            FlashProgress::Progress {
+                progress: 0.5,
+                bytes_written: 1024,
+                speed_mb_s: 10.0,
+            },
             FlashProgress::VerifyProgress {
                 phase: "image",
                 overall: 0.25,
@@ -327,7 +260,11 @@ mod tests {
 
     #[test]
     fn test_flash_progress_debug() {
-        let p = FlashProgress::Progress(1.0, 2048, 20.0);
+        let p = FlashProgress::Progress {
+            progress: 1.0,
+            bytes_written: 2048,
+            speed_mb_s: 20.0,
+        };
         assert!(format!("{p:?}").contains("Progress"));
     }
 
@@ -379,7 +316,7 @@ mod tests {
     #[test]
     fn test_verify_progress_overall_image_phase() {
         for pct in [0.0f32, 0.25, 0.5, 1.0] {
-            let overall = pct * 0.5;
+            let overall = flashkraft_core::flash_helper::verify_overall_progress("image", pct);
             assert!(
                 (0.0..=0.5).contains(&overall),
                 "image phase overall {overall} out of [0, 0.5]"
@@ -390,7 +327,7 @@ mod tests {
     #[test]
     fn test_verify_progress_overall_device_phase() {
         for pct in [0.0f32, 0.25, 0.5, 1.0] {
-            let overall = 0.5 + pct * 0.5;
+            let overall = flashkraft_core::flash_helper::verify_overall_progress("device", pct);
             assert!(
                 (0.5..=1.0).contains(&overall),
                 "device phase overall {overall} out of [0.5, 1.0]"
@@ -439,76 +376,35 @@ mod tests {
     /// Verify that all FlashEvent variants are handled (mapping smoke test).
     #[test]
     fn test_flash_event_mapping_smoke() {
-        use flashkraft_core::flash_helper::FlashStage;
+        use flashkraft_core::flash_helper::{FlashEvent as CoreFlashEvent, FlashStage};
 
         let events = vec![
-            FlashEvent::Stage(FlashStage::Writing),
-            FlashEvent::Progress {
+            CoreFlashEvent::Stage(FlashStage::Writing),
+            CoreFlashEvent::Progress {
                 bytes_written: 512,
                 total_bytes: 1024,
                 speed_mb_s: 42.0,
             },
-            FlashEvent::VerifyProgress {
+            CoreFlashEvent::VerifyProgress {
                 phase: "image",
                 bytes_read: 256,
                 total_bytes: 1024,
                 speed_mb_s: 100.0,
             },
-            FlashEvent::VerifyProgress {
+            CoreFlashEvent::VerifyProgress {
                 phase: "device",
                 bytes_read: 512,
                 total_bytes: 1024,
                 speed_mb_s: 80.0,
             },
-            FlashEvent::Log("Test log".into()),
-            FlashEvent::Done,
-            FlashEvent::Error("boom".into()),
+            CoreFlashEvent::Log("Test log".into()),
+            CoreFlashEvent::Done,
+            CoreFlashEvent::Error("boom".into()),
         ];
 
-        // Verify each variant maps to a FlashProgress without panicking.
+        // Verify each variant converts to a FlashUpdate (= FlashProgress) without panicking.
         for event in events {
-            let _mapped: Option<FlashProgress> = match event {
-                FlashEvent::Progress {
-                    bytes_written,
-                    total_bytes,
-                    speed_mb_s,
-                } => {
-                    let p = if total_bytes > 0 {
-                        (bytes_written as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
-                    } else {
-                        0.0
-                    };
-                    Some(FlashProgress::Progress(p, bytes_written, speed_mb_s))
-                }
-                FlashEvent::VerifyProgress {
-                    phase,
-                    bytes_read,
-                    total_bytes,
-                    speed_mb_s,
-                } => {
-                    let pass_fraction = if total_bytes > 0 {
-                        (bytes_read as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
-                    } else {
-                        0.0
-                    };
-                    let overall = if phase == "image" {
-                        pass_fraction * 0.5
-                    } else {
-                        0.5 + pass_fraction * 0.5
-                    };
-                    Some(FlashProgress::VerifyProgress {
-                        phase,
-                        overall,
-                        bytes_read,
-                        total_bytes,
-                        speed_mb_s,
-                    })
-                }
-                FlashEvent::Stage(s) => Some(FlashProgress::Message(s.to_string())),
-                FlashEvent::Log(m) => Some(FlashProgress::Message(m)),
-                FlashEvent::Done => Some(FlashProgress::Completed),
-                FlashEvent::Error(e) => Some(FlashProgress::Failed(e)),
-            };
+            let _mapped = FlashUpdate::from(event);
         }
     }
 }

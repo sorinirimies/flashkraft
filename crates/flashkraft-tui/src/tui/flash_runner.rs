@@ -44,6 +44,7 @@ use tokio::sync::mpsc;
 
 use crate::tui::app::FlashEvent;
 use flashkraft_core::flash_helper::{run_pipeline, FlashEvent as CoreFlashEvent};
+use flashkraft_core::FlashUpdate;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -111,6 +112,11 @@ async fn run_flash_inner(
     });
 
     // ── Forward CoreFlashEvents → TUI FlashEvents ────────────────────────────
+    //
+    // Each raw CoreFlashEvent is converted to a FlashUpdate (defined in core)
+    // via From<FlashEvent>, which handles the bytes→fraction normalisation and
+    // the Stage/Log → Message collapse.  The TUI's FlashEvent is a type alias
+    // for FlashUpdate so the converted value is sent directly.
     loop {
         // Check cancellation.
         if cancel_token.load(Ordering::SeqCst) {
@@ -120,58 +126,17 @@ async fn run_flash_inner(
         // Drain all currently available events (non-blocking).
         loop {
             match core_rx.try_recv() {
-                Ok(CoreFlashEvent::Stage(stage)) => {
-                    let _ = tx.send(FlashEvent::Stage(stage.to_string()));
-                }
-
-                Ok(CoreFlashEvent::Progress {
-                    bytes_written,
-                    total_bytes,
-                    speed_mb_s,
-                }) => {
-                    let p = if total_bytes > 0 {
-                        (bytes_written as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
-                    } else {
-                        0.0
-                    };
-                    let _ = tx.send(FlashEvent::Progress(p, bytes_written, speed_mb_s));
-                }
-
-                Ok(CoreFlashEvent::VerifyProgress {
-                    phase,
-                    bytes_read,
-                    total_bytes,
-                    speed_mb_s,
-                }) => {
-                    let pass_fraction = if total_bytes > 0 {
-                        (bytes_read as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
-                    } else {
-                        0.0
-                    };
-                    let overall = flashkraft_core::flash_helper::verify_overall_progress(
-                        phase,
-                        pass_fraction,
-                    );
-                    let _ = tx.send(FlashEvent::VerifyProgress {
-                        phase,
-                        overall,
-                        bytes_read,
-                        total_bytes,
-                        speed_mb_s,
-                    });
-                }
-
-                Ok(CoreFlashEvent::Log(msg)) => {
-                    let _ = tx.send(FlashEvent::Log(msg));
-                }
-
                 Ok(CoreFlashEvent::Done) => {
-                    let _ = tx.send(FlashEvent::Completed);
+                    let _ = tx.send(FlashUpdate::Completed);
                     return Ok(());
                 }
 
                 Ok(CoreFlashEvent::Error(e)) => {
                     return Err(e);
+                }
+
+                Ok(core_event) => {
+                    let _ = tx.send(FlashUpdate::from(core_event));
                 }
 
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -267,52 +232,56 @@ mod tests {
     // ── CoreFlashEvent → FlashEvent mapping ──────────────────────────────────
 
     #[test]
-    fn core_event_stage_maps_to_tui_stage() {
-        use flashkraft_core::flash_helper::FlashStage;
-
-        let stage = FlashStage::Writing;
-        let label = stage.to_string();
-        let tui_event = FlashEvent::Stage(label.clone());
-        assert!(matches!(tui_event, FlashEvent::Stage(s) if s == label));
+    fn core_event_stage_maps_to_message() {
+        use flashkraft_core::flash_helper::{FlashEvent as CoreFlashEvent, FlashStage};
+        let label = FlashStage::Writing.to_string();
+        let update = FlashUpdate::from(CoreFlashEvent::Stage(FlashStage::Writing));
+        assert!(matches!(update, FlashUpdate::Message(s) if s == label));
     }
 
     #[test]
     fn core_event_progress_maps_correctly() {
-        let bytes_written: u64 = 512;
-        let total_bytes: u64 = 1024;
-        let speed_mb_s: f32 = 42.0;
-
-        let p = (bytes_written as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32;
-        let tui_event = FlashEvent::Progress(p, bytes_written, speed_mb_s);
-
-        match tui_event {
-            FlashEvent::Progress(progress, bw, spd) => {
+        use flashkraft_core::flash_helper::FlashEvent as CoreFlashEvent;
+        let update = FlashUpdate::from(CoreFlashEvent::Progress {
+            bytes_written: 512,
+            total_bytes: 1024,
+            speed_mb_s: 42.0,
+        });
+        match update {
+            FlashUpdate::Progress {
+                progress,
+                bytes_written,
+                speed_mb_s,
+            } => {
                 assert!((progress - 0.5).abs() < 1e-6);
-                assert_eq!(bw, 512);
-                assert!((spd - 42.0).abs() < 1e-6);
+                assert_eq!(bytes_written, 512);
+                assert!((speed_mb_s - 42.0).abs() < 1e-6);
             }
             _ => panic!("unexpected variant"),
         }
     }
 
     #[test]
-    fn core_event_log_maps_to_tui_log() {
+    fn core_event_log_maps_to_message() {
+        use flashkraft_core::flash_helper::FlashEvent as CoreFlashEvent;
         let msg = "hello from pipeline".to_string();
-        let tui_event = FlashEvent::Log(msg.clone());
-        assert!(matches!(tui_event, FlashEvent::Log(m) if m == msg));
+        let update = FlashUpdate::from(CoreFlashEvent::Log(msg.clone()));
+        assert!(matches!(update, FlashUpdate::Message(m) if m == msg));
     }
 
     #[test]
     fn core_event_done_maps_to_completed() {
-        let tui_event = FlashEvent::Completed;
-        assert!(matches!(tui_event, FlashEvent::Completed));
+        use flashkraft_core::flash_helper::FlashEvent as CoreFlashEvent;
+        let update = FlashUpdate::from(CoreFlashEvent::Done);
+        assert!(matches!(update, FlashUpdate::Completed));
     }
 
     #[test]
     fn core_event_error_maps_to_failed() {
+        use flashkraft_core::flash_helper::FlashEvent as CoreFlashEvent;
         let msg = "something broke".to_string();
-        let tui_event = FlashEvent::Failed(msg.clone());
-        assert!(matches!(tui_event, FlashEvent::Failed(m) if m == msg));
+        let update = FlashUpdate::from(CoreFlashEvent::Error(msg.clone()));
+        assert!(matches!(update, FlashUpdate::Failed(m) if m == msg));
     }
 
     // ── Cancellation ─────────────────────────────────────────────────────────

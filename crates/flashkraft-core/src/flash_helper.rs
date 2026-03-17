@@ -387,6 +387,114 @@ pub enum FlashEvent {
 }
 
 // ---------------------------------------------------------------------------
+// Unified frontend event type
+// ---------------------------------------------------------------------------
+
+/// A normalised progress event suitable for consumption by any frontend
+/// (Iced GUI, Ratatui TUI, or future integrations).
+///
+/// Both the GUI's `FlashProgress` and the TUI's `FlashEvent` wrapper types
+/// were independently duplicating this shape.  By defining it once in core
+/// and converting from [`FlashEvent`] via [`From`], each frontend only needs
+/// to bridge this into its own message/command type.
+///
+/// Key differences from the raw [`FlashEvent`]:
+/// - `Progress` carries a normalised `0.0–1.0` write fraction (the raw event
+///   only carries raw byte counts; the fraction is computed here).
+/// - `VerifyProgress` carries a pre-computed `overall` spanning both passes
+///   (via [`verify_overall_progress`]) so frontends never need to duplicate
+///   that formula.
+/// - `Stage` and `Log` are both collapsed into `Message(String)` since both
+///   frontends treat them as human-readable status text.
+/// - `Done` / `Error` become `Completed` / `Failed` to match conventional
+///   naming in UI code.
+#[derive(Debug, Clone)]
+pub enum FlashUpdate {
+    /// Write progress.
+    ///
+    /// `progress` is `bytes_written / total_bytes` clamped to `[0.0, 1.0]`.
+    Progress {
+        progress: f32,
+        bytes_written: u64,
+        speed_mb_s: f32,
+    },
+    /// Verification read-back progress spanning both passes.
+    ///
+    /// `overall` is in `[0.0, 1.0]`:
+    ///   - image pass  → `[0.0, 0.5]`
+    ///   - device pass → `[0.5, 1.0]`
+    VerifyProgress {
+        phase: &'static str,
+        overall: f32,
+        bytes_read: u64,
+        total_bytes: u64,
+        speed_mb_s: f32,
+    },
+    /// Human-readable status text (stage label or log line).
+    Message(String),
+    /// The flash pipeline finished successfully.
+    Completed,
+    /// The flash pipeline failed; the string is a human-readable error.
+    Failed(String),
+}
+
+impl From<FlashEvent> for FlashUpdate {
+    /// Convert a raw pipeline [`FlashEvent`] into a [`FlashUpdate`].
+    ///
+    /// - `Progress` raw byte counts → normalised `0.0–1.0` fraction.
+    /// - `VerifyProgress` per-pass fraction → overall `0.0–1.0` via
+    ///   [`verify_overall_progress`].
+    /// - `Stage` display string and `Log` string → `Message`.
+    /// - `Done` → `Completed`, `Error` → `Failed`.
+    fn from(event: FlashEvent) -> Self {
+        match event {
+            FlashEvent::Progress {
+                bytes_written,
+                total_bytes,
+                speed_mb_s,
+            } => {
+                let progress = if total_bytes > 0 {
+                    (bytes_written as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
+                } else {
+                    0.0
+                };
+                FlashUpdate::Progress {
+                    progress,
+                    bytes_written,
+                    speed_mb_s,
+                }
+            }
+
+            FlashEvent::VerifyProgress {
+                phase,
+                bytes_read,
+                total_bytes,
+                speed_mb_s,
+            } => {
+                let pass_fraction = if total_bytes > 0 {
+                    (bytes_read as f64 / total_bytes as f64).clamp(0.0, 1.0) as f32
+                } else {
+                    0.0
+                };
+                let overall = verify_overall_progress(phase, pass_fraction);
+                FlashUpdate::VerifyProgress {
+                    phase,
+                    overall,
+                    bytes_read,
+                    total_bytes,
+                    speed_mb_s,
+                }
+            }
+
+            FlashEvent::Stage(stage) => FlashUpdate::Message(stage.to_string()),
+            FlashEvent::Log(msg) => FlashUpdate::Message(msg),
+            FlashEvent::Done => FlashUpdate::Completed,
+            FlashEvent::Error(e) => FlashUpdate::Failed(e),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 

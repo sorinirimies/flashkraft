@@ -37,4 +37,4 @@ pub use utils::fmt_bytes;
 
 /// Re-export the flash pipeline event types so consumers only need to import
 /// from `flashkraft_core` rather than the sub-module path.
-pub use flash_helper::{verify_overall_progress, FlashEvent, FlashStage};
+pub use flash_helper::{verify_overall_progress, FlashEvent, FlashStage, FlashUpdate};

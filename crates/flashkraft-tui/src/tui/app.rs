@@ -21,36 +21,15 @@ use super::storage::TuiStorage;
 use super::theme::{all_app_themes, TuiPalette};
 
 // ---------------------------------------------------------------------------
-// Flash progress events (TUI-specific, Tokio-channel-based)
+// Flash progress events
 // ---------------------------------------------------------------------------
 
 /// Progress events produced by the background flash task.
-#[derive(Debug, Clone)]
-pub enum FlashEvent {
-    /// `(progress 0.0–1.0, bytes_written, speed_mb_s)`
-    Progress(f32, u64, f32),
-    /// Verification read-back progress.
-    ///
-    /// `phase` is `"image"` for the source-hash pass and `"device"` for the
-    /// device read-back pass. `overall` spans both passes:
-    ///   - image pass:  `bytes_read / total * 0.5`
-    ///   - device pass: `0.5 + bytes_read / total * 0.5`
-    VerifyProgress {
-        phase: &'static str,
-        overall: f32,
-        bytes_read: u64,
-        total_bytes: u64,
-        speed_mb_s: f32,
-    },
-    /// Stage / status message (e.g. "WRITING", "VERIFYING")
-    Stage(String),
-    /// Informational log line
-    Log(String),
-    /// Flash completed successfully
-    Completed,
-    /// Flash failed with an error message
-    Failed(String),
-}
+///
+/// This is a type alias for [`flashkraft_core::FlashUpdate`] — the
+/// normalised frontend event defined in core so both the TUI and GUI share
+/// the same representation.
+pub use flashkraft_core::FlashUpdate as FlashEvent;
 
 // ---------------------------------------------------------------------------
 // USB content entry (shown on the completion screen)
@@ -398,13 +377,17 @@ impl App {
 
     fn apply_flash_event(&mut self, event: FlashEvent) {
         match event {
-            FlashEvent::Progress(p, bytes, speed) => {
+            FlashEvent::Progress {
+                progress,
+                bytes_written,
+                speed_mb_s,
+            } => {
                 // Writing phase occupies 0–80 % of the overall progress bar.
                 // Clamp to 0.80 so the bar never jumps back when post-write
                 // stages set a stage-floor above the raw write percentage.
-                self.flash_progress = (p * 0.80).clamp(0.0, 0.80);
-                self.flash_bytes = bytes;
-                self.flash_speed = speed;
+                self.flash_progress = (progress * 0.80).clamp(0.0, 0.80);
+                self.flash_bytes = bytes_written;
+                self.flash_speed = speed_mb_s;
             }
             FlashEvent::VerifyProgress {
                 phase,
@@ -422,7 +405,7 @@ impl App {
                     self.flash_progress = bar;
                 }
             }
-            FlashEvent::Stage(s) => {
+            FlashEvent::Message(s) => {
                 // Advance the progress bar floor for post-write stages so it
                 // keeps moving rather than sitting at 80 % (or 100 % from the
                 // final write-progress event) while sync / verify are running.
@@ -452,9 +435,6 @@ impl App {
                 }
                 self.flash_stage = s.clone();
                 self.push_log(s);
-            }
-            FlashEvent::Log(msg) => {
-                self.push_log(msg);
             }
             FlashEvent::Completed => {
                 self.flash_progress = 1.0;
@@ -1522,7 +1502,11 @@ mod tests {
     #[test]
     fn test_apply_flash_event_progress_updates_fields() {
         let mut app = App::new();
-        app.apply_flash_event(FlashEvent::Progress(0.42, 1_048_576, 28.5));
+        app.apply_flash_event(FlashEvent::Progress {
+            progress: 0.42,
+            bytes_written: 1_048_576,
+            speed_mb_s: 28.5,
+        });
         assert!((app.flash_progress - 0.42 * 0.80).abs() < 1e-5);
         assert_eq!(app.flash_bytes, 1_048_576);
         assert_eq!(app.flash_speed, 28.5);
@@ -1531,8 +1515,16 @@ mod tests {
     #[test]
     fn test_apply_flash_event_progress_overwrites_previous() {
         let mut app = App::new();
-        app.apply_flash_event(FlashEvent::Progress(0.2, 512, 10.0));
-        app.apply_flash_event(FlashEvent::Progress(0.7, 2048, 35.0));
+        app.apply_flash_event(FlashEvent::Progress {
+            progress: 0.2,
+            bytes_written: 512,
+            speed_mb_s: 10.0,
+        });
+        app.apply_flash_event(FlashEvent::Progress {
+            progress: 0.7,
+            bytes_written: 2048,
+            speed_mb_s: 35.0,
+        });
         assert!((app.flash_progress - 0.7 * 0.80).abs() < 1e-5);
         assert_eq!(app.flash_bytes, 2048);
         assert_eq!(app.flash_speed, 35.0);
@@ -1541,7 +1533,7 @@ mod tests {
     #[test]
     fn test_apply_flash_event_stage_sets_label_and_logs() {
         let mut app = App::new();
-        app.apply_flash_event(FlashEvent::Stage("Writing image to device…".to_string()));
+        app.apply_flash_event(FlashEvent::Message("Writing image to device…".to_string()));
         assert_eq!(app.flash_stage, "Writing image to device…");
         assert!(app
             .flash_log
@@ -1551,7 +1543,7 @@ mod tests {
     #[test]
     fn test_apply_flash_event_log_appends_to_log() {
         let mut app = App::new();
-        app.apply_flash_event(FlashEvent::Log("SHA-256 verified ✓".to_string()));
+        app.apply_flash_event(FlashEvent::Message("SHA-256 verified ✓".to_string()));
         assert!(app.flash_log.contains(&"SHA-256 verified ✓".to_string()));
     }
 
@@ -1559,7 +1551,7 @@ mod tests {
     fn test_apply_flash_event_multiple_logs_accumulate() {
         let mut app = App::new();
         for i in 0..5 {
-            app.apply_flash_event(FlashEvent::Log(format!("log {i}")));
+            app.apply_flash_event(FlashEvent::Message(format!("log {i}")));
         }
         assert_eq!(app.flash_log.len(), 5);
     }
@@ -1596,7 +1588,7 @@ mod tests {
         let mut app = App::new();
         // Push more than MAX_LOG (200) entries via apply_flash_event
         for i in 0..250 {
-            app.apply_flash_event(FlashEvent::Log(format!("log line {i}")));
+            app.apply_flash_event(FlashEvent::Message(format!("log line {i}")));
         }
         assert!(
             app.flash_log.len() <= 200,
@@ -1615,7 +1607,7 @@ mod tests {
     fn test_push_log_exactly_at_limit_does_not_trim() {
         let mut app = App::new();
         for i in 0..200 {
-            app.apply_flash_event(FlashEvent::Log(format!("entry {i}")));
+            app.apply_flash_event(FlashEvent::Message(format!("entry {i}")));
         }
         assert_eq!(app.flash_log.len(), 200);
     }
@@ -1671,7 +1663,12 @@ mod tests {
     #[test]
     fn test_poll_flash_applies_progress_event() {
         let (tx, rx) = mpsc::unbounded_channel::<FlashEvent>();
-        tx.send(FlashEvent::Progress(0.5, 1024, 22.0)).unwrap();
+        tx.send(FlashEvent::Progress {
+            progress: 0.5,
+            bytes_written: 1024,
+            speed_mb_s: 22.0,
+        })
+        .unwrap();
 
         let mut app = App::new();
         app.flash_rx = Some(rx);
@@ -1685,19 +1682,31 @@ mod tests {
     #[test]
     fn test_poll_flash_drains_multiple_events() {
         let (tx, rx) = mpsc::unbounded_channel::<FlashEvent>();
-        tx.send(FlashEvent::Stage("WRITING".to_string())).unwrap();
-        tx.send(FlashEvent::Log("Chunk 1 written".to_string()))
-            .unwrap();
-        tx.send(FlashEvent::Progress(0.25, 256, 15.0)).unwrap();
+        // Use a real stage string so flash_stage is set predictably, then a
+        // second Message so we can confirm both are logged.  Since every
+        // Message updates flash_stage, the last one wins.
+        let writing_str = flashkraft_core::FlashStage::Writing.to_string();
+        let second_msg = "Chunk 1 written".to_string();
+        tx.send(FlashEvent::Message(writing_str.clone())).unwrap();
+        tx.send(FlashEvent::Message(second_msg.clone())).unwrap();
+        tx.send(FlashEvent::Progress {
+            progress: 0.25,
+            bytes_written: 256,
+            speed_mb_s: 15.0,
+        })
+        .unwrap();
 
         let mut app = App::new();
         app.flash_rx = Some(rx);
         app.poll_flash();
 
-        assert_eq!(app.flash_stage, "WRITING");
+        // flash_stage is set by every Message; last Message wins.
+        assert_eq!(app.flash_stage, second_msg);
         assert!((app.flash_progress - 0.25 * 0.80).abs() < 1e-5);
-        // Stage event also logs, then Log event adds another entry
+        // Both Message events are logged.
         assert!(app.flash_log.len() >= 2);
+        assert!(app.flash_log.contains(&writing_str));
+        assert!(app.flash_log.contains(&second_msg));
     }
 
     #[test]

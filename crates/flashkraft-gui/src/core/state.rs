@@ -307,9 +307,11 @@ impl FlashKraft {
                     self.flash_run_id,
                 )
                 .map(|progress| match progress {
-                    FlashProgress::Progress(p, bytes, speed) => {
-                        Message::FlashProgressUpdate(p, bytes, speed)
-                    }
+                    FlashProgress::Progress {
+                        progress,
+                        bytes_written,
+                        speed_mb_s,
+                    } => Message::FlashProgressUpdate(progress, bytes_written, speed_mb_s),
                     FlashProgress::VerifyProgress {
                         phase,
                         overall,
