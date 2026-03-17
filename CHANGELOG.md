@@ -2,10 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.3 - 2026-03-17
+### ➕ Added
+- Add progress_floor and verify_overall_progress helpers
+### 🔄 Updated
+- Update tui-file-explorer to version 0.6.2
+- Update tui-file-explorer to version 0.6.2
+### 🔧 Chores
+- chore: nightly dependency update 2026-03-14
+- chore: nightly dependency update 2026-03-15
+- chore: nightly dependency update 2026-03-16
+- chore: nightly dependency update 2026-03-17
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.2...v0.8.3
 ## 0.8.2 - 2026-03-13
 ### 📦 Other Changes
 - Bump tui-file-explorer to 0.6.1 and tui-slider to 0.3.2
 - Bump tui-file-explorer to 0.6.1
+### 🔧 Chores
+- chore: bump version to 0.8.2
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.0...v0.8.2
 ## 0.8.0 - 2026-03-13
 ### 📦 Other Changes
