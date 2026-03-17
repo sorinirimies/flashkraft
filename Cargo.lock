@@ -4846,9 +4846,9 @@ dependencies = [
 
 [[package]]
 name = "tui-file-explorer"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dac692d2f80467a9399315d5e744a2fd464f8e7e20110fc9558525f01b3ea71"
+checksum = "1e736e80e38b076281936dfd037fa51002e952f2f42e1542b7fa71e6f6e73312"
 dependencies = [
  "clap",
  "crossterm",
