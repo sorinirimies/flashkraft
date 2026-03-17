@@ -39,6 +39,7 @@ dirs         = "5.0"
 sha2         = "0.10"
 tokio        = { version = "1", features = ["full"] }
 anyhow       = "1"
+tempfile     = "3"
 
 # GUI (Iced)
 iced         = { version = "0.13.1", features = ["advanced", "canvas"] }

@@ -556,33 +556,17 @@ fn flash_pipeline(
         return Err("Image file is empty".to_string());
     }
 
-    // ── Check device is not already in use ───────────────────────────────────
-    // Open the device O_RDONLY | O_EXCL — if another process (e.g. a second
-    // flashkraft instance) already has it open for writing this fails
-    // immediately with EBUSY, giving the user a clear message instead of
-    // appearing to hang during unmount.
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let busy = std::fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_EXCL)
-            .open(device_path);
-        if let Err(e) = busy {
-            if e.raw_os_error() == Some(libc::EBUSY) {
-                return Err(format!(
-                    "Device '{device_path}' is already in use by another process.\n\
-                     Is another flash operation already running?"
-                ));
-            }
-            // Any other error (EPERM, EACCES) is fine here — we will handle
-            // it properly when we open for writing later.
-        }
-    }
-
     // ── Step 1: Unmount ──────────────────────────────────────────────────────
     send(tx, FlashEvent::Stage(FlashStage::Unmounting));
     unmount_device(device_path, tx);
+
+    // ── Check device is not already in use ───────────────────────────────────
+    // Open the device O_RDONLY | O_EXCL *after* unmounting. If a partition was
+    // merely mounted beforehand the unmount above will have cleared it. If
+    // this still returns EBUSY it means a genuinely foreign process (e.g. a
+    // second flashkraft instance) has the device open for writing.
+    #[cfg(target_os = "linux")]
+    check_device_not_busy(device_path)?;
 
     // ── Step 2: Write ────────────────────────────────────────────────────────
     send(tx, FlashEvent::Stage(FlashStage::Writing));
@@ -608,6 +592,48 @@ fn flash_pipeline(
 
     // ── Done ─────────────────────────────────────────────────────────────────
     send(tx, FlashEvent::Done);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Device-busy guard (Linux only)
+// ---------------------------------------------------------------------------
+
+/// Try to open `device_path` with `O_RDONLY | O_EXCL`. On Linux this fails
+/// with `EBUSY` if a foreign process already holds the device open exclusively
+/// (e.g. a second flashkraft instance). Any other error is ignored here and
+/// will be caught properly when we open the device for writing.
+///
+/// This function is separate so it can be unit-tested by injecting a synthetic
+/// `io::Error`.
+#[cfg(target_os = "linux")]
+fn check_device_not_busy(device_path: &str) -> Result<(), String> {
+    check_device_not_busy_with(device_path, |path| {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_EXCL)
+            .open(path)
+            .map(|_| ())
+    })
+}
+
+/// Inner implementation — accepts an injectable opener so tests can supply a
+/// synthetic `EBUSY` without needing a real block device.
+#[cfg(target_os = "linux")]
+fn check_device_not_busy_with<F>(device_path: &str, open_fn: F) -> Result<(), String>
+where
+    F: FnOnce(&str) -> std::io::Result<()>,
+{
+    if let Err(e) = open_fn(device_path) {
+        if e.raw_os_error() == Some(libc::EBUSY) {
+            return Err(format!(
+                "Device '{device_path}' is already in use by another process.\n\
+                 Is another flash operation already running?"
+            ));
+        }
+        // Any other error (EPERM, EACCES) is fine — handled when opening for writing.
+    }
     Ok(())
 }
 
@@ -2683,5 +2709,282 @@ mod tests {
     fn verify_overall_unknown_phase_treated_as_device() {
         // Any phase that is not "image" falls into the device branch.
         assert!((verify_overall_progress("other", 0.0) - 0.5).abs() < f32::EPSILON);
+    }
+
+    // ── check_device_not_busy ────────────────────────────────────────────────
+
+    /// A synthetic EBUSY error must produce the "already in use" message.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn check_device_not_busy_ebusy_returns_error() {
+        let err = check_device_not_busy_with("/dev/sdz", |_| {
+            Err(std::io::Error::from_raw_os_error(libc::EBUSY))
+        });
+        assert!(err.is_err(), "EBUSY must be reported as an error");
+        let msg = err.unwrap_err();
+        assert!(
+            msg.contains("already in use"),
+            "error must mention 'already in use': {msg}"
+        );
+        assert!(
+            msg.contains("/dev/sdz"),
+            "error must include the device path: {msg}"
+        );
+        assert!(
+            msg.contains("another flash operation"),
+            "error must hint at another flash operation: {msg}"
+        );
+    }
+
+    /// A non-EBUSY error (e.g. EPERM) must be silently ignored — it will be
+    /// handled properly when the device is opened for writing.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn check_device_not_busy_eperm_is_ignored() {
+        let result = check_device_not_busy_with("/dev/sdz", |_| {
+            Err(std::io::Error::from_raw_os_error(libc::EPERM))
+        });
+        assert!(
+            result.is_ok(),
+            "EPERM must be silently ignored, got: {result:?}"
+        );
+    }
+
+    /// EACCES must also be silently ignored.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn check_device_not_busy_eacces_is_ignored() {
+        let result = check_device_not_busy_with("/dev/sdz", |_| {
+            Err(std::io::Error::from_raw_os_error(libc::EACCES))
+        });
+        assert!(
+            result.is_ok(),
+            "EACCES must be silently ignored, got: {result:?}"
+        );
+    }
+
+    /// When the open succeeds the function must return Ok.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn check_device_not_busy_success_returns_ok() {
+        let result = check_device_not_busy_with("/dev/sdz", |_| Ok(()));
+        assert!(result.is_ok(), "successful open must return Ok");
+    }
+
+    /// On a real regular file (not a block device) O_EXCL never returns EBUSY,
+    /// so the pipeline must not emit the "already in use" error for temp files.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn check_device_not_busy_regular_file_never_ebusy() {
+        let f = tempfile::NamedTempFile::new().expect("tempfile");
+        let result = check_device_not_busy(f.path().to_str().unwrap());
+        assert!(
+            result.is_ok(),
+            "regular file must never trigger the EBUSY guard: {result:?}"
+        );
+    }
+
+    /// The pipeline must emit Unmounting *before* it could ever hit the busy
+    /// check — i.e. the stage order must be Unmounting → Writing, not a
+    /// premature Error before Unmounting.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn pipeline_unmounting_precedes_busy_check_in_stage_stream() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let img = dir.path().join("img.bin");
+        let dev = dir.path().join("dev.bin");
+
+        let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
+        std::fs::write(&img, &data).unwrap();
+        std::fs::File::create(&dev).unwrap();
+
+        let (tx, rx) = make_channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
+
+        let events = drain(&rx);
+
+        // Must never see the "already in use" error on a temp file.
+        if let Some(msg) = find_error(&events) {
+            assert!(
+                !msg.contains("already in use"),
+                "temp file pipeline must not emit a false-positive busy error: {msg}"
+            );
+        }
+
+        // Unmounting must appear before Writing (busy check sits between them).
+        let stages: Vec<&FlashStage> = events
+            .iter()
+            .filter_map(|e| {
+                if let FlashEvent::Stage(s) = e {
+                    Some(s)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let pos_unmounting = stages.iter().position(|s| **s == FlashStage::Unmounting);
+        let pos_writing = stages.iter().position(|s| **s == FlashStage::Writing);
+
+        assert!(
+            pos_unmounting.is_some(),
+            "pipeline must emit Unmounting stage"
+        );
+        assert!(pos_writing.is_some(), "pipeline must emit Writing stage");
+        assert!(
+            pos_unmounting.unwrap() < pos_writing.unwrap(),
+            "Unmounting must precede Writing (busy check lives between them)"
+        );
+    }
+
+    // ── Non-Linux pipeline stage ordering ────────────────────────────────────
+
+    /// On macOS, `O_EXCL` on a block device does not produce `EBUSY` for
+    /// mounted partitions — the kernel uses a different locking model. The
+    /// busy-device scenario is handled by `open_device_for_writing` returning
+    /// `EBUSY` at write time. We therefore have no pre-flight guard on macOS,
+    /// but we still verify the stage ordering and the absence of a spurious
+    /// busy error on a temp file.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn pipeline_unmounting_precedes_writing_macos() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let img = dir.path().join("img.bin");
+        let dev = dir.path().join("dev.bin");
+
+        let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
+        std::fs::write(&img, &data).unwrap();
+        std::fs::File::create(&dev).unwrap();
+
+        let (tx, rx) = make_channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
+
+        let events = drain(&rx);
+
+        // Must never see "already in use" on a plain temp file.
+        if let Some(msg) = find_error(&events) {
+            assert!(
+                !msg.contains("already in use"),
+                "macOS pipeline must not emit a false-positive busy error: {msg}"
+            );
+        }
+
+        let stages: Vec<&FlashStage> = events
+            .iter()
+            .filter_map(|e| {
+                if let FlashEvent::Stage(s) = e {
+                    Some(s)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let pos_unmounting = stages.iter().position(|s| **s == FlashStage::Unmounting);
+        let pos_writing = stages.iter().position(|s| **s == FlashStage::Writing);
+
+        assert!(
+            pos_unmounting.is_some(),
+            "pipeline must emit Unmounting stage"
+        );
+        assert!(pos_writing.is_some(), "pipeline must emit Writing stage");
+        assert!(
+            pos_unmounting.unwrap() < pos_writing.unwrap(),
+            "Unmounting must precede Writing on macOS"
+        );
+    }
+
+    /// On Windows, device-busy is caught by `ERROR_SHARING_VIOLATION` (error
+    /// code 32) inside `open_device_for_writing` — there is no pre-flight
+    /// `O_EXCL` guard. Verify stage ordering and no false busy error on a
+    /// temp file.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn pipeline_unmounting_precedes_writing_windows() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let img = dir.path().join("img.bin");
+        let dev = dir.path().join("dev.bin");
+
+        let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
+        std::fs::write(&img, &data).unwrap();
+        std::fs::File::create(&dev).unwrap();
+
+        let (tx, rx) = make_channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
+
+        let events = drain(&rx);
+
+        // Must never see "already in use" on a plain temp file.
+        if let Some(msg) = find_error(&events) {
+            assert!(
+                !msg.contains("already in use"),
+                "Windows pipeline must not emit a false-positive busy error: {msg}"
+            );
+        }
+
+        let stages: Vec<&FlashStage> = events
+            .iter()
+            .filter_map(|e| {
+                if let FlashEvent::Stage(s) = e {
+                    Some(s)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let pos_unmounting = stages.iter().position(|s| **s == FlashStage::Unmounting);
+        let pos_writing = stages.iter().position(|s| **s == FlashStage::Writing);
+
+        assert!(
+            pos_unmounting.is_some(),
+            "pipeline must emit Unmounting stage"
+        );
+        assert!(pos_writing.is_some(), "pipeline must emit Writing stage");
+        assert!(
+            pos_unmounting.unwrap() < pos_writing.unwrap(),
+            "Unmounting must precede Writing on Windows"
+        );
+    }
+
+    /// Verify that `open_device_for_writing` on Windows produces a descriptive
+    /// message for `ERROR_SHARING_VIOLATION` (win32 error 32) — the Windows
+    /// equivalent of EBUSY.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn open_device_for_writing_sharing_violation_message() {
+        // We cannot easily synthesise error 32 without a real locked device,
+        // but we can confirm the non-existent-path error is descriptive and
+        // does NOT accidentally claim "already in use".
+        let dir = tempfile::tempdir().expect("tempdir");
+        let img = dir.path().join("img.bin");
+        let nonexistent_dev = dir.path().join("no_such_device");
+
+        let data: Vec<u8> = vec![0u8; 512];
+        std::fs::write(&img, &data).unwrap();
+
+        let (tx, rx) = make_channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        run_pipeline(
+            img.to_str().unwrap(),
+            nonexistent_dev.to_str().unwrap(),
+            tx,
+            cancel,
+        );
+
+        let events = drain(&rx);
+        // The pipeline must fail (device not found or cannot open).
+        let has_error = events.iter().any(|e| matches!(e, FlashEvent::Error(_)));
+        assert!(has_error, "pipeline must fail for a non-existent device");
+
+        if let Some(msg) = find_error(&events) {
+            assert!(
+                !msg.contains("already in use"),
+                "non-existent device must not emit a spurious 'already in use' message: {msg}"
+            );
+        }
     }
 }

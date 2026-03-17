@@ -31,3 +31,6 @@ sha2          = { workspace = true }
 # ── Windows-only system APIs ──────────────────────────────────────────────────
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys   = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

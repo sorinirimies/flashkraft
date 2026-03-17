@@ -1411,6 +1411,7 @@ dependencies = [
  "sha2",
  "sled",
  "sysinfo",
+ "tempfile",
  "tokio",
  "windows-sys 0.59.0",
 ]
