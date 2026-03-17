@@ -2,9 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.5 - 2026-03-17
+### ♻️ Refactor
+- Refactor device busy check and add tests for flash pipeline
+### 📦 Other Changes
+- Bump tui-file-explorer and tui-piechart dependencies
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.4...v0.8.5
 ## 0.8.4 - 2026-03-17
 ### ➕ Added
 - Add unified FlashUpdate event type for frontend progress
+### 🔧 Chores
+- chore: bump version to 0.8.4
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.3...v0.8.4
 ## 0.8.3 - 2026-03-17
 ### ➕ Added
