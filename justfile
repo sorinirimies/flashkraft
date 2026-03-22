@@ -447,6 +447,20 @@ push-all:
     git push gitea main
     @echo "✅ Pushed to both GitHub and Gitea!"
 
+# Pull the current branch from GitHub (origin)
+pull:
+    git pull origin main
+
+# Pull the current branch from Gitea
+pull-gitea:
+    git pull gitea main
+
+# Pull the current branch from both remotes
+pull-all:
+    git pull origin main
+    git pull gitea main
+    @echo "✅ Pulled from both GitHub and Gitea!"
+
 # Push all tags to GitHub
 push-tags:
     git push origin --tags
