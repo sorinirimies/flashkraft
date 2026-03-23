@@ -2,11 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.6 - 2026-03-23
+### ➕ Added
+- Add pull, pull-gitea, and pull-all recipes to justfile
+- Add tempfile dependency to Cargo.toml
+### 📦 Other Changes
+- Migrate all release and publish scripts from Bash to Nu, add Nu test
+- Downgrade flashkraft packages and update tui-file-explorer
+### 🔧 Chores
+- chore: nightly dependency update 2026-03-18
+- chore: nightly dependency update 2026-03-19
+- chore: nightly dependency update 2026-03-20
+- chore: nightly dependency update 2026-03-22
+- chore: nightly dependency update 2026-03-23
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.5...v0.8.6
 ## 0.8.5 - 2026-03-17
 ### ♻️ Refactor
 - Refactor device busy check and add tests for flash pipeline
 ### 📦 Other Changes
 - Bump tui-file-explorer and tui-piechart dependencies
+### 🔧 Chores
+- chore: bump version to 0.8.5
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.4...v0.8.5
 ## 0.8.4 - 2026-03-17
 ### ➕ Added
