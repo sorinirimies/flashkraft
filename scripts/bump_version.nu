@@ -217,8 +217,7 @@ Version must be in format: X.Y.Z or X.Y.Z-suffix \(e.g., 0.9.0 or 0.9.0-beta.1\)
     print ""
     print $"($cyan)Step 6/8: Running cargo clippy...($reset)"
     let clippy = (do {
-        run-external "cargo" "clippy" "--workspace" "--all-targets" "--all-features"
-            "--" "-D" "warnings" "-A" "deprecated"
+        run-external "cargo" "clippy" "--workspace" "--all-targets" "--all-features" "--" "-D" "warnings" "-A" "deprecated"
     } | complete)
     if $clippy.exit_code != 0 {
         error make { msg: $"($red)✗ Clippy found issues. Please fix them before continuing.($reset)" }
@@ -250,8 +249,7 @@ Version must be in format: X.Y.Z or X.Y.Z-suffix \(e.g., 0.9.0 or 0.9.0-beta.1\)
 
     # Stage changed files
     let diff = (do {
-        run-external "git" "diff" "--quiet"
-            "Cargo.toml" "Cargo.lock" "README.md" "CHANGELOG.md"
+        run-external "git" "diff" "--quiet" "Cargo.toml" "Cargo.lock" "README.md" "CHANGELOG.md"
     } | complete)
 
     if $diff.exit_code == 0 {

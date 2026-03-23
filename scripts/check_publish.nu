@@ -34,8 +34,7 @@ def main [] {
     print $"($cyan)── Clippy ──($reset)"
     print -n "  cargo clippy --workspace ... "
     let clippy = (do {
-        run-external "cargo" "clippy" "--workspace" "--all-targets" "--all-features"
-            "--" "-D" "warnings" "-A" "deprecated"
+        run-external "cargo" "clippy" "--workspace" "--all-targets" "--all-features" "--" "-D" "warnings" "-A" "deprecated"
     } | complete)
     if $clippy.exit_code == 0 {
         print $"($green)✓ no clippy warnings($reset)"
@@ -96,7 +95,7 @@ def main [] {
     let workspace_version = (open Cargo.toml | get workspace.package.version)
 
     if ($workspace_version | is-empty) {
-        print $"($red)✗ could not read \[workspace.package\] version from Cargo.toml($reset)"
+        print $"($red)✗ could not read [workspace.package] version from Cargo.toml($reset)"
         $errors = $errors + 1
     } else {
         print $"  workspace version: ($yellow)($workspace_version)($reset) ... ($green)✓ found($reset)"
