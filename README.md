@@ -350,8 +350,19 @@ flashkraft/                              ← workspace root
 │               └── mod.rs              built-in keyboard-driven file browser
 │
 ├── scripts/
-│   ├── bump_version.sh
-│   └── check_publish.sh
+│   ├── version.nu               print current workspace version
+│   ├── bump_version.nu          automated workspace version bump
+│   ├── check_publish.nu         pre-publish readiness check (all 3 crates)
+│   ├── release_prepare.nu       generate CHANGELOG.md + RELEASE_NOTES.md
+│   ├── setup_gitea.nu           add / update the Gitea remote
+│   ├── migrate_to_gitea.nu      migrate project to dual GitHub + Gitea hosting
+│   └── tests/
+│       ├── runner.nu            shared test runner (discovers "test …" commands)
+│       ├── run_all.nu           runs every test_*.nu suite with a summary table
+│       ├── test_version.nu      tests for version.nu parsing logic
+│       ├── test_bump_version.nu tests for bump_version.nu update logic
+│       ├── test_check_publish.nu tests for check_publish.nu checks
+│       └── test_release_prepare.nu tests for release_prepare.nu notes generation
 │
 └── .github/workflows/
     ├── ci.yml

@@ -9,7 +9,7 @@ resolver = "2"
 
 
 [workspace.package]
-version      = "0.8.5"
+version      = "0.8.3"
 edition      = "2021"
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
 license      = "MIT"
@@ -39,7 +39,6 @@ dirs         = "5.0"
 sha2         = "0.10"
 tokio        = { version = "1", features = ["full"] }
 anyhow       = "1"
-tempfile     = "3"
 
 # GUI (Iced)
 iced         = { version = "0.13.1", features = ["advanced", "canvas"] }
@@ -50,13 +49,13 @@ rfd          = "0.15"
 # TUI (Ratatui)
 ratatui              = "0.30"
 crossterm            = "0.29"
-tui-file-explorer    = "0.7.1"
+tui-file-explorer    = "0.8.1"
 tui-slider   = "0.3.2"
-tui-piechart = "0.3.1"
+tui-piechart = "0.3.0"
 tui-checkbox = "0.4.3"
 
 # Internal crates
-flashkraft-core = { path = "crates/flashkraft-core", version = "0.8.5" }
+flashkraft-core = { path = "crates/flashkraft-core", version = "0.8.3" }
 
 [profile.dev]
 opt-level = 0

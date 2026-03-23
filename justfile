@@ -16,6 +16,12 @@ _check-git-cliff:
         echo "❌ git-cliff not found. Install with: cargo install git-cliff"; exit 1; \
     }
 
+# Check nu (nushell) is available
+_check-nu:
+    @command -v nu >/dev/null 2>&1 || { \
+        echo "❌ nu (nushell) not found. Install: https://www.nushell.sh"; exit 1; \
+    }
+
 _check-vhs:
     @command -v vhs >/dev/null 2>&1 || { \
         echo "❌ vhs not found."; \
@@ -28,6 +34,7 @@ _check-vhs:
 install-tools:
     @echo "Installing development tools…"
     @command -v git-cliff >/dev/null 2>&1 || cargo install git-cliff
+    @command -v nu >/dev/null 2>&1 && echo "✅ nu found" || echo "⚠ nu (nushell) not found. Install: https://www.nushell.sh"
     @echo "✅ All tools installed!"
 
 # ── System install / uninstall ────────────────────────────────────────────────
@@ -139,6 +146,14 @@ test-gui:
 # Test only the TUI crate
 test-tui:
     cargo test -p flashkraft-tui --all-features
+
+# Run Nu script tests
+test-nu: _check-nu
+    nu scripts/tests/run_all.nu
+
+# Run both Rust and Nu tests
+test-all-nu: test test-nu
+    @echo "✅ All Rust and Nu tests passed!"
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 
@@ -311,15 +326,13 @@ changelog-preview: _check-git-cliff
 #
 # Flow:
 #   1. check-all  — fmt-check → clippy → tests (quality gate)
-#   2. bump_version.sh — updates Cargo.toml, Cargo.lock, CHANGELOG.md, commits, tags
+#   2. bump_version.nu — updates Cargo.toml, Cargo.lock, CHANGELOG.md, commits, tags
 #
 # After this completes, push with one of:
 #   just push-release-all   (both remotes)
 #   git push origin main && git push origin v<version>
-bump version: check-all _check-git-cliff
-    @echo "Bumping workspace version to {{version}}…"
-    @echo "  All crates inherit the version via version.workspace = true"
-    @./scripts/bump_version.sh --yes {{version}}
+bump version: check-all _check-git-cliff _check-nu
+    nu scripts/bump_version.nu --yes {{version}}
 
 # ── Publish (crates.io) ───────────────────────────────────────────────────────
 # Publish order must be: core → gui → tui (dependency order).
@@ -327,8 +340,8 @@ bump version: check-all _check-git-cliff
 # published as a prerequisite because cargo requires resolved version deps.
 
 # Run the full pre-publish readiness check (fmt, clippy, tests, docs, dry-run)
-check-publish:
-    @./scripts/check_publish.sh
+check-publish: _check-nu
+    nu scripts/check_publish.nu
 
 # Dry-run publish for all three crates (in dependency order)
 publish-dry: check-all
@@ -404,11 +417,8 @@ outdated:
     cargo outdated
 
 # Show the current workspace version
-version:
-    @grep -A5 '^\[workspace\.package\]' Cargo.toml \
-        | grep '^version' \
-        | head -1 \
-        | sed 's/version *= *"\(.*\)"/\1/'
+version: _check-nu
+    @nu scripts/version.nu
 
 # Show project info
 info:
@@ -538,8 +548,10 @@ sync-gitea:
     git push gitea --tags --force
     @echo "✅ Gitea force-synced with GitHub."
 
-# Add a Gitea remote (provide full URL)
-setup-gitea url:
-    git remote add gitea {{url}}
-    @echo "✅ Gitea remote added: {{url}}"
-    @echo "Verify with: just remotes"
+# Add a Gitea remote and optionally push — interactive (nu script)
+setup-gitea url: _check-nu
+    nu scripts/setup_gitea.nu {{url}}
+
+# Migrate this project to dual GitHub + Gitea hosting (interactive)
+migrate-gitea: _check-nu
+    nu scripts/migrate_to_gitea.nu

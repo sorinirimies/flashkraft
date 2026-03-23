@@ -223,46 +223,11 @@ jobs:
       - name: Install git-cliff
         run: cargo install git-cliff --locked
 
-      - name: Generate changelog for this release
-        run: |
-          TAG="${{ needs.validate.outputs.tag }}"
-          VERSION="${{ needs.validate.outputs.version }}"
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+      - name: Install Nushell
+        run: cargo install nu --locked
 
-          {
-            echo "# FlashKraft ${VERSION}"
-            echo ""
-            echo "## 🚀 What's New"
-            echo ""
-          } > RELEASE_NOTES.md
-
-          if [ -n "${LAST_TAG}" ]; then
-            git-cliff --config cliff.toml "${LAST_TAG}".."${TAG}" \
-              --strip header >> RELEASE_NOTES.md
-          else
-            git-cliff --config cliff.toml --tag "${TAG}" \
-              --strip header >> RELEASE_NOTES.md
-          fi
-
-          {
-            echo ""
-            echo "## 📦 Installation"
-            echo ""
-            echo "### Desktop GUI (Iced)"
-            echo "\`\`\`bash"
-            echo "cargo install flashkraft"
-            echo "\`\`\`"
-            echo ""
-            echo "### Terminal UI (Ratatui)"
-            echo "\`\`\`bash"
-            echo "cargo install flashkraft-tui"
-            echo "\`\`\`"
-            echo ""
-            echo "Or download a pre-built binary below."
-          } >> RELEASE_NOTES.md
-
-          # Also update the full CHANGELOG.md
-          git-cliff --config cliff.toml --output CHANGELOG.md
+      - name: Prepare release (RELEASE_NOTES.md + CHANGELOG.md)
+        run: nu scripts/release_prepare.nu ${{ needs.validate.outputs.tag }}
 
       # Download every artifact uploaded by the build matrix
       - name: Download all artifacts

@@ -250,3 +250,26 @@ jobs:
       # LLVM codegen and linking — fast and sufficient to catch API mismatches.
       - name: cargo check flashkraft-core (${{ matrix.target }})
         run: cargo check -p flashkraft-core --target ${{ matrix.target }}
+
+  # ── 7. Nu script tests ───────────────────────────────────────────────────────
+  test-nu:
+    name: test-nu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Generate lockfile (if absent)
+        if: hashFiles('Cargo.lock') == ''
+        run: cargo generate-lockfile
+
+      - name: Install Nushell
+        run: cargo install nu --locked
+
+      - name: Run Nu script tests
+        run: nu scripts/tests/run_all.nu
