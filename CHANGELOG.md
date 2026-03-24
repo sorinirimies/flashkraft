@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.7 - 2026-03-24
+### ➕ Added
+- Add nightly dependency upgrade script and tests
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.6...v0.8.7
 ## 0.8.6 - 2026-03-23
 ### ➕ Added
 - Add pull, pull-gitea, and pull-all recipes to justfile
@@ -15,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - chore: nightly dependency update 2026-03-20
 - chore: nightly dependency update 2026-03-22
 - chore: nightly dependency update 2026-03-23
+- chore: bump version to 0.8.6
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.5...v0.8.6
 ## 0.8.5 - 2026-03-17
 ### ♻️ Refactor
