@@ -15,14 +15,16 @@ concurrency:
 
 jobs:
   update-deps:
-    name: Update deps & quality gate
+    name: Upgrade deps & quality gate
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITEA_TOKEN || github.token }}
+          fetch-depth: 0
 
+      # ── System libraries (required by the Iced GUI crate) ────────────────────
       - name: Install Linux GUI system libraries
         run: |
           sudo apt-get update -qq
@@ -39,6 +41,13 @@ jobs:
             libfontconfig1-dev \
             libssl-dev
 
+      # ── mingw-w64 (needed for the Windows cross-compile check) ───────────────
+      - name: Install mingw-w64
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends mingw-w64
+
+      # ── Rust toolchain ────────────────────────────────────────────────────────
       - name: Install Rust stable (rustfmt + clippy + cross targets)
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -48,54 +57,27 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Update dependencies
-        run: cargo update
+      # ── Tool dependencies ─────────────────────────────────────────────────────
+      - name: Install cargo-edit (provides cargo upgrade)
+        run: cargo install cargo-edit --locked
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Install Nushell
+        run: cargo install nu --locked
 
-      - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
-
-      - name: Run tests
-        run: cargo test --workspace --all-features --all-targets
-
-      # ── Cross-compile checks ─────────────────────────────────────────────────
-      # Verify platform-specific code (Windows DeviceIoControl, macOS diskutil)
-      # type-checks correctly from the Linux runner — no Windows/macOS runner needed.
-      - name: Install mingw-w64 (for Windows cross-check)
+      # ── Nightly upgrade ───────────────────────────────────────────────────────
+      # All logic lives in the Nu script:
+      #   Phase 1 — cargo upgrade --workspace --incompatible allow
+      #             rewrites version pins in [workspace.dependencies]
+      #   Phase 2 — cargo update (syncs Cargo.lock)
+      #   Quality gate — fmt → clippy → tests → cross-compile checks
+      #   Commit strategy:
+      #     gate passed  + Cargo.toml changed → commit Cargo.toml + Cargo.lock
+      #     gate failed  + Cargo.toml changed → revert Cargo.toml, commit lock only, exit 1
+      #     gate passed  + only Cargo.lock    → commit Cargo.lock only
+      #     nothing changed                   → nothing to commit, exit 0
+      - name: Run nightly dependency upgrade
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends mingw-w64
-
-      - name: cargo check core — x86_64-pc-windows-gnu
-        run: cargo check -p flashkraft-core --target x86_64-pc-windows-gnu
-
-      - name: cargo check core — x86_64-apple-darwin
-        run: cargo check -p flashkraft-core --target x86_64-apple-darwin
-
-      - name: cargo check core — aarch64-apple-darwin
-        run: cargo check -p flashkraft-core --target aarch64-apple-darwin
-
-      - name: Check for Cargo.lock changes
-        id: diff
-        run: |
-          if git diff --quiet Cargo.lock; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Commit and push updated Cargo.lock
-        if: steps.diff.outputs.changed == 'true'
-        run: |
-          git config user.name  "gitea-actions[bot]"
-          git config user.email "gitea-actions[bot]@noreply.gitea"
-          git add Cargo.lock
-          git commit -m "chore: nightly dependency update $(date -u '+%Y-%m-%d')"
-          git push origin main
-          echo "✅ Cargo.lock updated and pushed."
-
-      - name: Nothing to update
-        if: steps.diff.outputs.changed == 'false'
-        run: echo "✅ All dependencies already up to date — nothing to commit."
+          nu scripts/upgrade_deps.nu \
+            --bot-name  "gitea-actions[bot]" \
+            --bot-email "gitea-actions[bot]@noreply.gitea" \
+            --remote    "origin"

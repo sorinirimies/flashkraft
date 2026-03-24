@@ -193,6 +193,10 @@ pub struct App {
     pub explorer_theme_idx: usize,
     /// Whether the global theme-picker side panel is visible (shown on every screen).
     pub show_app_theme_panel: bool,
+    /// Whether the browse-screen options panel (sort, hidden files) is open.
+    pub show_browse_options: bool,
+    /// Whether the browse-screen editor-picker panel is open.
+    pub show_browse_editor: bool,
     /// Cursor position inside the global theme panel (for keyboard navigation).
     pub app_theme_panel_cursor: usize,
     /// Sled-backed preference store — used to persist the active theme across restarts.
@@ -271,6 +275,8 @@ impl App {
                     .unwrap_or(0)
             },
             show_app_theme_panel: false,
+            show_browse_options: false,
+            show_browse_editor: false,
             app_theme_panel_cursor: 0,
             storage: TuiStorage::open(),
             file_clipboard: None,
