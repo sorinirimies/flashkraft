@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.8 - 2026-03-25
+### 📦 Other Changes
+- Replace nightly dependency update workflow with improved nightly
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.7...v0.8.8
 ## 0.8.7 - 2026-03-24
 ### ➕ Added
 - Add nightly dependency upgrade script and tests
+### 🔧 Chores
+- chore: bump version to 0.8.7
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.6...v0.8.7
 ## 0.8.6 - 2026-03-23
 ### ➕ Added
