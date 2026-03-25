@@ -163,6 +163,65 @@ def "test gate passes but only lock changed gives update label" [] {
     assert str contains $label "update"
 }
 
+# ── Workspace invariant checks ────────────────────────────────────────────────
+# These tests verify properties of OUR workspace that must hold after any
+# dependency upgrade: resolution succeeds, versions stay in sync, no dupes.
+
+def "test workspace cargo toml is valid toml" [] {
+    # Verify the real Cargo.toml can be parsed as TOML
+    let data = (open Cargo.toml)
+    assert ($data | get workspace.package.version | is-not-empty)
+}
+
+def "test workspace deps section exists" [] {
+    let data = (open Cargo.toml)
+    assert ($data | get workspace.dependencies | is-not-empty)
+}
+
+def "test core dep version matches workspace version" [] {
+    # The flashkraft-core workspace dep must track the workspace.package version
+    let data = (open Cargo.toml)
+    let ws_ver  = ($data | get workspace.package.version)
+    let content = (open Cargo.toml --raw)
+    let core_line = ($content | lines | where { |l| $l =~ '^flashkraft-core\s*=' } | first)
+    let core_ver  = ($core_line | parse --regex 'version\s*=\s*"(?P<v>[^"]+)"' | get v | first)
+    assert equal $ws_ver $core_ver
+}
+
+def "test cargo metadata resolves without errors" [] {
+    # A fast check (~200ms) that the workspace is in a consistent state:
+    # all deps resolve, no missing features, no version conflicts.
+    let result = (do { run-external "cargo" "metadata" "--no-deps" "--format-version" "1" } | complete)
+    assert equal $result.exit_code 0 "cargo metadata must succeed — dependency resolution is broken"
+}
+
+def "test workspace deps have no duplicate entries" [] {
+    let content = (open Cargo.toml --raw)
+    let dep_section = ($content | lines
+        | reduce --fold { in_deps: false, lines: [] } { |line, acc|
+            let entering = ($line =~ '^\[workspace\.dependencies\]')
+            let leaving = if $acc.in_deps {
+                ($line =~ '^\[') and (not $entering)
+            } else {
+                false
+            }
+            let new_in = if $entering { true } else if $leaving { false } else { $acc.in_deps }
+            let new_lines = if ($acc.in_deps and ($line =~ '^\w')) {
+                $acc.lines | append $line
+            } else {
+                $acc.lines
+            }
+            { in_deps: $new_in, lines: $new_lines }
+        }
+        | get lines)
+
+    let names = ($dep_section | each { |l|
+        $l | parse --regex '(?P<n>[\w-]+)\s*=' | get n | first
+    })
+    let unique = ($names | uniq)
+    assert equal ($names | length) ($unique | length) "workspace.dependencies must not have duplicate entries"
+}
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 def main [] {

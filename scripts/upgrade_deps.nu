@@ -2,7 +2,7 @@
 # Nightly dependency upgrade for the FlashKraft workspace.
 #
 # Phases:
-#   1. cargo upgrade --workspace --incompatible allow
+#   1. cargo upgrade --incompatible allow
 #      Rewrites version pins in [workspace.dependencies] so libs like
 #      `dirs = "5.0"` and `nix = "0.29"` can advance to newer releases.
 #   2. cargo update
@@ -102,7 +102,7 @@ def main [
     print $"($cyan)Phase 1/2 — Upgrading Cargo.toml dependency pins...($reset)"
 
     let upgrade_result = (do {
-        run-external "cargo" "upgrade" "--workspace" "--incompatible" "allow"
+        run-external "cargo" "upgrade" "--incompatible" "allow"
     } | complete)
 
     let upgrade_log = ($upgrade_result.stdout | str trim)

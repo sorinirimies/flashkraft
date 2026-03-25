@@ -21,21 +21,21 @@ repository   = "https://github.com/sorinirimies/flashkraft"
 
 [workspace.dependencies]
 # Core / shared
-sysinfo      = "0.30"
-windows-sys  = { version = "0.59", features = [
+sysinfo      = "0.38"
+windows-sys  = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_System_Ioctl",
     "Win32_System_IO",
 ] }
-nix          = { version = "0.29", features = ["fs", "ioctl", "mount", "process", "user"] }
+nix          = { version = "0.31", features = ["fs", "ioctl", "mount", "process", "user"] }
 notify       = { version = "8.2.0", features = [] }
 
 futures      = "0.3"
 futures-timer = "3.0"
 sled         = "0.34"
-dirs         = "5.0"
+dirs         = "6.0"
 sha2         = "0.10"
 tokio        = { version = "1", features = ["full"] }
 anyhow       = "1"
@@ -50,9 +50,9 @@ rfd          = "0.15"
 # TUI (Ratatui)
 ratatui              = "0.30"
 crossterm            = "0.29"
-tui-file-explorer    = "0.8.3"
+tui-file-explorer    = "0.8.8"
 tui-slider   = "0.3.2"
-tui-piechart = "0.3.0"
+tui-piechart = "0.3.1"
 tui-checkbox = "0.4.3"
 
 # Internal crates

@@ -1,0 +1,185 @@
+name: Nightly Dependency Upgrade
+
+on:
+  schedule:
+    # Runs at 02:00 UTC every day (03:00 CET)
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: deps-update
+  cancel-in-progress: true
+
+jobs:
+  upgrade-deps:
+    name: Upgrade Dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      # ── System libraries (required by the Iced GUI crate) ────────────────────
+      - name: Install Linux GUI system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libssl-dev
+
+      # ── mingw-w64 (needed for the Windows cross-compile check) ───────────────
+      - name: Install mingw-w64
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends mingw-w64
+
+      # ── Rust toolchain ────────────────────────────────────────────────────────
+      - name: Install Rust stable (rustfmt + clippy + cross targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-gnu,x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # ── cargo-edit (provides `cargo upgrade`) ────────────────────────────────
+      - name: Install cargo-edit
+        run: cargo install cargo-edit --locked
+
+      # ── Upgrade all dependency pins ──────────────────────────────────────────
+      # `cargo upgrade --incompatible allow` rewrites version constraints in
+      # [workspace.dependencies] so pinned libs like `dirs = "5.0"` can advance
+      # to "6.0", `nix = "0.29"` to "0.31", etc.
+      # `cargo update` then resolves the new constraints into Cargo.lock.
+      - name: Upgrade workspace dependency pins
+        run: cargo upgrade --incompatible allow
+
+      - name: Sync Cargo.lock
+        run: cargo update
+
+      # ── Check for changes ────────────────────────────────────────────────────
+      - name: Check for changes
+        id: check
+        run: |
+          if git diff --quiet Cargo.toml Cargo.lock; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Generate upgrade summary for the PR body ─────────────────────────────
+      - name: Generate upgrade summary
+        if: steps.check.outputs.has_changes == 'true'
+        id: summary
+        run: |
+          {
+            echo 'diff<<EOF'
+
+            TOML_DIFF=$(git diff Cargo.toml)
+            if [ -n "$TOML_DIFF" ]; then
+              echo '### `Cargo.toml` pin changes'
+              echo ''
+              echo '```diff'
+              echo "$TOML_DIFF" | head -200
+              echo '```'
+              echo ''
+            fi
+
+            echo '### `Cargo.lock` changes (truncated)'
+            echo ''
+            echo '```diff'
+            git diff --stat Cargo.lock
+            echo '```'
+
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # ── Quality gate ─────────────────────────────────────────────────────────
+      - name: Check formatting
+        if: steps.check.outputs.has_changes == 'true'
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        if: steps.check.outputs.has_changes == 'true'
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
+
+      - name: Run tests
+        if: steps.check.outputs.has_changes == 'true'
+        run: cargo test --workspace --all-features --all-targets
+
+      - name: Cross-check — x86_64-pc-windows-gnu
+        if: steps.check.outputs.has_changes == 'true'
+        run: cargo check -p flashkraft-core --target x86_64-pc-windows-gnu
+
+      - name: Cross-check — x86_64-apple-darwin
+        if: steps.check.outputs.has_changes == 'true'
+        run: cargo check -p flashkraft-core --target x86_64-apple-darwin
+
+      - name: Cross-check — aarch64-apple-darwin
+        if: steps.check.outputs.has_changes == 'true'
+        run: cargo check -p flashkraft-core --target aarch64-apple-darwin
+
+      # ── Create Pull Request ──────────────────────────────────────────────────
+      - name: Create Pull Request
+        if: steps.check.outputs.has_changes == 'true'
+        id: create-pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(deps): nightly dependency upgrade"
+          title: "chore(deps): nightly dependency upgrade"
+          body: |
+            ## Automated Nightly Dependency Upgrade
+
+            This PR was automatically created by the **Nightly Dependency Upgrade** workflow.
+
+            `cargo upgrade --incompatible allow` + `cargo update` were run to
+            upgrade all dependencies — including major-version bumps for workspace pins
+            in `[workspace.dependencies]`.
+
+            ### What was updated
+
+            ${{ steps.summary.outputs.diff }}
+
+            ---
+
+            > ✅ All quality checks passed: **fmt**, **clippy**, **tests**, and
+            > **cross-compile checks** (Windows x86_64, macOS x86_64, macOS ARM).
+          branch: deps/nightly-dependency-upgrade
+          labels: dependencies
+          delete-branch: true
+
+      # ── Auto-merge the PR ────────────────────────────────────────────────────
+      # The full quality gate (fmt, clippy, tests, cross-checks) already passed
+      # above, so merging is safe.  Try --auto first (honours branch protection
+      # rules and waits for any required status checks triggered by the PR);
+      # fall back to immediate merge if auto-merge is not enabled in the repo.
+      - name: Auto-merge Pull Request
+        if: steps.create-pr.outputs.pull-request-number
+        run: |
+          PR="${{ steps.create-pr.outputs.pull-request-number }}"
+          echo "Merging PR #${PR}..."
+          gh pr merge "$PR" --auto --merge --delete-branch 2>/dev/null \
+            || gh pr merge "$PR" --merge --delete-branch
+          echo "✅ PR #${PR} merged."
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Nothing to update
+        if: steps.check.outputs.has_changes == 'false'
+        run: echo "✅ All dependencies already up to date — nothing to upgrade."
