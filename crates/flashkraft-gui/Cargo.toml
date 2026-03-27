@@ -39,7 +39,7 @@ dirs = { workspace = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 # Explicitly enable both Wayland and X11 backends so the app works on any
 # Linux display server without needing env vars pre-set at build time.
-iced_winit = { version = "0.13", features = ["x11", "wayland", "wayland-dlopen", "wayland-csd-adwaita"] }
+iced_winit = { version = "0.14", features = ["x11", "wayland"] }
 
 # ── Build dependencies ────────────────────────────────────────────────────────
 # winres embeds the UAC manifest into the Windows PE binary at compile time
