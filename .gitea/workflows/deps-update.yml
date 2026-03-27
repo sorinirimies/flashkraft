@@ -63,6 +63,18 @@ jobs:
       - name: Install cargo-edit
         run: cargo install cargo-edit --locked
 
+      # ── Pre-warm cargo registry ───────────────────────────────────────────────
+      # `cargo upgrade`'s recursive-dep resolver runs in offline mode and only
+      # considers package sources that are physically present in the local cache.
+      # If a previously-cached version has since been yanked (e.g.
+      # unicode-segmentation 1.13.1) the offline resolver finds no valid
+      # candidate and aborts.  Running `cargo update` first refreshes the
+      # registry index and rewrites Cargo.lock to non-yanked versions; `cargo
+      # fetch` then downloads those sources so the offline phase has at least
+      # one valid, non-yanked candidate for every transitive dependency.
+      - name: Pre-warm cargo registry (refresh index + fetch sources)
+        run: cargo update && cargo fetch
+
       # ── Upgrade all dependency pins ──────────────────────────────────────────
       # `cargo upgrade --incompatible allow` rewrites version constraints in
       # [workspace.dependencies] so pinned libs like `dirs = "5.0"` can advance
