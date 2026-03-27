@@ -2,9 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.9 - 2026-03-27
+### ✨ Features
+- feat: add Nix flake for reproducible builds
+### 📦 Other Changes
+- Merge pull request #2 from MartinLoeper/main
+- Pre-warm cargo registry before upgrading dependencies
+### 🔄 Updated
+- Update iced_winit to 0.14 and adjust features on Linux
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.8...v0.8.9
 ## 0.8.8 - 2026-03-25
 ### 📦 Other Changes
 - Replace nightly dependency update workflow with improved nightly
+### 🔧 Chores
+- chore: bump version to 0.8.8
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.7...v0.8.8
 ## 0.8.7 - 2026-03-24
 ### ➕ Added
