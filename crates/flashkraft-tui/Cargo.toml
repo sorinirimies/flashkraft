@@ -35,7 +35,7 @@ tui-checkbox = { workspace = true }
 dirs   = { workspace = true }
 
 # ── Persistence ───────────────────────────────────────────────────────────────
-sled   = { workspace = true }
+redb   = { workspace = true }
 
 # ── Async runtime ─────────────────────────────────────────────────────────────
 tokio   = { workspace = true }

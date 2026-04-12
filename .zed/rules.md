@@ -83,7 +83,7 @@ flashkraft/
 - **`tui/theme.rs`** — `TuiPalette` struct and `all_app_themes()`. Maps each
   `tui_file_explorer::Theme` preset to a `TuiPalette`, adding `bg`, `warn`,
   and `err` colours that the explorer theme model does not carry.
-- **`tui/storage.rs`** — `TuiStorage`: sled-backed preference store. Persists
+- **`tui/storage.rs`** — `TuiStorage`: redb-backed preference store. Persists
   the active theme name across restarts. All operations are infallible from the
   caller's perspective — a missing or corrupt DB is silently ignored.
 
@@ -94,7 +94,7 @@ flashkraft/
   a `bool` (consumed flag); all side-effects go through `App` state fields.
 - `flash_runner.rs` communicates exclusively via `tokio::sync::mpsc` channels.
   Never share state directly between the runner task and the UI.
-- `storage.rs` operations must never panic. Wrap every sled call in `.ok()` or
+- `storage.rs` operations must never panic. Wrap every redb call in `.ok()` or
   `.unwrap_or_default()`.
 
 ---
@@ -149,7 +149,7 @@ Always reference `pal.brand`, `pal.accent`, `pal.dim`, etc.
 ### Theme persistence
 Every theme change (`next_explorer_theme`, `prev_explorer_theme`,
 `theme_panel_confirm`) calls `App::persist_theme()`, which writes the theme
-name string to sled via `TuiStorage::save_theme`. On startup `App::new()`
+name string to redb via `TuiStorage::save_theme`. On startup `App::new()`
 reads the saved name back and resolves its index in `all_presets()`.
 
 Config DB paths:
@@ -222,7 +222,7 @@ Config DB paths:
   as the code under test.
 - Integration-style tests that span multiple modules go in `tests/` at the
   crate root.
-- Use `tempfile::tempdir()` for all filesystem tests (including sled storage).
+- Use `tempfile::tempdir()` for all filesystem tests (including redb storage).
 
 ### What to test
 - **State transitions** — every `App` method that mutates state gets at least
@@ -278,9 +278,9 @@ cargo test --workspace
 
 ---
 
-## 10. Persistence (sled)
+## 10. Persistence (redb)
 
-- Both `flashkraft-gui` and `flashkraft-tui` use `sled` for user preferences.
+- Both `flashkraft-gui` and `flashkraft-tui` use `redb` for user preferences.
   The DB files are separate:
   - GUI: `flashkraft/preferences.db`
   - TUI: `flashkraft/tui-prefs.db`
@@ -289,9 +289,9 @@ cargo test --workspace
   const KEY_THEME: &[u8] = b"tui_theme";
   ```
 - Values are UTF-8 strings. No binary serialisation formats (no serde, no
-  bincode) — plain strings are enough and are human-inspectable with `sled-cli`.
-- Always call `db.flush()` after `db.insert()` to guarantee durability.
-- Wrap every sled operation in `.ok()` — storage failures must never crash
+  bincode) — plain strings are enough.
+- Always commit the write transaction after inserts to guarantee durability.
+- Wrap every redb operation in `.ok()` — storage failures must never crash
   the application.
 
 ---
@@ -303,7 +303,7 @@ cargo test --workspace
 - Run `cargo update` + review `Cargo.lock` diffs before each release.
 - Do not add GUI dependencies (`iced`, `rfd`, etc.) to `flashkraft-core` or
   `flashkraft-tui`.
-- `dirs` and `sled` are workspace-wide — used by both GUI and TUI for config
+- `dirs` and `redb` are workspace-wide — used by both GUI and TUI for config
   directory resolution and preference storage respectively.
 - Git dependencies (`tui-slider`, `tui-piechart`, `tui-checkbox`) must be
   switched to crates.io versions when those crates are published.

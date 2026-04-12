@@ -199,7 +199,7 @@ pub struct App {
     pub show_browse_editor: bool,
     /// Cursor position inside the global theme panel (for keyboard navigation).
     pub app_theme_panel_cursor: usize,
-    /// Sled-backed preference store — used to persist the active theme across restarts.
+    /// Redb-backed preference store — used to persist the active theme across restarts.
     pub storage: TuiStorage,
     /// Clipboard entry for copy/cut operations inside the file explorer.
     pub file_clipboard: Option<FileClipboard>,
@@ -779,7 +779,7 @@ impl App {
         self.persist_theme();
     }
 
-    /// Write the current theme name to the sled store.
+    /// Write the current theme name to the redb store.
     fn persist_theme(&self) {
         let name = &self.explorer_themes[self.explorer_theme_idx].0;
         self.storage.save_theme(name);

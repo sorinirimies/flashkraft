@@ -56,7 +56,7 @@ No Electron, no shell scripts, no external tooling — pure Rust from UI to bloc
 
 ### GUI extras
 
-- 🎨 **21 beautiful Iced themes** to choose from, persisted across sessions via `sled`
+- 🎨 **21 beautiful Iced themes** to choose from, persisted across sessions via `redb`
 - 🖱️ **Native file picker** — powered by `rfd` for OS-native open dialogs
 
 ### TUI extras
@@ -311,7 +311,7 @@ flashkraft/                              ← workspace root
 │   │       │   ├── state.rs             Model + TEA methods
 │   │       │   ├── message.rs           all Message variants
 │   │       │   ├── update.rs            state transition logic
-│   │       │   ├── storage.rs           sled-backed theme persistence
+│   │       │   ├── storage.rs           redb-backed theme persistence
 │   │       │   ├── flash_subscription.rs Iced Subscription — streams FlashProgress
 │   │       │   └── commands/
 │   │       │       └── file_selection.rs async rfd file dialog
@@ -382,7 +382,7 @@ Items marked ★ form the flash pipeline and are described in detail above.
 | `sha2` | 0.10 | SHA-256 write verification |
 | `tokio` | 1 | Async runtime |
 | `futures` / `futures-timer` | 0.3 / 3.0 | Async channel primitives |
-| `sled` | 0.34 | Embedded key-value store |
+| `redb` | 4.0 | Embedded key-value store |
 | `dirs` | 5.0 | XDG data directory resolution |
 | `anyhow` | 1 | Error handling |
 

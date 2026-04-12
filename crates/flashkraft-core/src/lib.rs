@@ -19,7 +19,7 @@
 //! no `ratatui`, no `crossterm`).  It may only depend on:
 //! - OS / system crates (`sysinfo`, `nix`, `sha2`, …)
 //! - Async utilities (`tokio`, `futures`, `futures-timer`)
-//! - Persistence (`sled`, `dirs`)
+//! - Persistence (`redb`, `dirs`)
 
 // Utility macros must be declared first so they are available to every
 // subsequent module via the implicit `#[macro_use]` on the crate root.

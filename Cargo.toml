@@ -34,7 +34,7 @@ notify       = { version = "8.2.0", features = [] }
 
 futures      = "0.3"
 futures-timer = "3.0"
-sled         = "0.34"
+redb         = "4.0"
 dirs         = "6.0"
 sha2         = "0.10"
 tokio        = { version = "1", features = ["full"] }

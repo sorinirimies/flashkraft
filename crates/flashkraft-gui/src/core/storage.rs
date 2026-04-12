@@ -1,28 +1,39 @@
 //! Storage Module - Theme Persistence
 //!
-//! This module handles persistent storage of user preferences using sled,
+//! This module handles persistent storage of user preferences using redb,
 //! an embedded database. Currently stores theme selection.
 
 use iced::Theme;
-use sled::Db;
+use redb::{Database, ReadableDatabase, TableDefinition};
 use std::path::PathBuf;
 
 /// Key for storing the theme preference
 const THEME_KEY: &[u8] = b"theme";
 
+/// Table definition for the preferences table
+const TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("preferences");
+
 /// Storage manager for application preferences
-#[derive(Debug)]
 pub struct Storage {
-    db: Db,
+    db: Database,
+}
+
+impl std::fmt::Debug for Storage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Storage")
+            .field("db", &"<redb::Database>")
+            .finish()
+    }
 }
 
 impl Storage {
     /// Create a new storage instance
     ///
-    /// Opens or creates the sled database in the user's config directory
+    /// Opens or creates the redb database in the user's config directory
     pub fn new() -> Result<Self, String> {
         let db_path = Self::get_db_path()?;
-        let db = sled::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+        let db =
+            Database::create(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
         Ok(Self { db })
     }
 
@@ -43,8 +54,10 @@ impl Storage {
     ///
     /// Returns the saved theme or None if no theme is saved
     pub fn load_theme(&self) -> Option<Theme> {
-        let value = self.db.get(THEME_KEY).ok()??;
-        let theme_name = String::from_utf8(value.to_vec()).ok()?;
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(TABLE).ok()?;
+        let value = table.get(THEME_KEY).ok()??;
+        let theme_name = String::from_utf8(value.value().to_vec()).ok()?;
         Self::theme_from_string(&theme_name)
     }
 
@@ -53,12 +66,21 @@ impl Storage {
     /// Persists the theme selection to disk
     pub fn save_theme(&self, theme: &Theme) -> Result<(), String> {
         let theme_name = Self::theme_to_string(theme);
-        self.db
-            .insert(THEME_KEY, theme_name.as_bytes())
+        let write_txn = self
+            .db
+            .begin_write()
             .map_err(|e| format!("Failed to save theme: {}", e))?;
-        self.db
-            .flush()
-            .map_err(|e| format!("Failed to flush database: {}", e))?;
+        {
+            let mut table = write_txn
+                .open_table(TABLE)
+                .map_err(|e| format!("Failed to save theme: {}", e))?;
+            table
+                .insert(THEME_KEY, theme_name.as_bytes())
+                .map_err(|e| format!("Failed to save theme: {}", e))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| format!("Failed to save theme: {}", e))?;
         Ok(())
     }
 

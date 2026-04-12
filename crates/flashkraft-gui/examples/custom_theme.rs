@@ -5,7 +5,7 @@
 //!
 //! - 21 built-in Iced themes (dark + light variants)
 //! - Runtime theme switching via the 🎨 button
-//! - Theme preference persisted across sessions via `sled`
+//! - Theme preference persisted across sessions via `redb`
 //! - Every UI component — buttons, progress bars, panels — adapts instantly
 //!
 //! # Run

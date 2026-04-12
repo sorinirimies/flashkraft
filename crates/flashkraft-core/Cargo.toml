@@ -22,7 +22,7 @@ futures-timer = { workspace = true }
 tokio         = { workspace = true }
 
 # ── Storage / persistence ─────────────────────────────────────────────────────
-sled          = { workspace = true }
+redb          = { workspace = true }
 dirs          = { workspace = true }
 
 # ── Crypto ────────────────────────────────────────────────────────────────────

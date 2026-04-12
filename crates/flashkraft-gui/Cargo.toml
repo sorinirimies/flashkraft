@@ -33,7 +33,7 @@ futures       = { workspace = true }
 futures-timer = { workspace = true }
 
 # ── Storage / persistence ─────────────────────────────────────────────────────
-sled = { workspace = true }
+redb = { workspace = true }
 dirs = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]

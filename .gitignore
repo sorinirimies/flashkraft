@@ -146,15 +146,14 @@ tmp/
 temp/
 
 # =============================================================================
-# Persistence — sled embedded databases
+# Persistence — redb embedded databases
 #
-# sled::open("path/name.db") creates a *directory*, not a single file.
-# Guard against any accidental local DB directories in the repo tree.
+# redb::Database::create("path/name.db") creates a single file.
 # The real DBs live in the OS config dir (~/.config/flashkraft/) so they
 # will never appear here in normal use, but this catches test accidents.
 # =============================================================================
-*.db/
-**/*.db/
+*.db
+*.redb
 
 # =============================================================================
 # VHS / demo recordings
