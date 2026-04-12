@@ -7,11 +7,69 @@ use iced::Theme;
 use redb::{Database, ReadableDatabase, TableDefinition};
 use std::path::PathBuf;
 
+/// Map any error to a descriptive storage-error string and propagate with `?`.
+macro_rules! map_storage_err {
+    ($expr:expr, $ctx:literal) => {
+        $expr.map_err(|e| format!("{}: {}", $ctx, e))?
+    };
+}
+
 /// Key for storing the theme preference
 const THEME_KEY: &[u8] = b"theme";
 
 /// Table definition for the preferences table
 const TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("preferences");
+
+/// Declare the canonical list of supported Iced themes.
+/// Generates `theme_to_string`, `theme_from_string`, and `all_themes`.
+macro_rules! theme_variants {
+    ( $( $variant:ident ),+ $(,)? ) => {
+        /// Convert a [`Theme`] to its storage string.
+        fn theme_to_string(theme: &Theme) -> String {
+            match theme {
+                $( Theme::$variant => stringify!($variant).to_string(), )+
+                _ => "Dark".to_string(),
+            }
+        }
+
+        /// Convert a storage string back to a [`Theme`].
+        fn theme_from_string(s: &str) -> Option<Theme> {
+            match s {
+                $( stringify!($variant) => Some(Theme::$variant), )+
+                _ => None,
+            }
+        }
+
+        /// All supported themes, in display order.
+        pub fn all_themes() -> Vec<Theme> {
+            vec![ $( Theme::$variant, )+ ]
+        }
+    };
+}
+
+theme_variants!(
+    Dark,
+    Light,
+    Dracula,
+    Nord,
+    SolarizedLight,
+    SolarizedDark,
+    GruvboxLight,
+    GruvboxDark,
+    CatppuccinLatte,
+    CatppuccinFrappe,
+    CatppuccinMacchiato,
+    CatppuccinMocha,
+    TokyoNight,
+    TokyoNightStorm,
+    TokyoNightLight,
+    KanagawaWave,
+    KanagawaDragon,
+    KanagawaLotus,
+    Moonfly,
+    Nightfly,
+    Oxocarbon,
+);
 
 /// Storage manager for application preferences
 pub struct Storage {
@@ -58,87 +116,24 @@ impl Storage {
         let table = read_txn.open_table(TABLE).ok()?;
         let value = table.get(THEME_KEY).ok()??;
         let theme_name = String::from_utf8(value.value().to_vec()).ok()?;
-        Self::theme_from_string(&theme_name)
+        theme_from_string(&theme_name)
     }
 
     /// Save the current theme
     ///
     /// Persists the theme selection to disk
     pub fn save_theme(&self, theme: &Theme) -> Result<(), String> {
-        let theme_name = Self::theme_to_string(theme);
-        let write_txn = self
-            .db
-            .begin_write()
-            .map_err(|e| format!("Failed to save theme: {}", e))?;
+        let theme_name = theme_to_string(theme);
+        let write_txn = map_storage_err!(self.db.begin_write(), "Failed to save theme");
         {
-            let mut table = write_txn
-                .open_table(TABLE)
-                .map_err(|e| format!("Failed to save theme: {}", e))?;
-            table
-                .insert(THEME_KEY, theme_name.as_bytes())
-                .map_err(|e| format!("Failed to save theme: {}", e))?;
+            let mut table = map_storage_err!(write_txn.open_table(TABLE), "Failed to save theme");
+            map_storage_err!(
+                table.insert(THEME_KEY, theme_name.as_bytes()),
+                "Failed to save theme"
+            );
         }
-        write_txn
-            .commit()
-            .map_err(|e| format!("Failed to save theme: {}", e))?;
+        map_storage_err!(write_txn.commit(), "Failed to save theme");
         Ok(())
-    }
-
-    /// Convert a Theme to a string for storage
-    fn theme_to_string(theme: &Theme) -> String {
-        match theme {
-            Theme::Dark => "Dark",
-            Theme::Light => "Light",
-            Theme::Dracula => "Dracula",
-            Theme::Nord => "Nord",
-            Theme::SolarizedLight => "SolarizedLight",
-            Theme::SolarizedDark => "SolarizedDark",
-            Theme::GruvboxLight => "GruvboxLight",
-            Theme::GruvboxDark => "GruvboxDark",
-            Theme::CatppuccinLatte => "CatppuccinLatte",
-            Theme::CatppuccinFrappe => "CatppuccinFrappe",
-            Theme::CatppuccinMacchiato => "CatppuccinMacchiato",
-            Theme::CatppuccinMocha => "CatppuccinMocha",
-            Theme::TokyoNight => "TokyoNight",
-            Theme::TokyoNightStorm => "TokyoNightStorm",
-            Theme::TokyoNightLight => "TokyoNightLight",
-            Theme::KanagawaWave => "KanagawaWave",
-            Theme::KanagawaDragon => "KanagawaDragon",
-            Theme::KanagawaLotus => "KanagawaLotus",
-            Theme::Moonfly => "Moonfly",
-            Theme::Nightfly => "Nightfly",
-            Theme::Oxocarbon => "Oxocarbon",
-            _ => "Dark",
-        }
-        .to_string()
-    }
-
-    /// Convert a string to a Theme
-    fn theme_from_string(s: &str) -> Option<Theme> {
-        match s {
-            "Dark" => Some(Theme::Dark),
-            "Light" => Some(Theme::Light),
-            "Dracula" => Some(Theme::Dracula),
-            "Nord" => Some(Theme::Nord),
-            "SolarizedLight" => Some(Theme::SolarizedLight),
-            "SolarizedDark" => Some(Theme::SolarizedDark),
-            "GruvboxLight" => Some(Theme::GruvboxLight),
-            "GruvboxDark" => Some(Theme::GruvboxDark),
-            "CatppuccinLatte" => Some(Theme::CatppuccinLatte),
-            "CatppuccinFrappe" => Some(Theme::CatppuccinFrappe),
-            "CatppuccinMacchiato" => Some(Theme::CatppuccinMacchiato),
-            "CatppuccinMocha" => Some(Theme::CatppuccinMocha),
-            "TokyoNight" => Some(Theme::TokyoNight),
-            "TokyoNightStorm" => Some(Theme::TokyoNightStorm),
-            "TokyoNightLight" => Some(Theme::TokyoNightLight),
-            "KanagawaWave" => Some(Theme::KanagawaWave),
-            "KanagawaDragon" => Some(Theme::KanagawaDragon),
-            "KanagawaLotus" => Some(Theme::KanagawaLotus),
-            "Moonfly" => Some(Theme::Moonfly),
-            "Nightfly" => Some(Theme::Nightfly),
-            "Oxocarbon" => Some(Theme::Oxocarbon),
-            _ => None,
-        }
     }
 }
 
@@ -148,22 +143,16 @@ mod tests {
 
     #[test]
     fn test_theme_to_string() {
-        assert_eq!(Storage::theme_to_string(&Theme::Dark), "Dark");
-        assert_eq!(Storage::theme_to_string(&Theme::Light), "Light");
-        assert_eq!(Storage::theme_to_string(&Theme::Dracula), "Dracula");
+        assert_eq!(theme_to_string(&Theme::Dark), "Dark");
+        assert_eq!(theme_to_string(&Theme::Light), "Light");
+        assert_eq!(theme_to_string(&Theme::Dracula), "Dracula");
     }
 
     #[test]
     fn test_theme_from_string() {
-        assert!(matches!(
-            Storage::theme_from_string("Dark"),
-            Some(Theme::Dark)
-        ));
-        assert!(matches!(
-            Storage::theme_from_string("Light"),
-            Some(Theme::Light)
-        ));
-        assert!(Storage::theme_from_string("Invalid").is_none());
+        assert!(matches!(theme_from_string("Dark"), Some(Theme::Dark)));
+        assert!(matches!(theme_from_string("Light"), Some(Theme::Light)));
+        assert!(theme_from_string("Invalid").is_none());
     }
 
     #[test]
@@ -177,9 +166,29 @@ mod tests {
         ];
 
         for theme in themes {
-            let name = Storage::theme_to_string(&theme);
-            let restored = Storage::theme_from_string(&name);
+            let name = theme_to_string(&theme);
+            let restored = theme_from_string(&name);
             assert!(restored.is_some());
+        }
+    }
+
+    #[test]
+    fn test_all_themes_count() {
+        let themes = all_themes();
+        assert_eq!(themes.len(), 21);
+    }
+
+    #[test]
+    fn test_all_themes_roundtrip() {
+        for theme in all_themes() {
+            let name = theme_to_string(&theme);
+            let restored = theme_from_string(&name).expect("roundtrip should succeed");
+            assert_eq!(
+                theme_to_string(&restored),
+                name,
+                "roundtrip failed for {}",
+                name
+            );
         }
     }
 }

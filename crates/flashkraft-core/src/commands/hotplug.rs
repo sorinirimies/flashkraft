@@ -339,75 +339,67 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_translate_create_any_arrives() {
-        let e = make_event(EventKind::Create(CreateKind::Any));
-        assert_eq!(translate_event(&e), Some(UsbHotplugEvent::Arrived));
+    macro_rules! translate_event_test {
+        ($name:ident, $kind:expr, $expected:expr) => {
+            #[test]
+            fn $name() {
+                let e = make_event($kind);
+                assert_eq!(translate_event(&e), $expected);
+            }
+        };
     }
 
-    #[test]
-    fn test_translate_create_file_arrives() {
-        let e = make_event(EventKind::Create(CreateKind::File));
-        assert_eq!(translate_event(&e), Some(UsbHotplugEvent::Arrived));
-    }
-
-    #[test]
-    fn test_translate_create_folder_arrives() {
-        let e = make_event(EventKind::Create(CreateKind::Folder));
-        assert_eq!(translate_event(&e), Some(UsbHotplugEvent::Arrived));
-    }
-
-    #[test]
-    fn test_translate_remove_any_left() {
-        let e = make_event(EventKind::Remove(RemoveKind::Any));
-        assert_eq!(translate_event(&e), Some(UsbHotplugEvent::Left));
-    }
-
-    #[test]
-    fn test_translate_remove_file_left() {
-        let e = make_event(EventKind::Remove(RemoveKind::File));
-        assert_eq!(translate_event(&e), Some(UsbHotplugEvent::Left));
-    }
-
-    #[test]
-    fn test_translate_rename_arrives() {
-        let e = make_event(EventKind::Modify(ModifyKind::Name(RenameMode::Any)));
-        assert_eq!(translate_event(&e), Some(UsbHotplugEvent::Arrived));
-    }
-
-    #[test]
-    fn test_translate_modify_data_ignored() {
-        let e = make_event(EventKind::Modify(ModifyKind::Data(
-            notify::event::DataChange::Any,
-        )));
-        assert_eq!(translate_event(&e), None);
-    }
-
-    #[test]
-    fn test_translate_modify_metadata_ignored() {
-        let e = make_event(EventKind::Modify(ModifyKind::Metadata(
-            notify::event::MetadataKind::Any,
-        )));
-        assert_eq!(translate_event(&e), None);
-    }
-
-    #[test]
-    fn test_translate_access_ignored() {
-        let e = make_event(EventKind::Access(notify::event::AccessKind::Any));
-        assert_eq!(translate_event(&e), None);
-    }
-
-    #[test]
-    fn test_translate_other_arrives() {
-        let e = make_event(EventKind::Other);
-        assert_eq!(translate_event(&e), Some(UsbHotplugEvent::Arrived));
-    }
-
-    #[test]
-    fn test_translate_any_ignored() {
-        let e = make_event(EventKind::Any);
-        assert_eq!(translate_event(&e), None);
-    }
+    translate_event_test!(
+        test_translate_create_any_arrives,
+        EventKind::Create(CreateKind::Any),
+        Some(UsbHotplugEvent::Arrived)
+    );
+    translate_event_test!(
+        test_translate_create_file_arrives,
+        EventKind::Create(CreateKind::File),
+        Some(UsbHotplugEvent::Arrived)
+    );
+    translate_event_test!(
+        test_translate_create_folder_arrives,
+        EventKind::Create(CreateKind::Folder),
+        Some(UsbHotplugEvent::Arrived)
+    );
+    translate_event_test!(
+        test_translate_remove_any_left,
+        EventKind::Remove(RemoveKind::Any),
+        Some(UsbHotplugEvent::Left)
+    );
+    translate_event_test!(
+        test_translate_remove_file_left,
+        EventKind::Remove(RemoveKind::File),
+        Some(UsbHotplugEvent::Left)
+    );
+    translate_event_test!(
+        test_translate_rename_arrives,
+        EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
+        Some(UsbHotplugEvent::Arrived)
+    );
+    translate_event_test!(
+        test_translate_modify_data_ignored,
+        EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Any)),
+        None
+    );
+    translate_event_test!(
+        test_translate_modify_metadata_ignored,
+        EventKind::Modify(ModifyKind::Metadata(notify::event::MetadataKind::Any)),
+        None
+    );
+    translate_event_test!(
+        test_translate_access_ignored,
+        EventKind::Access(notify::event::AccessKind::Any),
+        None
+    );
+    translate_event_test!(
+        test_translate_other_arrives,
+        EventKind::Other,
+        Some(UsbHotplugEvent::Arrived)
+    );
+    translate_event_test!(test_translate_any_ignored, EventKind::Any, None);
 
     // ── watch_usb_events construction ─────────────────────────────────────────
 

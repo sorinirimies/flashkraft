@@ -104,154 +104,54 @@ fn palette_from_preset(name: &str, t: &Theme) -> TuiPalette {
 /// Per-theme background, warn, and error colours.
 ///
 /// Returns `(bg, warn, err)`.
-fn extras(name: &str) -> (Color, Color, Color) {
-    match name {
-        // ── Built-in ─────────────────────────────────────────────────────────
-        "Default" => (
-            Color::Rgb(18, 18, 26),
-            Color::Rgb(255, 200, 50),
-            Color::Rgb(255, 80, 80),
-        ),
+macro_rules! theme_extras {
+    ( $( $name:expr => bg($br:expr,$bg:expr,$bb:expr) warn($wr:expr,$wg:expr,$wb:expr) err($er:expr,$eg:expr,$eb:expr) );+ $(;)? ) => {
+        fn extras(name: &str) -> (Color, Color, Color) {
+            match name {
+                $( $name => (
+                    Color::Rgb($br, $bg, $bb),
+                    Color::Rgb($wr, $wg, $wb),
+                    Color::Rgb($er, $eg, $eb),
+                ), )+
+                _ => (
+                    Color::Rgb(18, 18, 26),
+                    Color::Rgb(255, 200, 50),
+                    Color::Rgb(255, 80, 80),
+                ),
+            }
+        }
+    };
+}
 
-        // ── Decorative ────────────────────────────────────────────────────────
-        "Grape" => (
-            Color::Rgb(18, 12, 30),
-            Color::Rgb(210, 170, 255),
-            Color::Rgb(255, 80, 150),
-        ),
-        "Ocean" => (
-            Color::Rgb(0, 20, 35),
-            Color::Rgb(255, 220, 80),
-            Color::Rgb(255, 100, 100),
-        ),
-        "Sunset" => (
-            Color::Rgb(22, 8, 6),
-            Color::Rgb(255, 230, 80),
-            Color::Rgb(255, 50, 50),
-        ),
-        "Forest" => (
-            Color::Rgb(8, 18, 8),
-            Color::Rgb(220, 200, 80),
-            Color::Rgb(210, 80, 80),
-        ),
-        "Rose" => (
-            Color::Rgb(28, 6, 16),
-            Color::Rgb(255, 220, 180),
-            Color::Rgb(220, 60, 100),
-        ),
-        "Mono" => (
-            Color::Rgb(8, 8, 10),
-            Color::Rgb(200, 200, 200),
-            Color::Rgb(160, 160, 160),
-        ),
-        "Neon" => (
-            Color::Rgb(6, 0, 14),
-            Color::Rgb(255, 220, 0),
-            Color::Rgb(255, 30, 80),
-        ),
-
-        // ── Editor / terminal presets ─────────────────────────────────────────
-        "Dracula" => (
-            Color::Rgb(40, 42, 54),
-            Color::Rgb(241, 250, 140),
-            Color::Rgb(255, 85, 85),
-        ),
-        "Nord" => (
-            Color::Rgb(29, 35, 42),
-            Color::Rgb(235, 203, 139),
-            Color::Rgb(191, 97, 106),
-        ),
-        "Solarized Dark" => (
-            Color::Rgb(0, 43, 54),
-            Color::Rgb(181, 137, 0),
-            Color::Rgb(220, 50, 47),
-        ),
-        "Solarized Light" => (
-            Color::Rgb(253, 246, 227),
-            Color::Rgb(181, 137, 0),
-            Color::Rgb(220, 50, 47),
-        ),
-        "Gruvbox Dark" => (
-            Color::Rgb(29, 28, 27),
-            Color::Rgb(250, 189, 47),
-            Color::Rgb(251, 73, 52),
-        ),
-        "Gruvbox Light" => (
-            Color::Rgb(251, 241, 199),
-            Color::Rgb(215, 153, 33),
-            Color::Rgb(214, 93, 14),
-        ),
-        "Catppuccin Latte" => (
-            Color::Rgb(239, 241, 245),
-            Color::Rgb(223, 142, 29),
-            Color::Rgb(210, 15, 57),
-        ),
-        "Catppuccin Frappé" => (
-            Color::Rgb(48, 52, 70),
-            Color::Rgb(229, 200, 144),
-            Color::Rgb(231, 130, 132),
-        ),
-        "Catppuccin Macchiato" => (
-            Color::Rgb(36, 39, 58),
-            Color::Rgb(238, 212, 159),
-            Color::Rgb(237, 135, 150),
-        ),
-        "Catppuccin Mocha" => (
-            Color::Rgb(30, 30, 46),
-            Color::Rgb(249, 226, 175),
-            Color::Rgb(243, 139, 168),
-        ),
-        "Tokyo Night" => (
-            Color::Rgb(26, 27, 38),
-            Color::Rgb(224, 175, 104),
-            Color::Rgb(247, 118, 142),
-        ),
-        "Tokyo Night Storm" => (
-            Color::Rgb(36, 40, 59),
-            Color::Rgb(224, 175, 104),
-            Color::Rgb(247, 118, 142),
-        ),
-        "Tokyo Night Light" => (
-            Color::Rgb(213, 214, 219),
-            Color::Rgb(140, 108, 62),
-            Color::Rgb(210, 15, 57),
-        ),
-        "Kanagawa Wave" => (
-            Color::Rgb(22, 22, 30),
-            Color::Rgb(220, 165, 97),
-            Color::Rgb(210, 126, 153),
-        ),
-        "Kanagawa Dragon" => (
-            Color::Rgb(20, 20, 20),
-            Color::Rgb(200, 170, 109),
-            Color::Rgb(210, 126, 153),
-        ),
-        "Kanagawa Lotus" => (
-            Color::Rgb(246, 243, 228),
-            Color::Rgb(119, 113, 63),
-            Color::Rgb(192, 71, 71),
-        ),
-        "Moonfly" => (
-            Color::Rgb(8, 8, 8),
-            Color::Rgb(226, 164, 120),
-            Color::Rgb(255, 115, 131),
-        ),
-        "Nightfly" => (
-            Color::Rgb(1, 22, 38),
-            Color::Rgb(243, 218, 11),
-            Color::Rgb(252, 87, 73),
-        ),
-        "Oxocarbon" => (
-            Color::Rgb(22, 22, 22),
-            Color::Rgb(250, 204, 55),
-            Color::Rgb(255, 97, 101),
-        ),
-
-        // ── Fallback — reuse the default FlashKraft palette ───────────────────
-        _ => (
-            Color::Rgb(18, 18, 26),
-            Color::Rgb(255, 200, 50),
-            Color::Rgb(255, 80, 80),
-        ),
-    }
+theme_extras! {
+    // ── Built-in ─────────────────────────────────────────────────────────
+    "Default"              => bg(18,18,26)     warn(255,200,50)   err(255,80,80);
+    // ── Decorative ───────────────────────────────────────────────────────
+    "Grape"                => bg(18,12,30)     warn(210,170,255)  err(255,80,150);
+    "Ocean"                => bg(0,20,35)      warn(255,220,80)   err(255,100,100);
+    "Sunset"               => bg(22,8,6)       warn(255,230,80)   err(255,50,50);
+    "Forest"               => bg(8,18,8)       warn(220,200,80)   err(210,80,80);
+    "Rose"                 => bg(28,6,16)      warn(255,220,180)  err(220,60,100);
+    "Mono"                 => bg(8,8,10)       warn(200,200,200)  err(160,160,160);
+    "Neon"                 => bg(6,0,14)       warn(255,220,0)    err(255,30,80);
+    // ── Editor / terminal presets ────────────────────────────────────────
+    "Dracula"              => bg(40,42,54)     warn(241,250,140)  err(255,85,85);
+    "Nord"                 => bg(29,35,42)     warn(235,203,139)  err(191,97,106);
+    "Solarized Dark"       => bg(0,43,54)      warn(181,137,0)    err(220,50,47);
+    "Solarized Light"      => bg(253,246,227)  warn(181,137,0)    err(220,50,47);
+    "Gruvbox Dark"         => bg(29,28,27)     warn(250,189,47)   err(251,73,52);
+    "Gruvbox Light"        => bg(251,241,199)  warn(215,153,33)   err(214,93,14);
+    "Catppuccin Latte"     => bg(239,241,245)  warn(223,142,29)   err(210,15,57);
+    "Catppuccin Frappé"    => bg(48,52,70)     warn(229,200,144)  err(231,130,132);
+    "Catppuccin Macchiato" => bg(36,39,58)     warn(238,212,159)  err(237,135,150);
+    "Catppuccin Mocha"     => bg(30,30,46)     warn(249,226,175)  err(243,139,168);
+    "Tokyo Night"          => bg(26,27,38)     warn(224,175,104)  err(247,118,142);
+    "Tokyo Night Storm"    => bg(36,40,59)     warn(224,175,104)  err(247,118,142);
+    "Tokyo Night Light"    => bg(213,214,219)  warn(140,108,62)   err(210,15,57);
+    "Kanagawa Wave"        => bg(22,22,30)     warn(220,165,97)   err(210,126,153);
+    "Kanagawa Dragon"      => bg(20,20,20)     warn(200,170,109)  err(210,126,153);
+    "Kanagawa Lotus"       => bg(246,243,228)  warn(119,113,63)   err(192,71,71);
+    "Moonfly"              => bg(8,8,8)        warn(226,164,120)  err(255,115,131);
+    "Nightfly"             => bg(1,22,38)      warn(243,218,11)   err(252,87,73);
+    "Oxocarbon"            => bg(22,22,22)     warn(250,204,55)   err(255,97,101)
 }

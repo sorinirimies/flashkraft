@@ -12,44 +12,28 @@ use crate::core::FlashKraft;
 use crate::utils::icons_bootstrap_mapper as icons;
 use iced_fonts::Bootstrap;
 
+/// Build a step-indicator column: icon + label, centred in 220px.
+macro_rules! step_indicator {
+    ($icon:expr, $label:expr) => {
+        container(
+            column![icons::icon($icon, 32.0), text($label).size(13)]
+                .spacing(8)
+                .align_x(Alignment::Center),
+        )
+        .width(220)
+        .center_x(220)
+    };
+}
+
 /// Step indicators with connecting lines (Balena Etcher style)
 pub fn view_step_indicators(state: &FlashKraft) -> Element<'_, Message> {
     let has_image = state.selected_image.is_some();
     let has_target = state.selected_target.is_some();
 
     // Create step indicators - width matches button content width (220px)
-    let step1 = container(
-        column![
-            icons::icon(Bootstrap::Image, 32.0),
-            text("Select Image").size(13),
-        ]
-        .spacing(8)
-        .align_x(Alignment::Center),
-    )
-    .width(220)
-    .center_x(220);
-
-    let step2 = container(
-        column![
-            icons::icon(Bootstrap::DeviceHdd, 32.0),
-            text("Select Target").size(13),
-        ]
-        .spacing(8)
-        .align_x(Alignment::Center),
-    )
-    .width(220)
-    .center_x(220);
-
-    let step3 = container(
-        column![
-            icons::icon(Bootstrap::LightningFill, 32.0),
-            text("Flash!").size(13),
-        ]
-        .spacing(8)
-        .align_x(Alignment::Center),
-    )
-    .width(220)
-    .center_x(220);
+    let step1 = step_indicator!(Bootstrap::Image, "Select Image");
+    let step2 = step_indicator!(Bootstrap::DeviceHdd, "Select Target");
+    let step3 = step_indicator!(Bootstrap::LightningFill, "Flash!");
 
     // Create connecting lines - animated with theme colors
     let line1 =

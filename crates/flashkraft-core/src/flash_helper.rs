@@ -2215,81 +2215,60 @@ mod tests {
 
     // ── sync_device (via pipeline — emits Log event on all platforms) ────────
 
-    /// sync_device must emit a "caches flushed" log event regardless of
-    /// platform.  We test this indirectly via the full pipeline on temp files.
-    #[test]
-    fn test_pipeline_emits_syncing_stage() {
-        let dir = std::env::temp_dir();
-        let img = dir.join("fk_sync_stage_img.bin");
-        let dev = dir.join("fk_sync_stage_dev.bin");
-
-        let data: Vec<u8> = (0u8..=255).cycle().take(512 * 1024).collect();
-        std::fs::write(&img, &data).unwrap();
-        std::fs::File::create(&dev).unwrap();
-
-        let (tx, rx) = make_channel();
-        let cancel = Arc::new(AtomicBool::new(false));
-        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
-
-        let events = drain(&rx);
-        assert!(
-            has_stage(&events, &FlashStage::Syncing),
-            "Syncing stage must be emitted on every platform"
-        );
-
-        let _ = std::fs::remove_file(&img);
-        let _ = std::fs::remove_file(&dev);
+    /// Run a pipeline on temp files and return the collected events.
+    macro_rules! pipeline_test_events {
+        ($img_name:literal, $dev_name:literal, $data:expr) => {{
+            let dir = std::env::temp_dir();
+            let img = dir.join($img_name);
+            let dev = dir.join($dev_name);
+            std::fs::write(&img, $data).unwrap();
+            std::fs::File::create(&dev).unwrap();
+            let (tx, rx) = make_channel();
+            let cancel = Arc::new(AtomicBool::new(false));
+            run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
+            let events = drain(&rx);
+            let _ = std::fs::remove_file(&img);
+            let _ = std::fs::remove_file(&dev);
+            events
+        }};
     }
 
-    /// The pipeline must emit the Rereading stage on every platform.
-    #[test]
-    fn test_pipeline_emits_rereading_stage() {
-        let dir = std::env::temp_dir();
-        let img = dir.join("fk_reread_stage_img.bin");
-        let dev = dir.join("fk_reread_stage_dev.bin");
-
-        let data: Vec<u8> = vec![0xABu8; 256 * 1024];
-        std::fs::write(&img, &data).unwrap();
-        std::fs::File::create(&dev).unwrap();
-
-        let (tx, rx) = make_channel();
-        let cancel = Arc::new(AtomicBool::new(false));
-        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
-
-        let events = drain(&rx);
-        assert!(
-            has_stage(&events, &FlashStage::Rereading),
-            "Rereading stage must be emitted on every platform"
-        );
-
-        let _ = std::fs::remove_file(&img);
-        let _ = std::fs::remove_file(&dev);
+    /// Generate a test asserting the pipeline emits a specific stage.
+    macro_rules! assert_pipeline_emits_stage {
+        ($name:ident, $img:literal, $dev:literal, $stage:expr) => {
+            #[test]
+            fn $name() {
+                let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
+                let events = pipeline_test_events!($img, $dev, &data);
+                assert!(
+                    has_stage(&events, &$stage),
+                    "{} stage must be emitted on every platform",
+                    stringify!($stage)
+                );
+            }
+        };
     }
 
-    /// The pipeline must emit the Verifying stage on every platform.
-    #[test]
-    fn test_pipeline_emits_verifying_stage() {
-        let dir = std::env::temp_dir();
-        let img = dir.join("fk_verify_stage_img.bin");
-        let dev = dir.join("fk_verify_stage_dev.bin");
+    assert_pipeline_emits_stage!(
+        test_pipeline_emits_syncing_stage,
+        "fk_sync_stage_img.bin",
+        "fk_sync_stage_dev.bin",
+        FlashStage::Syncing
+    );
 
-        let data: Vec<u8> = vec![0xCDu8; 256 * 1024];
-        std::fs::write(&img, &data).unwrap();
-        std::fs::File::create(&dev).unwrap();
+    assert_pipeline_emits_stage!(
+        test_pipeline_emits_rereading_stage,
+        "fk_reread_stage_img.bin",
+        "fk_reread_stage_dev.bin",
+        FlashStage::Rereading
+    );
 
-        let (tx, rx) = make_channel();
-        let cancel = Arc::new(AtomicBool::new(false));
-        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
-
-        let events = drain(&rx);
-        assert!(
-            has_stage(&events, &FlashStage::Verifying),
-            "Verifying stage must be emitted on every platform"
-        );
-
-        let _ = std::fs::remove_file(&img);
-        let _ = std::fs::remove_file(&dev);
-    }
+    assert_pipeline_emits_stage!(
+        test_pipeline_emits_verifying_stage,
+        "fk_verify_stage_img.bin",
+        "fk_verify_stage_dev.bin",
+        FlashStage::Verifying
+    );
 
     // ── open_device_for_writing error messages ───────────────────────────────
 
@@ -2736,32 +2715,29 @@ mod tests {
         );
     }
 
-    /// A non-EBUSY error (e.g. EPERM) must be silently ignored — it will be
-    /// handled properly when the device is opened for writing.
-    #[test]
-    #[cfg(target_os = "linux")]
-    fn check_device_not_busy_eperm_is_ignored() {
-        let result = check_device_not_busy_with("/dev/sdz", |_| {
-            Err(std::io::Error::from_raw_os_error(libc::EPERM))
-        });
-        assert!(
-            result.is_ok(),
-            "EPERM must be silently ignored, got: {result:?}"
-        );
+    /// Generate a `check_device_not_busy_with` test for a given errno.
+    macro_rules! busy_check_test {
+        ($name:ident, errno: $errno:expr, expect_ok: $ok:expr) => {
+            #[test]
+            #[cfg(target_os = "linux")]
+            fn $name() {
+                let result = check_device_not_busy_with("/dev/sdz", |_| {
+                    Err(std::io::Error::from_raw_os_error($errno))
+                });
+                assert_eq!(
+                    result.is_ok(),
+                    $ok,
+                    "errno {} — expected is_ok()={}, got {:?}",
+                    $errno,
+                    $ok,
+                    result
+                );
+            }
+        };
     }
 
-    /// EACCES must also be silently ignored.
-    #[test]
-    #[cfg(target_os = "linux")]
-    fn check_device_not_busy_eacces_is_ignored() {
-        let result = check_device_not_busy_with("/dev/sdz", |_| {
-            Err(std::io::Error::from_raw_os_error(libc::EACCES))
-        });
-        assert!(
-            result.is_ok(),
-            "EACCES must be silently ignored, got: {result:?}"
-        );
-    }
+    busy_check_test!(check_device_not_busy_eperm_is_ignored, errno: libc::EPERM, expect_ok: true);
+    busy_check_test!(check_device_not_busy_eacces_is_ignored, errno: libc::EACCES, expect_ok: true);
 
     /// When the open succeeds the function must return Ok.
     #[test]
@@ -2784,171 +2760,72 @@ mod tests {
         );
     }
 
-    /// The pipeline must emit Unmounting *before* it could ever hit the busy
-    /// check — i.e. the stage order must be Unmounting → Writing, not a
-    /// premature Error before Unmounting.
-    #[test]
-    #[cfg(target_os = "linux")]
-    fn pipeline_unmounting_precedes_busy_check_in_stage_stream() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let img = dir.path().join("img.bin");
-        let dev = dir.path().join("dev.bin");
+    /// Generate a platform-gated test verifying Unmounting precedes Writing.
+    macro_rules! pipeline_stage_order_test {
+        ($name:ident, $os:meta) => {
+            #[$os]
+            #[test]
+            fn $name() {
+                let dir = tempfile::tempdir().expect("tempdir");
+                let img = dir.path().join("img.bin");
+                let dev = dir.path().join("dev.bin");
 
-        let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
-        std::fs::write(&img, &data).unwrap();
-        std::fs::File::create(&dev).unwrap();
+                let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
+                std::fs::write(&img, &data).unwrap();
+                std::fs::File::create(&dev).unwrap();
 
-        let (tx, rx) = make_channel();
-        let cancel = Arc::new(AtomicBool::new(false));
-        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
+                let (tx, rx) = make_channel();
+                let cancel = Arc::new(AtomicBool::new(false));
+                run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
 
-        let events = drain(&rx);
+                let events = drain(&rx);
 
-        // Must never see the "already in use" error on a temp file.
-        if let Some(msg) = find_error(&events) {
-            assert!(
-                !msg.contains("already in use"),
-                "temp file pipeline must not emit a false-positive busy error: {msg}"
-            );
-        }
-
-        // Unmounting must appear before Writing (busy check sits between them).
-        let stages: Vec<&FlashStage> = events
-            .iter()
-            .filter_map(|e| {
-                if let FlashEvent::Stage(s) = e {
-                    Some(s)
-                } else {
-                    None
+                if let Some(msg) = find_error(&events) {
+                    assert!(
+                        !msg.contains("already in use"),
+                        "must not emit a false-positive busy error: {msg}"
+                    );
                 }
-            })
-            .collect();
 
-        let pos_unmounting = stages.iter().position(|s| **s == FlashStage::Unmounting);
-        let pos_writing = stages.iter().position(|s| **s == FlashStage::Writing);
+                let stages: Vec<&FlashStage> = events
+                    .iter()
+                    .filter_map(|e| {
+                        if let FlashEvent::Stage(s) = e {
+                            Some(s)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
 
-        assert!(
-            pos_unmounting.is_some(),
-            "pipeline must emit Unmounting stage"
-        );
-        assert!(pos_writing.is_some(), "pipeline must emit Writing stage");
-        assert!(
-            pos_unmounting.unwrap() < pos_writing.unwrap(),
-            "Unmounting must precede Writing (busy check lives between them)"
-        );
+                let pos_unmounting = stages.iter().position(|s| **s == FlashStage::Unmounting);
+                let pos_writing = stages.iter().position(|s| **s == FlashStage::Writing);
+
+                assert!(
+                    pos_unmounting.is_some(),
+                    "pipeline must emit Unmounting stage"
+                );
+                assert!(pos_writing.is_some(), "pipeline must emit Writing stage");
+                assert!(
+                    pos_unmounting.unwrap() < pos_writing.unwrap(),
+                    "Unmounting must precede Writing"
+                );
+            }
+        };
     }
 
-    // ── Non-Linux pipeline stage ordering ────────────────────────────────────
-
-    /// On macOS, `O_EXCL` on a block device does not produce `EBUSY` for
-    /// mounted partitions — the kernel uses a different locking model. The
-    /// busy-device scenario is handled by `open_device_for_writing` returning
-    /// `EBUSY` at write time. We therefore have no pre-flight guard on macOS,
-    /// but we still verify the stage ordering and the absence of a spurious
-    /// busy error on a temp file.
-    #[test]
-    #[cfg(target_os = "macos")]
-    fn pipeline_unmounting_precedes_writing_macos() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let img = dir.path().join("img.bin");
-        let dev = dir.path().join("dev.bin");
-
-        let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
-        std::fs::write(&img, &data).unwrap();
-        std::fs::File::create(&dev).unwrap();
-
-        let (tx, rx) = make_channel();
-        let cancel = Arc::new(AtomicBool::new(false));
-        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
-
-        let events = drain(&rx);
-
-        // Must never see "already in use" on a plain temp file.
-        if let Some(msg) = find_error(&events) {
-            assert!(
-                !msg.contains("already in use"),
-                "macOS pipeline must not emit a false-positive busy error: {msg}"
-            );
-        }
-
-        let stages: Vec<&FlashStage> = events
-            .iter()
-            .filter_map(|e| {
-                if let FlashEvent::Stage(s) = e {
-                    Some(s)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let pos_unmounting = stages.iter().position(|s| **s == FlashStage::Unmounting);
-        let pos_writing = stages.iter().position(|s| **s == FlashStage::Writing);
-
-        assert!(
-            pos_unmounting.is_some(),
-            "pipeline must emit Unmounting stage"
-        );
-        assert!(pos_writing.is_some(), "pipeline must emit Writing stage");
-        assert!(
-            pos_unmounting.unwrap() < pos_writing.unwrap(),
-            "Unmounting must precede Writing on macOS"
-        );
-    }
-
-    /// On Windows, device-busy is caught by `ERROR_SHARING_VIOLATION` (error
-    /// code 32) inside `open_device_for_writing` — there is no pre-flight
-    /// `O_EXCL` guard. Verify stage ordering and no false busy error on a
-    /// temp file.
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn pipeline_unmounting_precedes_writing_windows() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let img = dir.path().join("img.bin");
-        let dev = dir.path().join("dev.bin");
-
-        let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
-        std::fs::write(&img, &data).unwrap();
-        std::fs::File::create(&dev).unwrap();
-
-        let (tx, rx) = make_channel();
-        let cancel = Arc::new(AtomicBool::new(false));
-        run_pipeline(img.to_str().unwrap(), dev.to_str().unwrap(), tx, cancel);
-
-        let events = drain(&rx);
-
-        // Must never see "already in use" on a plain temp file.
-        if let Some(msg) = find_error(&events) {
-            assert!(
-                !msg.contains("already in use"),
-                "Windows pipeline must not emit a false-positive busy error: {msg}"
-            );
-        }
-
-        let stages: Vec<&FlashStage> = events
-            .iter()
-            .filter_map(|e| {
-                if let FlashEvent::Stage(s) = e {
-                    Some(s)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let pos_unmounting = stages.iter().position(|s| **s == FlashStage::Unmounting);
-        let pos_writing = stages.iter().position(|s| **s == FlashStage::Writing);
-
-        assert!(
-            pos_unmounting.is_some(),
-            "pipeline must emit Unmounting stage"
-        );
-        assert!(pos_writing.is_some(), "pipeline must emit Writing stage");
-        assert!(
-            pos_unmounting.unwrap() < pos_writing.unwrap(),
-            "Unmounting must precede Writing on Windows"
-        );
-    }
+    pipeline_stage_order_test!(
+        pipeline_unmounting_precedes_busy_check_in_stage_stream,
+        cfg(target_os = "linux")
+    );
+    pipeline_stage_order_test!(
+        pipeline_unmounting_precedes_writing_macos,
+        cfg(target_os = "macos")
+    );
+    pipeline_stage_order_test!(
+        pipeline_unmounting_precedes_writing_windows,
+        cfg(target_os = "windows")
+    );
 
     /// Verify that `open_device_for_writing` on Windows produces a descriptive
     /// message for `ERROR_SHARING_VIOLATION` (win32 error 32) — the Windows

@@ -192,21 +192,17 @@ impl FlashKraft {
 
     /// Cancel current selections
     pub fn cancel_selections(&mut self) {
-        self.selected_image = None;
-        self.selected_target = None;
-        self.flash_progress = None;
-        self.flash_bytes_written = 0;
-        self.flash_speed_mb_s = 0.0;
-        self.flash_stage = String::new();
-        self.verify_progress = None;
-        self.verify_speed_mb_s = 0.0;
-        self.verify_phase = "";
-        self.error_message = None;
-        self.device_selection_open = false;
-        self.flashing_active = false;
-        self.flash_complete = false;
+        self.reset();
+    }
+
+    /// Prepare state for a new flash attempt.
+    pub fn begin_flash_state(&mut self) {
         self.flash_cancel_token = Arc::new(AtomicBool::new(false));
-        // Do NOT reset flash_run_id here either.
+        self.flash_run_id = self.flash_run_id.wrapping_add(1);
+        self.flash_progress = Some(0.0);
+        self.error_message = None;
+        self.flashing_active = true;
+        self.flash_complete = false;
     }
 }
 

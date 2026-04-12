@@ -4,35 +4,9 @@
 //! all available themes and handles theme changes with persistence.
 
 use crate::core::message::Message;
+use crate::core::storage::all_themes;
 use iced::widget::{container, pick_list};
 use iced::{Alignment, Element, Length, Theme};
-
-/// Get all available themes in Iced
-pub fn all_themes() -> Vec<Theme> {
-    vec![
-        Theme::Dark,
-        Theme::Light,
-        Theme::Dracula,
-        Theme::Nord,
-        Theme::SolarizedLight,
-        Theme::SolarizedDark,
-        Theme::GruvboxLight,
-        Theme::GruvboxDark,
-        Theme::CatppuccinLatte,
-        Theme::CatppuccinFrappe,
-        Theme::CatppuccinMacchiato,
-        Theme::CatppuccinMocha,
-        Theme::TokyoNight,
-        Theme::TokyoNightStorm,
-        Theme::TokyoNightLight,
-        Theme::KanagawaWave,
-        Theme::KanagawaDragon,
-        Theme::KanagawaLotus,
-        Theme::Moonfly,
-        Theme::Nightfly,
-        Theme::Oxocarbon,
-    ]
-}
 
 /// Create a theme selector widget
 ///

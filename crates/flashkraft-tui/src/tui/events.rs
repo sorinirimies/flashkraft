@@ -14,6 +14,19 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::app::{App, AppScreen, ClipOp, FileOpMode, InputMode};
 use tui_file_explorer::ExplorerOutcome;
 
+/// Try `$call`; on error set the error message and transition to the Error screen.
+macro_rules! try_or_error_screen {
+    ($app:expr, $call:expr) => {
+        match $call {
+            Ok(()) => {}
+            Err(msg) => {
+                $app.error_message = msg;
+                $app.screen = AppScreen::Error;
+            }
+        }
+    };
+}
+
 /// Process a single key event and mutate `app` accordingly.
 ///
 /// Returns `true` if the event was consumed (no further handling needed).
@@ -306,13 +319,7 @@ fn handle_select_drive(app: &mut App, key: KeyEvent) -> bool {
             if app.available_drives.is_empty() {
                 return true; // nothing to select
             }
-            match app.confirm_drive() {
-                Ok(()) => {}
-                Err(msg) => {
-                    app.error_message = msg;
-                    app.screen = AppScreen::Error;
-                }
-            }
+            try_or_error_screen!(app, app.confirm_drive());
             true
         }
 
@@ -362,13 +369,7 @@ fn handle_confirm_flash(app: &mut App, key: KeyEvent) -> bool {
     match key.code {
         // Confirm and start flash.
         KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
-            match app.begin_flash() {
-                Ok(()) => {}
-                Err(msg) => {
-                    app.error_message = msg;
-                    app.screen = AppScreen::Error;
-                }
-            }
+            try_or_error_screen!(app, app.begin_flash());
             true
         }
 

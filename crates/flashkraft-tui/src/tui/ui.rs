@@ -29,6 +29,65 @@ use super::app::{App, AppScreen, FileOpMode, InputMode, UsbEntry};
 use super::theme::TuiPalette;
 use tui_file_explorer::render_themed;
 
+/// Build a [`Block`] with a bold styled title, rounded borders, and coloured border.
+macro_rules! themed_block {
+    ($title:expr, $title_color:expr, $border_color:expr) => {
+        Block::default()
+            .title(Span::styled(
+                $title,
+                Style::default()
+                    .fg($title_color)
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg($border_color))
+    };
+}
+
+/// Build a key-value [`Line`] with a dim label and a styled value.
+macro_rules! kv_line {
+    ($label:expr, $value:expr, $pal:expr) => {
+        Line::from(vec![
+            Span::styled($label, Style::default().fg($pal.dim)),
+            Span::styled($value, Style::default().fg($pal.fg)),
+        ])
+    };
+    ($label:expr, $value:expr, $pal:expr, $color:expr) => {
+        Line::from(vec![
+            Span::styled($label, Style::default().fg($pal.dim)),
+            Span::styled($value, Style::default().fg($color)),
+        ])
+    };
+    ($label:expr, $value:expr, $pal:expr, bold $color:expr) => {
+        Line::from(vec![
+            Span::styled($label, Style::default().fg($pal.dim)),
+            Span::styled(
+                $value,
+                Style::default().fg($color).add_modifier(Modifier::BOLD),
+            ),
+        ])
+    };
+}
+
+/// Build a palette-styled [`Checkbox`].
+macro_rules! themed_checkbox {
+    ($label:expr, $checked:expr, $color:expr, $pal:expr) => {
+        Checkbox::new($label, $checked)
+            .checkbox_style(Style::default().fg($color).add_modifier(Modifier::BOLD))
+            .label_style(Style::default().fg($pal.dim))
+            .checked_symbol("☑ ")
+            .unchecked_symbol("☐ ")
+    };
+    ($label:expr, $checked:expr, $color:expr, $pal:expr, $check_sym:expr, $uncheck_sym:expr) => {
+        Checkbox::new($label, $checked)
+            .checkbox_style(Style::default().fg($color).add_modifier(Modifier::BOLD))
+            .label_style(Style::default().fg($pal.dim))
+            .checked_symbol($check_sym)
+            .unchecked_symbol($uncheck_sym)
+    };
+}
+
 // ── Pie-chart slice palette (theme-independent) ───────────────────────────────
 const SLICE_COLORS: &[Color] = &[
     Color::Rgb(80, 200, 255),
@@ -334,15 +393,8 @@ fn render_app_theme_panel(app: &App, frame: &mut Frame, area: Rect, pal: &TuiPal
 
     frame.render_widget(Clear, split[0]);
     let panel = Paragraph::new(lines).scroll((scroll_y, 0)).block(
-        Block::default()
-            .title(Span::styled(
-                " \u{1f3a8} Themes ",
-                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-            ))
-            .title_alignment(Alignment::Center)
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.accent)),
+        themed_block!(" \u{1f3a8} Themes ", pal.brand, pal.accent)
+            .title_alignment(Alignment::Center),
     );
     frame.render_widget(panel, split[0]);
 
@@ -413,16 +465,7 @@ fn render_file_op_modal(frame: &mut Frame, title: &str, body: &str, area: Rect, 
             Span::styled(" No", Style::default().fg(pal.dim)),
         ]),
     ];
-    let popup = Paragraph::new(lines).block(
-        Block::default()
-            .title(Span::styled(
-                title,
-                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-            ))
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.brand)),
-    );
+    let popup = Paragraph::new(lines).block(themed_block!(title, pal.brand, pal.brand));
     frame.render_widget(popup, modal);
 }
 
@@ -536,15 +579,7 @@ fn render_select_image(
     ])
     .alignment(Alignment::Center)
     .block(
-        Block::default()
-            .title(Span::styled(
-                " 📁  Select OS Image ",
-                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-            ))
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.accent))
-            .padding(Padding::uniform(1)),
+        themed_block!(" 📁  Select OS Image ", pal.brand, pal.accent).padding(Padding::uniform(1)),
     );
     frame.render_widget(instr, rows[1]);
 
@@ -575,18 +610,7 @@ fn render_select_image(
 
     let input_para = Paragraph::new(Span::raw(display))
         .style(Style::default().fg(pal.fg))
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    mode_label,
-                    Style::default()
-                        .fg(border_color)
-                        .add_modifier(Modifier::BOLD),
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(border_color)),
-        );
+        .block(themed_block!(mode_label, border_color, border_color));
     frame.render_widget(input_para, rows[2]);
 }
 
@@ -700,16 +724,7 @@ fn render_select_drive(
     }
 
     let list = List::new(items)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    title_text,
-                    Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(pal.accent)),
-        )
+        .block(themed_block!(title_text, pal.accent, pal.accent))
         .highlight_style(Style::default().fg(pal.brand).add_modifier(Modifier::BOLD));
 
     frame.render_stateful_widget(list, cols[0], &mut list_state);
@@ -740,26 +755,11 @@ fn render_select_drive(
         };
 
         vec![
-            Line::from(vec![
-                Span::styled("Name:    ", Style::default().fg(pal.dim)),
-                Span::styled(
-                    d.name.clone(),
-                    Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
-                ),
-            ]),
+            kv_line!("Name:    ", d.name.clone(), pal, bold pal.fg),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("Device:  ", Style::default().fg(pal.dim)),
-                Span::styled(d.device_path.clone(), Style::default().fg(pal.accent)),
-            ]),
-            Line::from(vec![
-                Span::styled("Mount:   ", Style::default().fg(pal.dim)),
-                Span::styled(d.mount_point.clone(), Style::default().fg(pal.dim)),
-            ]),
-            Line::from(vec![
-                Span::styled("Size:    ", Style::default().fg(pal.dim)),
-                Span::styled(size_str, Style::default().fg(pal.fg)),
-            ]),
+            kv_line!("Device:  ", d.device_path.clone(), pal, pal.accent),
+            kv_line!("Mount:   ", d.mount_point.clone(), pal, pal.dim),
+            kv_line!("Size:    ", size_str, pal),
             Line::from(""),
             Line::from(status_spans),
         ]
@@ -771,17 +771,7 @@ fn render_select_drive(
     };
 
     let detail = Paragraph::new(detail_lines)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    " Drive Details ",
-                    Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(pal.dim))
-                .padding(Padding::uniform(1)),
-        )
+        .block(themed_block!(" Drive Details ", pal.brand, pal.dim).padding(Padding::uniform(1)))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(detail, cols[1]);
@@ -839,16 +829,11 @@ fn render_drive_info(
         .legend_position(LegendPosition::Right)
         .legend_layout(LegendLayout::Vertical)
         .high_resolution(true)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    " 🥧  Drive Storage Layout ",
-                    Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(pal.accent)),
-        );
+        .block(themed_block!(
+            " 🥧  Drive Storage Layout ",
+            pal.brand,
+            pal.accent
+        ));
 
     frame.render_widget(pie, cols[0]);
 
@@ -874,17 +859,8 @@ fn render_drive_info(
     ];
 
     if let Some(img) = &app.selected_image {
-        lines.push(Line::from(vec![
-            Span::styled("File:   ", Style::default().fg(pal.dim)),
-            Span::styled(
-                img.name.clone(),
-                Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
-            ),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Size:   ", Style::default().fg(pal.dim)),
-            Span::styled(fmt_bytes(image_bytes), Style::default().fg(pal.brand)),
-        ]));
+        lines.push(kv_line!("File:   ", img.name.clone(), pal, bold pal.fg));
+        lines.push(kv_line!("Size:   ", fmt_bytes(image_bytes), pal, pal.brand));
     }
 
     lines.push(Line::from(""));
@@ -897,39 +873,25 @@ fn render_drive_info(
     lines.push(Line::from(""));
 
     if let Some(d) = &app.selected_drive {
-        lines.push(Line::from(vec![
-            Span::styled("Name:   ", Style::default().fg(pal.dim)),
-            Span::styled(
-                d.name.clone(),
-                Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
+        lines.push(kv_line!("Name:   ", d.name.clone(), pal, bold pal.fg));
+        lines.push(kv_line!("Device: ", d.device_path.clone(), pal, pal.accent));
+        lines.push(kv_line!("Total:  ", fmt_bytes(drive_bytes), pal));
+        lines.push(kv_line!(
+            "Image:  ",
+            format!("{} ({:.1}%)", fmt_bytes(image_bytes), image_pct),
+            pal,
+            pal.brand
+        ));
+        lines.push(kv_line!(
+            "Free:   ",
+            format!(
+                "{} ({:.1}%)",
+                fmt_bytes(drive_bytes.saturating_sub(image_bytes)),
+                free_pct
             ),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Device: ", Style::default().fg(pal.dim)),
-            Span::styled(d.device_path.clone(), Style::default().fg(pal.accent)),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Total:  ", Style::default().fg(pal.dim)),
-            Span::styled(fmt_bytes(drive_bytes), Style::default().fg(pal.fg)),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Image:  ", Style::default().fg(pal.dim)),
-            Span::styled(
-                format!("{} ({:.1}%)", fmt_bytes(image_bytes), image_pct),
-                Style::default().fg(pal.brand),
-            ),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Free:   ", Style::default().fg(pal.dim)),
-            Span::styled(
-                format!(
-                    "{} ({:.1}%)",
-                    fmt_bytes(drive_bytes.saturating_sub(image_bytes)),
-                    free_pct
-                ),
-                Style::default().fg(pal.accent),
-            ),
-        ]));
+            pal,
+            pal.accent
+        ));
 
         if image_bytes > drive_bytes && drive_bytes > 0 {
             lines.push(Line::from(""));
@@ -941,17 +903,7 @@ fn render_drive_info(
     }
 
     let detail = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    " Storage Info ",
-                    Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(pal.dim))
-                .padding(Padding::uniform(1)),
-        )
+        .block(themed_block!(" Storage Info ", pal.brand, pal.dim).padding(Padding::uniform(1)))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(detail, cols[1]);
@@ -1105,20 +1057,14 @@ fn render_confirm_flash(
         .as_ref()
         .is_some_and(|d| !d.is_system && !d.is_read_only);
 
-    let cb_image = Checkbox::new(
+    let cb_image = themed_checkbox!(
         format!("Image ready: {image_name}"),
         app.selected_image.is_some(),
-    )
-    .checkbox_style(
-        Style::default()
-            .fg(pal.success)
-            .add_modifier(Modifier::BOLD),
-    )
-    .label_style(Style::default().fg(pal.dim))
-    .checked_symbol("☑ ")
-    .unchecked_symbol("☐ ");
+        pal.success,
+        pal
+    );
 
-    let cb_drive = Checkbox::new(
+    let cb_drive = themed_checkbox!(
         format!(
             "Drive selected: {}",
             app.selected_drive
@@ -1127,21 +1073,11 @@ fn render_confirm_flash(
                 .unwrap_or("—")
         ),
         drive_ready,
-    )
-    .checkbox_style(
-        Style::default()
-            .fg(if drive_ready { pal.success } else { pal.err })
-            .add_modifier(Modifier::BOLD),
-    )
-    .label_style(Style::default().fg(pal.dim))
-    .checked_symbol("☑ ")
-    .unchecked_symbol("☐ ");
+        if drive_ready { pal.success } else { pal.err },
+        pal
+    );
 
-    let cb_warn = Checkbox::new("Data loss understood", true)
-        .checkbox_style(Style::default().fg(pal.warn).add_modifier(Modifier::BOLD))
-        .label_style(Style::default().fg(pal.dim))
-        .checked_symbol("☑ ")
-        .unchecked_symbol("☐ ");
+    let cb_warn = themed_checkbox!("Data loss understood", true, pal.warn, pal);
 
     frame.render_widget(cb_image, indent(cb_rows[1]));
     frame.render_widget(cb_drive, indent(cb_rows[2]));
@@ -1211,15 +1147,8 @@ fn render_flashing(
 
     let slider_state = SliderState::new((pct * 100.0) as f64, 0.0, 100.0);
 
-    let slider_outer = Block::default()
-        .title(Span::styled(
-            " ⚡  Flashing ",
-            Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-        ))
-        .title_alignment(Alignment::Center)
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(pal.accent));
+    let slider_outer =
+        themed_block!(" ⚡  Flashing ", pal.brand, pal.accent).title_alignment(Alignment::Center);
 
     let slider_inner = slider_outer.inner(rows[2]);
     frame.render_widget(slider_outer, rows[2]);
@@ -1264,17 +1193,12 @@ fn render_flashing(
             String::new()
         };
 
-        let verify_outer = Block::default()
-            .title(Span::styled(
-                format!(" 🔍  Verifying{} ", verify_speed_label),
-                Style::default()
-                    .fg(pal.success)
-                    .add_modifier(Modifier::BOLD),
-            ))
-            .title_alignment(Alignment::Center)
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.success));
+        let verify_outer = themed_block!(
+            format!(" 🔍  Verifying{} ", verify_speed_label),
+            pal.success,
+            pal.success
+        )
+        .title_alignment(Alignment::Center);
 
         let verify_inner = verify_outer.inner(rows[3]);
         frame.render_widget(verify_outer, rows[3]);
@@ -1350,44 +1274,14 @@ fn render_flashing(
     };
 
     let stats_lines = vec![
-        Line::from(vec![
-            Span::styled("Written:  ", Style::default().fg(pal.dim)),
-            Span::styled(
-                fmt_bytes(app.flash_bytes),
-                Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("Total:    ", Style::default().fg(pal.dim)),
-            Span::styled(fmt_bytes(total), Style::default().fg(pal.dim)),
-        ]),
-        Line::from(vec![
-            Span::styled("Speed:    ", Style::default().fg(pal.dim)),
-            Span::styled(
-                speed_label,
-                Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("Progress: ", Style::default().fg(pal.dim)),
-            Span::styled(
-                format!("{:.1}%", pct * 100.0),
-                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-            ),
-        ]),
+        kv_line!("Written:  ", fmt_bytes(app.flash_bytes), pal, bold pal.fg),
+        kv_line!("Total:    ", fmt_bytes(total), pal, pal.dim),
+        kv_line!("Speed:    ", speed_label, pal, bold pal.accent),
+        kv_line!("Progress: ", format!("{:.1}%", pct * 100.0), pal, bold pal.brand),
     ];
 
-    let stats = Paragraph::new(stats_lines).block(
-        Block::default()
-            .title(Span::styled(
-                " Statistics ",
-                Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
-            ))
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.dim))
-            .padding(Padding::horizontal(1)),
-    );
+    let stats = Paragraph::new(stats_lines)
+        .block(themed_block!(" Statistics ", pal.accent, pal.dim).padding(Padding::horizontal(1)));
     frame.render_widget(stats, stats_log_cols[0]);
 
     // ── Log panel + Zed-style spinner ────────────────────────────────────────
@@ -1416,15 +1310,7 @@ fn render_flashing(
     };
 
     // The log block — rendered first so we can measure the inner height.
-    let log_block = Block::default()
-        .title(Span::styled(
-            " Log ",
-            Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
-        ))
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(pal.dim))
-        .padding(Padding::horizontal(1));
+    let log_block = themed_block!(" Log ", pal.accent, pal.dim).padding(Padding::horizontal(1));
 
     let log_inner = log_block.inner(stats_log_cols[1]);
 
@@ -1603,16 +1489,11 @@ fn render_usb_contents(app: &App, frame: &mut Frame, area: Rect, pal: &TuiPalett
         String::new()
     };
 
-    let list = List::new(items).block(
-        Block::default()
-            .title(Span::styled(
-                format!(" 📋  USB Contents{scroll_info}"),
-                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-            ))
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.success)),
-    );
+    let list = List::new(items).block(themed_block!(
+        format!(" 📋  USB Contents{scroll_info}"),
+        pal.brand,
+        pal.success
+    ));
 
     frame.render_widget(list, area);
 }
@@ -1626,16 +1507,11 @@ fn render_contents_piechart(app: &App, frame: &mut Frame, area: Rect, pal: &TuiP
             Style::default().fg(pal.dim),
         ))
         .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    " 🥧  Contents Breakdown ",
-                    Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(pal.dim)),
-        );
+        .block(themed_block!(
+            " 🥧  Contents Breakdown ",
+            pal.brand,
+            pal.dim
+        ));
         frame.render_widget(placeholder, area);
         return;
     }
@@ -1652,16 +1528,11 @@ fn render_contents_piechart(app: &App, frame: &mut Frame, area: Rect, pal: &TuiP
         .legend_position(LegendPosition::Right)
         .legend_layout(LegendLayout::Vertical)
         .high_resolution(true)
-        .block(
-            Block::default()
-                .title(Span::styled(
-                    " 🥧  Contents Breakdown ",
-                    Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(pal.success)),
-        );
+        .block(themed_block!(
+            " 🥧  Contents Breakdown ",
+            pal.brand,
+            pal.success
+        ));
 
     frame.render_widget(pie, rows[0]);
 
@@ -1683,11 +1554,14 @@ fn render_contents_piechart(app: &App, frame: &mut Frame, area: Rect, pal: &TuiP
         if i >= cb_rows.len() {
             break;
         }
-        let cb = Checkbox::new(format!("{:<18} — {} file(s)", label, count), true)
-            .checkbox_style(Style::default().fg(*color).add_modifier(Modifier::BOLD))
-            .label_style(Style::default().fg(pal.dim))
-            .checked_symbol("■ ")
-            .unchecked_symbol("□ ");
+        let cb = themed_checkbox!(
+            format!("{:<18} — {} file(s)", label, count),
+            true,
+            *color,
+            pal,
+            "■ ",
+            "□ "
+        );
 
         frame.render_widget(cb, cb_rows[i]);
     }

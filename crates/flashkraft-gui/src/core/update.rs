@@ -83,19 +83,7 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
                     return Task::perform(async { Message::EscalateAndFlash }, |m| m);
                 }
 
-                // Create a new cancellation token for this flash operation
-                state.flash_cancel_token =
-                    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-                // Bump the run counter so the subscription gets a fresh unique
-                // ID even if the same image+device pair is flashed again.
-                state.flash_run_id = state.flash_run_id.wrapping_add(1);
-
-                // Start flashing - activate subscription
-                state.flash_progress = Some(0.0);
-                state.error_message = None;
-                state.flashing_active = true;
-                state.flash_complete = false;
+                state.begin_flash_state();
 
                 Task::none()
             } else {
@@ -127,17 +115,7 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             // reexec returned → escalation unavailable or declined.
             // Proceed with the flash attempt so the user sees the specific
             // error (and the setuid install instructions) rather than nothing.
-            state.flash_cancel_token =
-                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-            // Bump the run counter here too so a re-exec retry always starts
-            // with a fresh subscription.
-            state.flash_run_id = state.flash_run_id.wrapping_add(1);
-
-            state.flash_progress = Some(0.0);
-            state.error_message = None;
-            state.flashing_active = true;
-            state.flash_complete = false;
+            state.begin_flash_state();
 
             Task::none()
         }

@@ -967,48 +967,31 @@ mod tests {
     // ── Linux helpers ─────────────────────────────────────────────────────────
 
     #[cfg(target_os = "linux")]
-    #[test]
-    fn test_skip_loop_devices() {
-        assert!(linux::should_skip_device("loop0"));
-        assert!(linux::should_skip_device("loop1"));
+    macro_rules! skip_device_tests {
+        ($( $name:ident : $device:literal => $expected:expr ),+ $(,)?) => {
+            $(
+                #[cfg(target_os = "linux")]
+                #[test]
+                fn $name() {
+                    assert_eq!(linux::should_skip_device($device), $expected,
+                        "should_skip_device({:?}) should be {}", $device, $expected);
+                }
+            )+
+        };
     }
 
     #[cfg(target_os = "linux")]
-    #[test]
-    fn test_skip_nvme_devices() {
-        assert!(linux::should_skip_device("nvme0n1"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_skip_ram_devices() {
-        assert!(linux::should_skip_device("ram0"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_skip_dm_devices() {
-        assert!(linux::should_skip_device("dm-0"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_skip_optical_drives() {
-        assert!(linux::should_skip_device("sr0"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_skip_empty_name() {
-        assert!(linux::should_skip_device(""));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_allow_sata_usb_names() {
-        assert!(!linux::should_skip_device("sda"));
-        assert!(!linux::should_skip_device("sdb"));
-        assert!(!linux::should_skip_device("sdc"));
+    skip_device_tests! {
+        test_skip_loop_devices_loop0:  "loop0"  => true,
+        test_skip_loop_devices_loop1:  "loop1"  => true,
+        test_skip_nvme_devices:        "nvme0n1" => true,
+        test_skip_ram_devices:         "ram0"   => true,
+        test_skip_dm_devices:          "dm-0"   => true,
+        test_skip_optical_drives:      "sr0"    => true,
+        test_skip_empty_name:          ""       => true,
+        test_allow_sata_usb_sda:       "sda"    => false,
+        test_allow_sata_usb_sdb:       "sdb"    => false,
+        test_allow_sata_usb_sdc:       "sdc"    => false,
     }
 
     #[cfg(target_os = "linux")]

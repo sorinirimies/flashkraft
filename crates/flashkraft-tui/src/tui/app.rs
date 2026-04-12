@@ -219,6 +219,29 @@ pub struct App {
     pub should_quit: bool,
 }
 
+/// Generate a pair of cursor-navigation methods that clamp at list bounds.
+macro_rules! cursor_nav {
+    (up: $fn_up:ident, down: $fn_down:ident, cursor: $cursor:ident, list: $list:ident) => {
+        impl App {
+            pub fn $fn_up(&mut self) {
+                if self.$cursor > 0 {
+                    self.$cursor -= 1;
+                }
+            }
+
+            pub fn $fn_down(&mut self) {
+                if !self.$list.is_empty() && self.$cursor < self.$list.len().saturating_sub(1) {
+                    self.$cursor += 1;
+                }
+            }
+        }
+    };
+}
+
+cursor_nav!(up: drive_up,        down: drive_down,        cursor: drive_cursor,           list: available_drives);
+cursor_nav!(up: contents_up,      down: contents_down,      cursor: contents_scroll,        list: usb_contents);
+cursor_nav!(up: theme_panel_up,   down: theme_panel_down,   cursor: app_theme_panel_cursor, list: explorer_themes);
+
 impl App {
     // -----------------------------------------------------------------------
     // Construction
@@ -461,41 +484,6 @@ impl App {
         self.flash_log.push(msg);
         if self.flash_log.len() > MAX_LOG {
             self.flash_log.drain(0..self.flash_log.len() - MAX_LOG);
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Navigation helpers
-    // -----------------------------------------------------------------------
-
-    /// Move drive-list cursor up.
-    pub fn drive_up(&mut self) {
-        if self.drive_cursor > 0 {
-            self.drive_cursor -= 1;
-        }
-    }
-
-    /// Move drive-list cursor down.
-    pub fn drive_down(&mut self) {
-        if !self.available_drives.is_empty() && self.drive_cursor < self.available_drives.len() - 1
-        {
-            self.drive_cursor += 1;
-        }
-    }
-
-    /// Scroll USB-contents list up.
-    pub fn contents_up(&mut self) {
-        if self.contents_scroll > 0 {
-            self.contents_scroll -= 1;
-        }
-    }
-
-    /// Scroll USB-contents list down.
-    pub fn contents_down(&mut self) {
-        if !self.usb_contents.is_empty()
-            && self.contents_scroll < self.usb_contents.len().saturating_sub(1)
-        {
-            self.contents_scroll += 1;
         }
     }
 
@@ -755,21 +743,6 @@ impl App {
     /// Close the global theme panel without applying any change.
     pub fn close_app_theme_panel(&mut self) {
         self.show_app_theme_panel = false;
-    }
-
-    /// Move the theme-panel cursor up by one (clamps at 0).
-    pub fn theme_panel_up(&mut self) {
-        if self.app_theme_panel_cursor > 0 {
-            self.app_theme_panel_cursor -= 1;
-        }
-    }
-
-    /// Move the theme-panel cursor down by one (clamps at last entry).
-    pub fn theme_panel_down(&mut self) {
-        let last = self.explorer_themes.len().saturating_sub(1);
-        if self.app_theme_panel_cursor < last {
-            self.app_theme_panel_cursor += 1;
-        }
     }
 
     /// Apply the theme currently under the panel cursor, persist it, and close the panel.

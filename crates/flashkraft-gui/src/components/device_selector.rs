@@ -11,6 +11,31 @@ use crate::domain::{constraints, DriveInfo, ImageInfo};
 use crate::utils::icons_bootstrap_mapper as icons;
 use iced_fonts::Bootstrap;
 
+/// Build an [`iced::widget::Text`] that is dimmed when disabled.
+macro_rules! styled_text {
+    ($content:expr, $size:expr, $disabled:expr) => {{
+        let t = text($content).size($size);
+        if $disabled {
+            t.color(Color::from_rgb(0.5, 0.5, 0.5))
+        } else {
+            t
+        }
+    }};
+}
+
+/// Return (colour, Bootstrap icon) for a compatibility status type.
+fn status_style(ty: &constraints::CompatibilityStatusType) -> (Color, Bootstrap) {
+    match ty {
+        constraints::CompatibilityStatusType::Error => {
+            (Color::from_rgb(0.9, 0.3, 0.3), Bootstrap::XCircle)
+        }
+        constraints::CompatibilityStatusType::Warning => (
+            Color::from_rgb(0.9, 0.7, 0.2),
+            Bootstrap::ExclamationTriangle,
+        ),
+    }
+}
+
 /// Device selector overlay
 pub fn view_device_selector<'a>(
     available_drives: &'a [DriveInfo],
@@ -101,42 +126,14 @@ fn view_device_row<'a>(
     };
 
     // Apply grayed-out styling for disabled drives
-    let name_text = if is_disabled {
-        text(&drive.name)
-            .size(18)
-            .color(Color::from_rgb(0.5, 0.5, 0.5))
-    } else {
-        text(&drive.name).size(18)
-    };
-
-    let size_text = if is_disabled {
-        text(flashkraft_core::fmt_bytes(
-            (drive.size_gb * 1_073_741_824.0) as u64,
-        ))
-        .size(14)
-        .color(Color::from_rgb(0.5, 0.5, 0.5))
-    } else {
-        text(flashkraft_core::fmt_bytes(
-            (drive.size_gb * 1_073_741_824.0) as u64,
-        ))
-        .size(14)
-    };
-
-    let mount_text = if is_disabled {
-        text(&drive.mount_point)
-            .size(12)
-            .color(Color::from_rgb(0.5, 0.5, 0.5))
-    } else {
-        text(&drive.mount_point).size(12)
-    };
-
-    let device_text = if is_disabled {
-        text(&drive.device_path)
-            .size(12)
-            .color(Color::from_rgb(0.5, 0.5, 0.5))
-    } else {
-        text(&drive.device_path).size(12)
-    };
+    let name_text = styled_text!(&drive.name, 18, is_disabled);
+    let size_text = styled_text!(
+        flashkraft_core::fmt_bytes((drive.size_gb * 1_073_741_824.0) as u64),
+        14,
+        is_disabled
+    );
+    let mount_text = styled_text!(&drive.mount_point, 12, is_disabled);
+    let device_text = styled_text!(&drive.device_path, 12, is_disabled);
 
     // Add warning/error badges if present
     let mut info_column = column![
@@ -148,15 +145,7 @@ fn view_device_row<'a>(
 
     // Add status messages
     for status in statuses {
-        let status_color = match status.status_type {
-            constraints::CompatibilityStatusType::Error => Color::from_rgb(0.9, 0.3, 0.3),
-            constraints::CompatibilityStatusType::Warning => Color::from_rgb(0.9, 0.7, 0.2),
-        };
-
-        let status_icon = match status.status_type {
-            constraints::CompatibilityStatusType::Error => Bootstrap::XCircle,
-            constraints::CompatibilityStatusType::Warning => Bootstrap::ExclamationTriangle,
-        };
+        let (status_color, status_icon) = status_style(&status.status_type);
 
         info_column = info_column.push(
             row![

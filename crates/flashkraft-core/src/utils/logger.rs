@@ -3,9 +3,23 @@
 //! Centralized logging macros and utilities for FlashKraft.
 //! All debug logging is conditionally compiled and only active in debug builds.
 
-/// Debug logging macro for general application messages
+/// Internal implementation for debug-only tagged logging.
 ///
-/// Only prints in debug builds. Automatically prefixes with `\[DEBUG\]`.
+/// Not intended for direct use — call [`debug_log!`], [`flash_debug!`], or
+/// [`status_log!`] instead.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __debug_log_impl {
+    ($tag:expr, $($arg:tt)*) => {
+        #[cfg(debug_assertions)]
+        eprintln!(concat!("[", $tag, "] {}"), format!($($arg)*));
+    };
+}
+
+/// Debug logging macro for general application messages.
+///
+/// Only prints in debug builds. Automatically prefixes with `[DEBUG]`.
+/// Delegates to [`__debug_log_impl!`].
 ///
 /// # Example
 /// ```no_run
@@ -15,15 +29,13 @@
 /// ```
 #[macro_export]
 macro_rules! debug_log {
-    ($($arg:tt)*) => {
-        #[cfg(debug_assertions)]
-        eprintln!("[DEBUG] {}", format!($($arg)*));
-    };
+    ($($arg:tt)*) => { $crate::__debug_log_impl!("DEBUG", $($arg)*) };
 }
 
-/// Debug logging macro for flash subscription messages
+/// Debug logging macro for flash subscription messages.
 ///
-/// Only prints in debug builds. Automatically prefixes with `\[FLASH_DEBUG\]`.
+/// Only prints in debug builds. Automatically prefixes with `[FLASH_DEBUG]`.
+/// Delegates to [`__debug_log_impl!`].
 ///
 /// # Example
 /// ```no_run
@@ -33,15 +45,13 @@ macro_rules! debug_log {
 /// ```
 #[macro_export]
 macro_rules! flash_debug {
-    ($($arg:tt)*) => {
-        #[cfg(debug_assertions)]
-        eprintln!("[FLASH_DEBUG] {}", format!($($arg)*));
-    };
+    ($($arg:tt)*) => { $crate::__debug_log_impl!("FLASH_DEBUG", $($arg)*) };
 }
 
-/// Debug logging macro for status messages
+/// Debug logging macro for status messages.
 ///
-/// Only prints in debug builds. Automatically prefixes with `\[STATUS\]`.
+/// Only prints in debug builds. Automatically prefixes with `[STATUS]`.
+/// Delegates to [`__debug_log_impl!`].
 ///
 /// # Example
 /// ```no_run
@@ -50,10 +60,7 @@ macro_rules! flash_debug {
 /// ```
 #[macro_export]
 macro_rules! status_log {
-    ($($arg:tt)*) => {
-        #[cfg(debug_assertions)]
-        eprintln!("[STATUS] {}", format!($($arg)*));
-    };
+    ($($arg:tt)*) => { $crate::__debug_log_impl!("STATUS", $($arg)*) };
 }
 
 /// Conditional debug logging - only logs if condition is true

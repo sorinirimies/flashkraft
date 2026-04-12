@@ -14,6 +14,23 @@ use crate::core::FlashKraft;
 use crate::utils::icons_bootstrap_mapper as icons;
 use iced_fonts::Bootstrap;
 
+/// Wrap inner content in the standard status-page layout:
+/// theme selector on top, centred content below.
+fn status_page<'a>(state: &'a FlashKraft, inner: Element<'a, Message>) -> Element<'a, Message> {
+    let content = column![
+        theme_selector::theme_selector_right(&state.theme),
+        container(inner)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
+    ];
+    container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
 /// Flashing progress view
 pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
     let progress = state.flash_progress.unwrap_or(0.0);
@@ -166,19 +183,7 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
                 .padding(10),
         );
 
-    let content = column![
-        theme_selector::theme_selector_right(&state.theme),
-        container(progress_content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
-    ];
-
-    container(content)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    status_page(state, progress_content.into())
 }
 
 /// Split a raw error string into a short headline and optional detail lines.
@@ -306,15 +311,7 @@ pub fn view_error<'a>(state: &'a crate::core::FlashKraft, error: &'a str) -> Ele
         .center_x(Length::Fill)
         .center_y(Length::Fill);
 
-    let content = column![
-        theme_selector::theme_selector_right(&state.theme),
-        error_content,
-    ];
-
-    container(content)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    status_page(state, error_content.into())
 }
 
 /// Flash complete view
@@ -333,19 +330,7 @@ pub fn view_complete(state: &crate::core::FlashKraft) -> Element<'_, Message> {
     .align_x(Alignment::Center)
     .padding(40);
 
-    let content = column![
-        theme_selector::theme_selector_right(&state.theme),
-        container(complete_content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
-    ];
-
-    container(content)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    status_page(state, complete_content.into())
 }
 
 // ---------------------------------------------------------------------------
