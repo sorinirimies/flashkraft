@@ -926,6 +926,9 @@ fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
                     libc::EINVAL => {}
                     // ENOENT — path doesn't exist, also harmless.
                     libc::ENOENT => {}
+                    // EPERM — not permitted (non-root); harmless when the
+                    // partition was never mounted in the first place.
+                    libc::EPERM => {}
                     _ => {
                         let err = std::io::Error::from_raw_os_error(raw);
                         send(
