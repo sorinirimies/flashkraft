@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 - Refactor tests and UI helpers using macros for conciseness
 ### ➕ Added
 - Add Gitea Starscream remote support to release workflows
+### 🔧 Chores
+- chore: bump version to 1.0.1
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.0...v1.0.1
 ## 1.0.0 - 2026-04-12
 ### 📦 Other Changes
