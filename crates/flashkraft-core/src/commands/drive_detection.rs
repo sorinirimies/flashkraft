@@ -551,19 +551,17 @@ mod macos_parse {
                 "WholeDisk" => {
                     info.whole_disk = value_section.starts_with("<true/>");
                 }
-                "Ejectable" | "Removable" | "RemovableMedia" | "RemovableMediaOrExternalDevice" => {
-                    if value_section.starts_with("<true/>") {
-                        info.removable = true;
-                    }
+                "Ejectable" | "Removable" | "RemovableMedia" | "RemovableMediaOrExternalDevice"
+                    if value_section.starts_with("<true/>") =>
+                {
+                    info.removable = true;
                 }
                 "ReadOnly" => {
                     info.read_only = value_section.starts_with("<true/>");
                 }
-                "TotalSize" | "DiskSize" => {
-                    if info.size_bytes == 0 {
-                        if let Some(v) = extract_integer(value_section) {
-                            info.size_bytes = v;
-                        }
+                "TotalSize" | "DiskSize" if info.size_bytes == 0 => {
+                    if let Some(v) = extract_integer(value_section) {
+                        info.size_bytes = v;
                     }
                 }
                 "MountPoint" => {
