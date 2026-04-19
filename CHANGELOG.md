@@ -2,9 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.1 - 2026-04-19
+### ♻️ Refactor
+- Refactor tests and UI helpers using macros for conciseness
+### ➕ Added
+- Add Gitea Starscream remote support to release workflows
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.0...v1.0.1
 ## 1.0.0 - 2026-04-12
 ### 📦 Other Changes
 - Replace sled with redb for theme persistence
+### 🔧 Chores
+- chore: bump version to 1.0.0
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.9...v1.0.0
 ## 0.8.9 - 2026-03-27
 ### ✨ Features
