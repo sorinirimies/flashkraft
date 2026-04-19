@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.3 - 2026-04-19
+### ♻️ Refactor
+- Refactor macOS drive parsing with pattern guards
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.2...v1.0.3
+## 1.0.2 - 2026-04-19
+### 🔧 Chores
+- chore: bump version to 1.0.2
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.1...v1.0.2
 ## 1.0.1 - 2026-04-19
 ### ♻️ Refactor
 - Refactor tests and UI helpers using macros for conciseness

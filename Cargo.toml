@@ -9,7 +9,7 @@ resolver = "2"
 
 
 [workspace.package]
-version      = "1.0.2"
+version      = "1.0.3"
 edition      = "2021"
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
 license      = "MIT"
@@ -56,7 +56,7 @@ tui-piechart = "0.3.1"
 tui-checkbox = "0.4.3"
 
 # Internal crates
-flashkraft-core = { path = "crates/flashkraft-core", version = "1.0.2" }
+flashkraft-core = { path = "crates/flashkraft-core", version = "1.0.3" }
 
 [profile.dev]
 opt-level = 0
