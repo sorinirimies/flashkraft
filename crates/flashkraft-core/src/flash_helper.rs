@@ -1310,7 +1310,11 @@ fn sha256_with_progress(
         }
     }
 
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect())
 }
 
 /// Legacy non-progress variant kept for unit tests that don't need a channel.
@@ -1792,7 +1796,10 @@ mod tests {
         std::fs::write(&path, &data).unwrap();
 
         let result = sha256_first_n_bytes(path.to_str().unwrap(), data.len() as u64).unwrap();
-        let expected = format!("{:x}", Sha256::digest(&data));
+        let expected: String = Sha256::digest(&data)
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect();
         assert_eq!(result, expected);
 
         let _ = std::fs::remove_file(path);
@@ -1809,7 +1816,10 @@ mod tests {
 
         let n = 4096u64;
         let result = sha256_first_n_bytes(path.to_str().unwrap(), n).unwrap();
-        let expected = format!("{:x}", Sha256::digest(&data[..n as usize]));
+        let expected: String = Sha256::digest(&data[..n as usize])
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect();
         assert_eq!(result, expected);
 
         let _ = std::fs::remove_file(path);
@@ -1832,7 +1842,10 @@ mod tests {
 
         // max_bytes = 0 → nothing is read → hash of empty input
         let result = sha256_first_n_bytes(path.to_str().unwrap(), 0).unwrap();
-        let expected = format!("{:x}", Sha256::digest(b""));
+        let expected: String = Sha256::digest(b"")
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect();
         assert_eq!(result, expected);
 
         let _ = std::fs::remove_file(path);
