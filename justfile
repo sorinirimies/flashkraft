@@ -1,4 +1,8 @@
 # flashkraft workspace — task runner
+# Timeout (seconds) for git push/pull to unreachable remotes.
+
+GIT_TIMEOUT := "15"
+
 # Install just:      cargo install just
 # Install git-cliff: cargo install git-cliff
 # Install vhs:       brew install vhs  OR  go install github.com/charmbracelet/vhs@latest
@@ -464,23 +468,23 @@ push-gitea:
 push-gitea-starscream:
     git push gitea_starscream main
 
-# Push the current branch to all remotes (continues on failure)
+# Push the current branch to all remotes (continues on failure, {{GIT_TIMEOUT}}s timeout)
 push-all:
     #!/usr/bin/env sh
     fail=0
-    git push origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push gitea main             || { echo "⚠️  gitea failed";             fail=1; }
-    git push gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push origin main            || { echo "⚠️  origin failed (unreachable or error)";            fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push gitea main             || { echo "⚠️  gitea failed (unreachable or error)";             fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push gitea_starscream main  || { echo "⚠️  gitea_starscream failed (unreachable or error)";  fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Pushed to GitHub, Gitea, and Gitea Starscream!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
-# Force-push the current branch to all remotes (continues on failure)
+# Force-push the current branch to all remotes (continues on failure, {{GIT_TIMEOUT}}s timeout)
 push-all-force:
     #!/usr/bin/env sh
     fail=0
-    git push --force origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --force gitea main             || { echo "⚠️  gitea failed";             fail=1; }
-    git push --force gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --force origin main            || { echo "⚠️  origin failed (unreachable or error)";            fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --force gitea main             || { echo "⚠️  gitea failed (unreachable or error)";             fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --force gitea_starscream main  || { echo "⚠️  gitea_starscream failed (unreachable or error)";  fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Force-pushed to GitHub, Gitea, and Gitea Starscream!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -496,13 +500,13 @@ pull-gitea:
 pull-gitea-starscream:
     git pull gitea_starscream main
 
-# Pull the current branch from all remotes (continues on failure)
+# Pull the current branch from all remotes (continues on failure, {{GIT_TIMEOUT}}s timeout)
 pull-all:
     #!/usr/bin/env sh
     fail=0
-    git pull origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git pull gitea main             || { echo "⚠️  gitea failed";             fail=1; }
-    git pull gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
+    timeout {{ GIT_TIMEOUT }} git pull origin main            || { echo "⚠️  origin failed (unreachable or error)";            fail=1; }
+    timeout {{ GIT_TIMEOUT }} git pull gitea main             || { echo "⚠️  gitea failed (unreachable or error)";             fail=1; }
+    timeout {{ GIT_TIMEOUT }} git pull gitea_starscream main  || { echo "⚠️  gitea_starscream failed (unreachable or error)";  fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Pulled from GitHub, Gitea, and Gitea Starscream!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -510,13 +514,13 @@ pull-all:
 push-tags:
     git push origin --tags
 
-# Push all tags to all remotes (continues on failure)
+# Push all tags to all remotes (continues on failure, {{GIT_TIMEOUT}}s timeout)
 push-tags-all:
     #!/usr/bin/env sh
     fail=0
-    git push origin --tags            || { echo "⚠️  origin failed";            fail=1; }
-    git push gitea --tags             || { echo "⚠️  gitea failed";             fail=1; }
-    git push gitea_starscream --tags  || { echo "⚠️  gitea_starscream failed";  fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push origin --tags            || { echo "⚠️  origin failed (unreachable or error)";            fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push gitea --tags             || { echo "⚠️  gitea failed (unreachable or error)";             fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push gitea_starscream --tags  || { echo "⚠️  gitea_starscream failed (unreachable or error)";  fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Tags pushed to all remotes!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -558,14 +562,14 @@ release-gitea-starscream version: (bump version)
     git push --follow-tags gitea_starscream main
     @echo "✅ Release v{{ version }} live on Gitea Starscream."
 
-# Bump, commit, tag, then push to all remotes (continues on failure).
+# Bump, commit, tag, then push to all remotes (continues on failure, {{GIT_TIMEOUT}}s timeout).
 release-all version: (bump version)
     #!/usr/bin/env sh
     echo "Pushing release v{{ version }} to all remotes…"
     fail=0
-    git push --follow-tags origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --follow-tags gitea main             || { echo "⚠️  gitea failed";             fail=1; }
-    git push --follow-tags gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --follow-tags origin main            || { echo "⚠️  origin failed (unreachable or error)";            fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --follow-tags gitea main             || { echo "⚠️  gitea failed (unreachable or error)";             fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --follow-tags gitea_starscream main  || { echo "⚠️  gitea_starscream failed (unreachable or error)";  fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Release v{{ version }} pushed to GitHub, Gitea, and Gitea Starscream!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -578,9 +582,9 @@ release-all version: (bump version)
 push-release-all: check-all
     #!/usr/bin/env sh
     fail=0
-    git push --follow-tags origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --follow-tags gitea main             || { echo "⚠️  gitea failed";             fail=1; }
-    git push --follow-tags gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --follow-tags origin main            || { echo "⚠️  origin failed (unreachable or error)";            fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --follow-tags gitea main             || { echo "⚠️  gitea failed (unreachable or error)";             fail=1; }
+    timeout {{ GIT_TIMEOUT }} git push --follow-tags gitea_starscream main  || { echo "⚠️  gitea_starscream failed (unreachable or error)";  fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Latest commit + tags pushed to all remotes."; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
