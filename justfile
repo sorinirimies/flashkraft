@@ -402,20 +402,23 @@ update:
 
 # Aborts without committing if fmt, clippy, or tests fail.
 update-deps:
-    @echo "⬆️  Updating dependencies…"
+    #!/usr/bin/env sh
+    set -e
+    echo "⬆️  Updating dependencies…"
     cargo update
-    @echo "🔍 Running quality gate…"
+    echo "🔍 Running quality gate…"
     cargo fmt --all -- --check
     cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
     cargo test --workspace --locked --all-features --all-targets
-    @echo "✅ All checks passed — committing dependency updates…"
+    echo "✅ All checks passed — committing dependency updates…"
     git add Cargo.lock
     git diff --cached --quiet || git commit -m "chore: update dependencies"
-    fail=0; \
-    git push origin main            || { echo "⚠️  origin failed";            fail=1; }; \
-    git push gitea main             || { echo "⚠️  gitea failed";             fail=1; }; \
-    git push gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }; \
-    if [ "$$fail" -eq 0 ]; then echo "✅ Dependency updates pushed to all remotes."; \
+    set +e
+    fail=0
+    git push origin main            || { echo "⚠️  origin failed";            fail=1; }
+    git push gitea main             || { echo "⚠️  gitea failed";             fail=1; }
+    git push gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
+    if [ "$fail" -eq 0 ]; then echo "✅ Dependency updates pushed to all remotes.";
     else echo "⚠️  Some remotes failed — check output above."; fi
 
 # Show outdated dependencies (requires cargo-outdated)
