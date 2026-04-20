@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.5 - 2026-04-20
+### 📦 Other Changes
+- Simplify release workflow to build only native Linux binaries
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.4...v1.0.5
 ## 1.0.4 - 2026-04-20
 ### ♻️ Refactor
 - Refactor update-deps recipe to use POSIX shell and improve error
@@ -11,6 +15,8 @@ All notable changes to this project will be documented in this file.
 - Handle EPERM error as harmless in do_unmount
 - Make multi-remote push and pull tasks continue on failure
 - Use lowercase hex for SHA256 output formatting
+### 🔧 Chores
+- chore: bump version to 1.0.4
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.3...v1.0.4
 ## 1.0.3 - 2026-04-19
 ### ♻️ Refactor
