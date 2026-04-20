@@ -411,8 +411,12 @@ update-deps:
     @echo "✅ All checks passed — committing dependency updates…"
     git add Cargo.lock
     git diff --cached --quiet || git commit -m "chore: update dependencies"
-    git push origin main
-    @echo "✅ Dependency updates pushed to GitHub."
+    fail=0; \
+    git push origin main            || { echo "⚠️  origin failed";            fail=1; }; \
+    git push gitea main             || { echo "⚠️  gitea failed";             fail=1; }; \
+    git push gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }; \
+    if [ "$$fail" -eq 0 ]; then echo "✅ Dependency updates pushed to all remotes."; \
+    else echo "⚠️  Some remotes failed — check output above."; fi
 
 # Show outdated dependencies (requires cargo-outdated)
 outdated:
@@ -465,6 +469,16 @@ push-all:
     git push gitea main             || { echo "⚠️  gitea failed";             fail=1; }
     git push gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Pushed to GitHub, Gitea, and Gitea Starscream!"; \
+    else echo "⚠️  Some remotes failed — check output above."; fi
+
+# Force-push the current branch to all remotes (continues on failure)
+push-all-force:
+    #!/usr/bin/env sh
+    fail=0
+    git push --force origin main            || { echo "⚠️  origin failed";            fail=1; }
+    git push --force gitea main             || { echo "⚠️  gitea failed";             fail=1; }
+    git push --force gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
+    if [ "$fail" -eq 0 ]; then echo "✅ Force-pushed to GitHub, Gitea, and Gitea Starscream!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
 # Pull the current branch from GitHub (origin)
@@ -590,6 +604,17 @@ sync-gitea-starscream:
     git push gitea_starscream main --force
     git push gitea_starscream --tags --force
     @echo "✅ Gitea Starscream force-synced with GitHub."
+
+# Force-sync all Gitea instances with GitHub (continues on failure)
+sync-all:
+    #!/usr/bin/env sh
+    fail=0
+    git push gitea main --force                  || { echo "⚠️  gitea main failed";              fail=1; }
+    git push gitea --tags --force                || { echo "⚠️  gitea tags failed";              fail=1; }
+    git push gitea_starscream main --force       || { echo "⚠️  gitea_starscream main failed";   fail=1; }
+    git push gitea_starscream --tags --force     || { echo "⚠️  gitea_starscream tags failed";   fail=1; }
+    if [ "$fail" -eq 0 ]; then echo "✅ All Gitea instances force-synced with GitHub."; \
+    else echo "⚠️  Some remotes failed — check output above."; fi
 
 # Add a Gitea remote and optionally push — interactive (nu script)
 setup-gitea url: _check-nu
