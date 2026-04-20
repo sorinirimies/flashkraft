@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.6 - 2026-04-20
+### 📦 Other Changes
+- Skip test if pipeline returns permission denied error
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.5...v1.0.6
 ## 1.0.5 - 2026-04-20
 ### 📦 Other Changes
 - Simplify release workflow to build only native Linux binaries
+### 🔧 Chores
+- chore: bump version to 1.0.5
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.4...v1.0.5
 ## 1.0.4 - 2026-04-20
 ### ♻️ Refactor
