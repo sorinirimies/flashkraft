@@ -291,7 +291,8 @@ fn render_browse_image(
         pal,
     );
 
-    let theme = *app.current_explorer_theme();
+    #[allow(clippy::clone_on_copy)]
+    let theme = app.current_explorer_theme().clone();
     render_themed(&mut app.file_explorer, frame, body, &theme);
 
     match &app.file_op_mode {
