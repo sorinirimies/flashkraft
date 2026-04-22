@@ -2,9 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.7 - 2026-04-22
+### ✨ Features
+- feat: migrate GUI to iced 0.14 + iced_fonts 0.3 + iced_aw 0.13
+### ➕ Added
+- Add timeout to all multi-remote git push/pull tasks
+### 🐛 Bug Fixes
+- Fix theme cloning in render_browse_image
+- Fix clippy warning for clone on copy in render_browse_image
+- fix: gracefully skip pipeline stage order test on PermissionDenied
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.6...v1.0.7
 ## 1.0.6 - 2026-04-20
 ### 📦 Other Changes
 - Skip test if pipeline returns permission denied error
+### 🔧 Chores
+- chore: bump version to 1.0.6
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.5...v1.0.6
 ## 1.0.5 - 2026-04-20
 ### 📦 Other Changes
