@@ -42,9 +42,9 @@ anyhow       = "1"
 tempfile     = "3"
 
 # GUI (Iced)
-iced         = { version = "0.13.1", features = ["advanced", "canvas"] }
-iced_aw      = "0.12.2"
-iced_fonts   = { version = "0.1", features = ["bootstrap"] }
+iced         = { version = "0.14", features = ["advanced", "canvas"] }
+iced_aw      = "0.13"
+iced_fonts   = { version = "0.3", features = ["bootstrap"] }
 rfd          = "0.15"
 
 # TUI (Ratatui)

@@ -41,7 +41,7 @@ pub fn theme_selector_right(current_theme: &Theme) -> Element<'static, Message> 
 
     container(
         row![
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
             theme_selector(current_theme),
         ]
         .align_y(Alignment::Start),

@@ -27,6 +27,31 @@ use iced::Color;
 use iced::{stream, Element, Subscription, Task, Theme};
 use std::sync::{atomic::AtomicBool, Arc};
 
+/// Free function for `Subscription::run_with` — iced 0.14 requires a `fn` pointer.
+///
+/// `run_with` passes `&D` where `D = &str`, so the parameter is `&&str`.
+fn usb_hotplug_stream(_id: &&str) -> impl futures::Stream<Item = Message> {
+    stream::channel(
+        4,
+        |mut output: futures::channel::mpsc::Sender<Message>| async move {
+            use futures::SinkExt as _;
+            match watch_usb_events() {
+                Ok(mut events) => {
+                    while let Some(_event) = events.next().await {
+                        let _ = output.send(Message::UsbHotplugDetected).await;
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[hotplug] watch_usb_events failed: {e}");
+                    // Park the future so the subscription stays alive but
+                    // silent — avoids Iced restarting it in a tight loop.
+                    std::future::pending::<()>().await;
+                }
+            }
+        },
+    )
+}
+
 /// The main application state
 ///
 /// This struct represents the complete state of the FlashKraft application.
@@ -272,25 +297,7 @@ impl FlashKraft {
         // Windows.  No elevated privileges are required for any of these
         // watches.  When the watch cannot be created (path missing or sandboxed)
         // we simply produce no events rather than crashing.
-        let hotplug_sub = Subscription::run_with_id(
-            "usb-hotplug",
-            stream::channel(4, |mut output| async move {
-                use futures::SinkExt as _;
-                match watch_usb_events() {
-                    Ok(mut events) => {
-                        while let Some(_event) = events.next().await {
-                            let _ = output.send(Message::UsbHotplugDetected).await;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("[hotplug] watch_usb_events failed: {e}");
-                        // Park the future so the subscription stays alive but
-                        // silent — avoids Iced restarting it in a tight loop.
-                        std::future::pending::<()>().await;
-                    }
-                }
-            }),
-        );
+        let hotplug_sub = Subscription::run_with("usb-hotplug", usb_hotplug_stream);
         subscriptions.push(hotplug_sub);
 
         // ── Flash progress ────────────────────────────────────────────────────

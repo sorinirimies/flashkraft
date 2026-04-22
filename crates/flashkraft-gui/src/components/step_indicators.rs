@@ -10,7 +10,6 @@ use crate::components::progress_line;
 use crate::core::message::Message;
 use crate::core::FlashKraft;
 use crate::utils::icons_bootstrap_mapper as icons;
-use iced_fonts::Bootstrap;
 
 /// Build a step-indicator column: icon + label, centred in 220px.
 macro_rules! step_indicator {
@@ -31,9 +30,9 @@ pub fn view_step_indicators(state: &FlashKraft) -> Element<'_, Message> {
     let has_target = state.selected_target.is_some();
 
     // Create step indicators - width matches button content width (220px)
-    let step1 = step_indicator!(Bootstrap::Image, "Select Image");
-    let step2 = step_indicator!(Bootstrap::DeviceHdd, "Select Target");
-    let step3 = step_indicator!(Bootstrap::LightningFill, "Flash!");
+    let step1 = step_indicator!(icons::Icon::Image, "Select Image");
+    let step2 = step_indicator!(icons::Icon::DeviceHdd, "Select Target");
+    let step3 = step_indicator!(icons::Icon::LightningFill, "Flash!");
 
     // Create connecting lines - animated with theme colors
     let line1 =

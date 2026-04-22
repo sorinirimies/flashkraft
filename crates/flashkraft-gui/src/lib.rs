@@ -57,10 +57,18 @@ pub fn run_gui() -> iced::Result {
     use iced::{Settings, Task};
 
     iced::application(
-        "FlashKraft - OS Image Writer",
+        || {
+            let initial_state = FlashKraft::new();
+            let initial_command = Task::perform(
+                flashkraft_core::commands::load_drives(),
+                Message::DrivesRefreshed,
+            );
+            (initial_state, initial_command)
+        },
         FlashKraft::update,
         FlashKraft::view,
     )
+    .title("FlashKraft - OS Image Writer")
     .subscription(FlashKraft::subscription)
     .theme(|state: &FlashKraft| state.theme.clone())
     .settings(Settings {
@@ -73,14 +81,7 @@ pub fn run_gui() -> iced::Result {
         decorations: true,
         ..Default::default()
     })
-    .run_with(|| {
-        let initial_state = FlashKraft::new();
-        let initial_command = Task::perform(
-            flashkraft_core::commands::load_drives(),
-            Message::DrivesRefreshed,
-        );
-        (initial_state, initial_command)
-    })
+    .run()
 }
 
 // Re-export domain types from core so downstream code can do

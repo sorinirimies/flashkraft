@@ -51,11 +51,11 @@ use flashkraft_core::flash_helper::{run_pipeline, FlashEvent};
 use flashkraft_core::FlashUpdate;
 use futures::channel::mpsc as futures_mpsc;
 use futures::SinkExt;
+use futures::Stream;
 use futures::StreamExt;
 use iced::stream;
 use iced::Subscription;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -83,22 +83,36 @@ pub use flashkraft_core::FlashUpdate as FlashProgress;
 /// `run_id` must be incremented on every new flash attempt so that flashing
 /// the same image to the same device twice always produces a distinct
 /// subscription ID and Iced creates a fresh stream.
-pub fn flash_progress(
+///
+/// In iced 0.14 `Subscription::run_with(data, fn_ptr)` requires a bare `fn`
+/// pointer — closures that capture are not accepted.  We bundle every captured
+/// value into [`FlashSubData`], which also derives `Hash` so Iced can use it
+/// as the subscription identity.
+#[derive(Clone)]
+struct FlashSubData {
     image_path: PathBuf,
     device_path: PathBuf,
     cancel_token: Arc<AtomicBool>,
     run_id: u64,
-) -> Subscription<FlashProgress> {
-    // Unique subscription ID — changes every flash attempt.
-    let mut hasher = DefaultHasher::new();
-    image_path.hash(&mut hasher);
-    device_path.hash(&mut hasher);
-    run_id.hash(&mut hasher);
-    let id = hasher.finish();
+}
 
-    Subscription::run_with_id(
-        id,
-        stream::channel(64, move |mut output| async move {
+impl std::hash::Hash for FlashSubData {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.image_path.hash(state);
+        self.device_path.hash(state);
+        self.run_id.hash(state);
+    }
+}
+
+/// Free function required by `Subscription::run_with` (must be `fn`, not closure).
+fn flash_stream(data: &FlashSubData) -> impl Stream<Item = FlashProgress> {
+    let image_path = data.image_path.clone();
+    let device_path = data.device_path.clone();
+    let cancel_token = data.cancel_token.clone();
+
+    stream::channel(
+        64,
+        move |mut output: futures::channel::mpsc::Sender<FlashProgress>| async move {
             // ── Validate inputs ───────────────────────────────────────────────
             let image_size = match image_path.metadata() {
                 Ok(m) if m.len() == 0 => {
@@ -215,8 +229,24 @@ pub fn flash_progress(
 
             // Park forever — Iced requires the stream future to never return.
             std::future::pending().await
-        }),
+        },
     )
+}
+
+pub fn flash_progress(
+    image_path: PathBuf,
+    device_path: PathBuf,
+    cancel_token: Arc<AtomicBool>,
+    run_id: u64,
+) -> Subscription<FlashProgress> {
+    let data = FlashSubData {
+        image_path,
+        device_path,
+        cancel_token,
+        run_id,
+    };
+
+    Subscription::run_with(data, flash_stream)
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +256,8 @@ pub fn flash_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
 
     #[test]
     fn test_flash_progress_clone() {

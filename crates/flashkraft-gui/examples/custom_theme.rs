@@ -45,19 +45,26 @@ fn main() -> iced::Result {
     println!();
 
     // Build initial state pre-configured with Tokyo Night.
-    let mut initial_state = FlashKraft::new();
-    initial_state.theme = Theme::TokyoNight;
-
-    // Persist the pre-selected theme so it survives a restart.
-    if let Some(storage) = &initial_state.storage {
-        let _ = storage.save_theme(&Theme::TokyoNight);
-    }
-
     iced::application(
-        "FlashKraft — Custom Theme Demo",
+        || {
+            let mut initial_state = FlashKraft::new();
+            initial_state.theme = Theme::TokyoNight;
+
+            // Persist the pre-selected theme so it survives a restart.
+            if let Some(storage) = &initial_state.storage {
+                let _ = storage.save_theme(&Theme::TokyoNight);
+            }
+
+            let load_drives = Task::perform(
+                flashkraft_core::commands::load_drives(),
+                Message::DrivesRefreshed,
+            );
+            (initial_state, load_drives)
+        },
         FlashKraft::update,
         FlashKraft::view,
     )
+    .title("FlashKraft — Custom Theme Demo")
     .subscription(FlashKraft::subscription)
     .theme(|state: &FlashKraft| state.theme.clone())
     .settings(Settings {
@@ -70,11 +77,5 @@ fn main() -> iced::Result {
         decorations: true,
         ..Default::default()
     })
-    .run_with(move || {
-        let load_drives = Task::perform(
-            flashkraft_core::commands::load_drives(),
-            Message::DrivesRefreshed,
-        );
-        (initial_state, load_drives)
-    })
+    .run()
 }

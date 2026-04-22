@@ -11,7 +11,6 @@ use iced::{Alignment, Element, Length};
 use crate::core::message::Message;
 use crate::domain::{DriveInfo, ImageInfo};
 use crate::utils::icons_bootstrap_mapper as icons;
-use iced_fonts::Bootstrap;
 
 /// Three buttons section
 pub fn view_buttons<'a>(
@@ -50,7 +49,7 @@ pub fn view_buttons<'a>(
 fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
     let content = if let Some(img) = image {
         column![
-            icons::icon(Bootstrap::CheckCircle, 50.0),
+            icons::icon(icons::Icon::CheckCircle, 50.0),
             text(&img.name).size(16),
             text(flashkraft_core::fmt_bytes(
                 (img.size_mb * 1_048_576.0) as u64
@@ -59,7 +58,7 @@ fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
         ]
     } else {
         column![
-            icons::icon(Bootstrap::PlusCircle, 50.0),
+            icons::icon(icons::Icon::PlusCircle, 50.0),
             text("Flash from file").size(16),
             text("Click to select").size(12),
         ]
@@ -81,7 +80,7 @@ fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
 fn view_target_section(selected: &Option<DriveInfo>) -> Element<'_, Message> {
     let content = if let Some(target) = selected {
         column![
-            icons::icon(Bootstrap::CheckCircle, 50.0),
+            icons::icon(icons::Icon::CheckCircle, 50.0),
             text(&target.name).size(16),
             text(flashkraft_core::fmt_bytes(
                 (target.size_gb * 1_073_741_824.0) as u64
@@ -91,7 +90,7 @@ fn view_target_section(selected: &Option<DriveInfo>) -> Element<'_, Message> {
         ]
     } else {
         column![
-            icons::icon(Bootstrap::DeviceHdd, 50.0),
+            icons::icon(icons::Icon::DeviceHdd, 50.0),
             text("Select target").size(16),
             text("Click to choose").size(12),
         ]
@@ -112,7 +111,7 @@ fn view_target_section(selected: &Option<DriveInfo>) -> Element<'_, Message> {
 /// Flash button panel
 fn view_flash_section(is_ready: bool) -> Element<'static, Message> {
     let content = column![
-        icons::icon(Bootstrap::LightningFill, 50.0),
+        icons::icon(icons::Icon::LightningFill, 50.0),
         text("Flash!").size(16),
         text(if is_ready {
             "Ready to flash"

@@ -37,10 +37,18 @@ fn main() -> iced::Result {
     println!();
 
     iced::application(
-        "FlashKraft — OS Image Writer",
+        || {
+            let initial_state = FlashKraft::new();
+            let load_drives = Task::perform(
+                flashkraft_core::commands::load_drives(),
+                Message::DrivesRefreshed,
+            );
+            (initial_state, load_drives)
+        },
         FlashKraft::update,
         FlashKraft::view,
     )
+    .title("FlashKraft — OS Image Writer")
     .subscription(FlashKraft::subscription)
     .theme(|state: &FlashKraft| state.theme.clone())
     .settings(Settings {
@@ -53,12 +61,5 @@ fn main() -> iced::Result {
         decorations: true,
         ..Default::default()
     })
-    .run_with(|| {
-        let initial_state = FlashKraft::new();
-        let load_drives = Task::perform(
-            flashkraft_core::commands::load_drives(),
-            Message::DrivesRefreshed,
-        );
-        (initial_state, load_drives)
-    })
+    .run()
 }
