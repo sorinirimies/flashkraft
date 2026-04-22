@@ -2787,8 +2787,20 @@ mod tests {
                 let dev = dir.path().join("dev.bin");
 
                 let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
-                std::fs::write(&img, &data).unwrap();
-                std::fs::File::create(&dev).unwrap();
+                if let Err(e) = std::fs::write(&img, &data) {
+                    if e.kind() == std::io::ErrorKind::PermissionDenied {
+                        eprintln!("Skipping: cannot write temp files (PermissionDenied): {e}");
+                        return;
+                    }
+                    panic!("unexpected error writing temp image: {e}");
+                }
+                if let Err(e) = std::fs::File::create(&dev) {
+                    if e.kind() == std::io::ErrorKind::PermissionDenied {
+                        eprintln!("Skipping: cannot create temp files (PermissionDenied): {e}");
+                        return;
+                    }
+                    panic!("unexpected error creating temp device: {e}");
+                }
 
                 let (tx, rx) = make_channel();
                 let cancel = Arc::new(AtomicBool::new(false));
