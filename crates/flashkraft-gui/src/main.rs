@@ -76,10 +76,22 @@ fn main() -> iced::Result {
 
     // ── Start the Iced GUI ───────────────────────────────────────────────────
     iced::application(
-        "FlashKraft - OS Image Writer",
+        || {
+            // Initialise application state.
+            let initial_state = FlashKraft::new();
+
+            // Kick off drive detection immediately on startup.
+            let initial_command = Task::perform(
+                flashkraft_core::commands::load_drives(),
+                Message::DrivesRefreshed,
+            );
+
+            (initial_state, initial_command)
+        },
         FlashKraft::update,
         FlashKraft::view,
     )
+    .title("FlashKraft - OS Image Writer")
     .subscription(FlashKraft::subscription)
     .theme(|state: &FlashKraft| state.theme.clone())
     .settings(Settings {
@@ -92,18 +104,7 @@ fn main() -> iced::Result {
         decorations: true,
         ..Default::default()
     })
-    .run_with(|| {
-        // Initialise application state.
-        let initial_state = FlashKraft::new();
-
-        // Kick off drive detection immediately on startup.
-        let initial_command = Task::perform(
-            flashkraft_core::commands::load_drives(),
-            Message::DrivesRefreshed,
-        );
-
-        (initial_state, initial_command)
-    })
+    .run()
 }
 
 // ---------------------------------------------------------------------------

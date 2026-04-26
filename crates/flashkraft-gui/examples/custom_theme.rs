@@ -44,20 +44,30 @@ fn main() -> iced::Result {
     println!("  4. Your choice is saved and restored on next launch");
     println!();
 
-    // Build initial state pre-configured with Tokyo Night.
-    let mut initial_state = FlashKraft::new();
-    initial_state.theme = Theme::TokyoNight;
-
-    // Persist the pre-selected theme so it survives a restart.
-    if let Some(storage) = &initial_state.storage {
+    // Persist the Tokyo Night preference so it survives a restart.
+    // (Storage is opened transiently here; the boot closure will pick it up
+    // via `FlashKraft::new()` → `Storage::load_theme()`.)
+    if let Ok(storage) = flashkraft_gui::core::storage::Storage::new() {
         let _ = storage.save_theme(&Theme::TokyoNight);
     }
 
     iced::application(
-        "FlashKraft — Custom Theme Demo",
+        || {
+            let mut initial_state = FlashKraft::new();
+            // Override theme to Tokyo Night (persisted above, but set
+            // explicitly in case Storage failed).
+            initial_state.theme = Theme::TokyoNight;
+
+            let load_drives = Task::perform(
+                flashkraft_core::commands::load_drives(),
+                Message::DrivesRefreshed,
+            );
+            (initial_state, load_drives)
+        },
         FlashKraft::update,
         FlashKraft::view,
     )
+    .title("FlashKraft — Custom Theme Demo")
     .subscription(FlashKraft::subscription)
     .theme(|state: &FlashKraft| state.theme.clone())
     .settings(Settings {
@@ -70,11 +80,5 @@ fn main() -> iced::Result {
         decorations: true,
         ..Default::default()
     })
-    .run_with(move || {
-        let load_drives = Task::perform(
-            flashkraft_core::commands::load_drives(),
-            Message::DrivesRefreshed,
-        );
-        (initial_state, load_drives)
-    })
+    .run()
 }

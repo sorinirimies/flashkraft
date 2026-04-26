@@ -9,7 +9,7 @@ use iced::{Alignment, Color, Element, Length};
 use crate::core::message::Message;
 use crate::domain::{constraints, DriveInfo, ImageInfo};
 use crate::utils::icons_bootstrap_mapper as icons;
-use iced_fonts::Bootstrap;
+use iced_fonts::bootstrap;
 
 /// Build an [`iced::widget::Text`] that is dimmed when disabled.
 macro_rules! styled_text {
@@ -23,15 +23,18 @@ macro_rules! styled_text {
     }};
 }
 
-/// Return (colour, Bootstrap icon) for a compatibility status type.
-fn status_style(ty: &constraints::CompatibilityStatusType) -> (Color, Bootstrap) {
+/// Return (colour, icon-builder) for a compatibility status type.
+///
+/// The second element is a pre-configured `Text` widget from the
+/// `iced_fonts::bootstrap` module (iced_fonts 0.3 API).
+fn status_style(ty: &constraints::CompatibilityStatusType) -> (Color, iced::widget::Text<'static>) {
     match ty {
         constraints::CompatibilityStatusType::Error => {
-            (Color::from_rgb(0.9, 0.3, 0.3), Bootstrap::XCircle)
+            (Color::from_rgb(0.9, 0.3, 0.3), bootstrap::x_circle())
         }
         constraints::CompatibilityStatusType::Warning => (
             Color::from_rgb(0.9, 0.7, 0.2),
-            Bootstrap::ExclamationTriangle,
+            bootstrap::exclamation_triangle(),
         ),
     }
 }
@@ -62,7 +65,7 @@ pub fn view_device_selector<'a>(
 
     let refresh_button = button(
         row![
-            icons::icon(Bootstrap::ArrowClockwise, 16.0),
+            icons::icon(bootstrap::arrow_clockwise(), 16.0),
             text("Refresh").size(14)
         ]
         .spacing(8)
@@ -77,10 +80,10 @@ pub fn view_device_selector<'a>(
 
     let content = column![
         title,
-        Space::with_height(20),
+        Space::new().height(20),
         drives_list,
-        Space::with_height(20),
-        row![refresh_button, Space::with_width(10), cancel_button].align_y(Alignment::Center)
+        Space::new().height(20),
+        row![refresh_button, Space::new().width(10), cancel_button].align_y(Alignment::Center)
     ]
     .spacing(10)
     .padding(30)
@@ -116,13 +119,13 @@ fn view_device_row<'a>(
 
     // Choose icon based on state
     let icon = if is_disabled {
-        icons::icon(Bootstrap::XCircleFill, 40.0)
+        icons::icon(bootstrap::x_circle_fill(), 40.0)
     } else if has_warnings {
-        icons::icon(Bootstrap::ExclamationTriangleFill, 40.0)
+        icons::icon(bootstrap::exclamation_triangle_fill(), 40.0)
     } else if is_selected {
-        icons::icon(Bootstrap::CheckCircleFill, 40.0)
+        icons::icon(bootstrap::check_circle_fill(), 40.0)
     } else {
-        icons::icon(Bootstrap::DeviceHdd, 40.0)
+        icons::icon(bootstrap::device_hdd(), 40.0)
     };
 
     // Apply grayed-out styling for disabled drives

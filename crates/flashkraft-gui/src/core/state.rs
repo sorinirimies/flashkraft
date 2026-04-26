@@ -1,5 +1,9 @@
 //! Application State Module
 //!
+//! NOTE: `hotplug_stream` is defined at the bottom of this file as a free
+//! function so it can be passed as a `fn() -> impl Stream` pointer to
+//! `Subscription::run`.
+//!
 //! ## Hotplug
 //!
 //! [`FlashKraft::subscription`] includes a persistent USB hotplug watch
@@ -272,25 +276,7 @@ impl FlashKraft {
         // Windows.  No elevated privileges are required for any of these
         // watches.  When the watch cannot be created (path missing or sandboxed)
         // we simply produce no events rather than crashing.
-        let hotplug_sub = Subscription::run_with_id(
-            "usb-hotplug",
-            stream::channel(4, |mut output| async move {
-                use futures::SinkExt as _;
-                match watch_usb_events() {
-                    Ok(mut events) => {
-                        while let Some(_event) = events.next().await {
-                            let _ = output.send(Message::UsbHotplugDetected).await;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("[hotplug] watch_usb_events failed: {e}");
-                        // Park the future so the subscription stays alive but
-                        // silent — avoids Iced restarting it in a tight loop.
-                        std::future::pending::<()>().await;
-                    }
-                }
-            }),
-        );
+        let hotplug_sub = Subscription::run(hotplug_stream);
         subscriptions.push(hotplug_sub);
 
         // ── Flash progress ────────────────────────────────────────────────────
@@ -339,6 +325,29 @@ impl FlashKraft {
 
         Subscription::batch(subscriptions)
     }
+}
+
+/// Free function that creates the USB hotplug event stream.
+///
+/// Defined as a named `fn` (not a closure) so it can be passed directly to
+/// [`Subscription::run`], which requires a `fn() -> S` pointer.
+fn hotplug_stream() -> impl futures::Stream<Item = Message> {
+    stream::channel(4, async |mut output| {
+        use futures::SinkExt as _;
+        match watch_usb_events() {
+            Ok(mut events) => {
+                while let Some(_event) = events.next().await {
+                    let _ = output.send(Message::UsbHotplugDetected).await;
+                }
+            }
+            Err(e) => {
+                eprintln!("[hotplug] watch_usb_events failed: {e}");
+                // Park the future so the subscription stays alive but
+                // silent — avoids Iced restarting it in a tight loop.
+                std::future::pending::<()>().await;
+            }
+        }
+    })
 }
 
 #[cfg(test)]

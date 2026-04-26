@@ -3,26 +3,26 @@
 //! This utility module provides helper functions for mapping Bootstrap Icons
 //! to Iced elements in the FlashKraft application. It uses Bootstrap Icons
 //! from the iced_fonts crate.
+//!
+//! In iced_fonts 0.3+, the `Bootstrap` enum was replaced by a `bootstrap`
+//! module containing one function per icon that returns a pre-configured
+//! `Text` widget.  This helper adds a `.size()` call and converts to
+//! `Element`.
 
-use iced::widget::text;
-use iced::Element;
-use iced_fonts::Bootstrap;
+use iced::widget::Text;
+use iced::{Element, Renderer, Theme};
 
 use crate::core::message::Message;
 
-/// Create an icon element from a Bootstrap icon
+/// Finish an icon [`Text`] widget by applying a pixel size and converting to
+/// [`Element`].
 ///
-/// # Arguments
+/// # Usage
 ///
-/// * `icon` - The Bootstrap icon to display
-/// * `size` - The size of the icon in pixels
-///
-/// # Returns
-///
-/// An Element that displays the icon
-pub fn icon<'a>(icon: Bootstrap, size: f32) -> Element<'a, Message> {
-    text(char::from(icon))
-        .font(iced_fonts::BOOTSTRAP_FONT)
-        .size(size)
-        .into()
+/// ```ignore
+/// use iced_fonts::bootstrap;
+/// icon(bootstrap::image(), 32.0)
+/// ```
+pub fn icon<'a>(base: Text<'a, Theme, Renderer>, size: f32) -> Element<'a, Message> {
+    base.size(size).into()
 }

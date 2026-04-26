@@ -291,7 +291,7 @@ fn render_browse_image(
         pal,
     );
 
-    let theme = app.current_explorer_theme().clone();
+    let theme = *app.current_explorer_theme();
     render_themed(&mut app.file_explorer, frame, body, &theme);
 
     match &app.file_op_mode {

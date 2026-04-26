@@ -12,7 +12,7 @@ use crate::components::theme_selector;
 use crate::core::message::Message;
 use crate::core::FlashKraft;
 use crate::utils::icons_bootstrap_mapper as icons;
-use iced_fonts::Bootstrap;
+use iced_fonts::bootstrap;
 
 /// Wrap inner content in the standard status-page layout:
 /// theme selector on top, centred content below.
@@ -41,7 +41,7 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
     // ── Icon & headline ───────────────────────────────────────────────────────
     let (headline_icon, headline_text) = if is_verifying {
         (
-            Bootstrap::ShieldFillCheck,
+            bootstrap::shield_fill_check(),
             format!(
                 "Verifying… {}%",
                 (state.verify_progress.unwrap_or(0.0) * 100.0) as u32
@@ -49,7 +49,7 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
         )
     } else {
         (
-            Bootstrap::LightningFill,
+            bootstrap::lightning_fill(),
             format!("Flashing… {}%", progress_percent),
         )
     };
@@ -124,7 +124,7 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
         icons::icon(headline_icon, 80.0),
         text(headline_text).size(32),
         text(stage_label).size(14),
-        Space::with_height(20),
+        Space::new().height(20),
         main_bar,
     ]
     .spacing(10)
@@ -148,18 +148,18 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
         };
 
         progress_content = progress_content
-            .push(Space::with_height(4))
+            .push(Space::new().height(4))
             .push(
                 state
                     .verify_animated_progress
                     .view::<Message>()
                     .map(|_| Message::AnimationTick),
             )
-            .push(Space::with_height(6))
+            .push(Space::new().height(6))
             .push(
                 row![
                     text(format!("✓ Image hash {}%", image_pct)).size(13),
-                    Space::with_width(24),
+                    Space::new().width(24),
                     text(format!("✓ Device read-back {}%", device_pct)).size(13),
                 ]
                 .align_y(Alignment::Center),
@@ -167,16 +167,16 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
     }
 
     progress_content = progress_content
-        .push(Space::with_height(15))
+        .push(Space::new().height(15))
         .push(
             row![
                 text(speed_text).size(16),
-                Space::with_width(40),
+                Space::new().width(40),
                 text(eta_text).size(16),
             ]
             .align_y(Alignment::Center),
         )
-        .push(Space::with_height(20))
+        .push(Space::new().height(20))
         .push(
             button(text("Cancel").size(14))
                 .on_press(Message::CancelFlash)
@@ -222,10 +222,10 @@ pub fn view_error<'a>(state: &'a crate::core::FlashKraft, error: &'a str) -> Ele
 
     // ── Headline ──────────────────────────────────────────────────────────────
     let mut body: iced::widget::Column<'a, Message> = column![
-        icons::icon(Bootstrap::ExclamationTriangleFill, 64.0),
-        Space::with_height(4),
+        icons::icon(bootstrap::exclamation_triangle_fill(), 64.0),
+        Space::new().height(4),
         text("Error").size(28),
-        Space::with_height(12),
+        Space::new().height(12),
         container(text(headline).size(15)).max_width(520),
     ]
     .spacing(0)
@@ -245,7 +245,7 @@ pub fn view_error<'a>(state: &'a crate::core::FlashKraft, error: &'a str) -> Ele
         .collect();
 
     for line in &prose {
-        body = body.push(Space::with_height(6));
+        body = body.push(Space::new().height(6));
         body = body.push(container(text(*line).size(13)).max_width(520));
     }
 
@@ -286,18 +286,18 @@ pub fn view_error<'a>(state: &'a crate::core::FlashKraft, error: &'a str) -> Ele
             })
             .width(Length::Fixed(480.0));
 
-        body = body.push(Space::with_height(16));
+        body = body.push(Space::new().height(16));
         body = body.push(container(card).width(Length::Fill).center_x(Length::Fill));
     }
 
     // ── Action buttons ────────────────────────────────────────────────────────
-    body = body.push(Space::with_height(24));
+    body = body.push(Space::new().height(24));
     body = body.push(
         row![
             button(text("Go Back").size(14))
                 .on_press(Message::CancelClicked)
                 .padding([8, 20]),
-            Space::with_width(12),
+            Space::new().width(12),
             button(text("Try Again").size(14))
                 .on_press(Message::ResetClicked)
                 .padding([8, 20]),
@@ -317,11 +317,11 @@ pub fn view_error<'a>(state: &'a crate::core::FlashKraft, error: &'a str) -> Ele
 /// Flash complete view
 pub fn view_complete(state: &crate::core::FlashKraft) -> Element<'_, Message> {
     let complete_content = column![
-        icons::icon(Bootstrap::CheckCircleFill, 80.0),
+        icons::icon(bootstrap::check_circle_fill(), 80.0),
         text("Flash Complete!").size(32),
-        Space::with_height(20),
+        Space::new().height(20),
         text("Your device is ready to use").size(16),
-        Space::with_height(20),
+        Space::new().height(20),
         button(text("Flash Another").size(14))
             .on_press(Message::ResetClicked)
             .padding(10),

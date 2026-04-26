@@ -23,7 +23,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITEA_TOKEN || github.token }}
           fetch-depth: 0
 
       # ── System libraries (required by the Iced GUI crate) ────────────────────
@@ -121,80 +120,21 @@ jobs:
         if: steps.check.outputs.has_changes == 'true'
         run: cargo check -p flashkraft-core --target aarch64-apple-darwin
 
-      # ── Push upgrade branch ──────────────────────────────────────────────────
-      - name: Push upgrade branch
+      # ── Commit and push directly to main ───────────────────────────────────────
+      # The quality gate already passed — safe to push directly.
+      - name: Commit and push dependency updates
         if: steps.check.outputs.has_changes == 'true'
         run: |
-          BRANCH="deps/nightly-dependency-upgrade"
           DATE=$(date -u '+%Y-%m-%d')
 
           git config user.name  "gitea-actions[bot]"
           git config user.email "gitea-actions[bot]@noreply.gitea"
 
-          # Force-create or update the branch
-          git checkout -B "$BRANCH"
           git add Cargo.toml Cargo.lock
           git commit -m "chore(deps): nightly dependency upgrade $DATE"
-          git push --force origin "$BRANCH"
+          git push origin main
 
-          echo "✅ Branch '$BRANCH' pushed."
-
-      # ── Create PR via Gitea API + auto-merge ─────────────────────────────────
-      # The full quality gate already passed above, so merging is safe.
-      - name: Create and auto-merge Pull Request
-        if: steps.check.outputs.has_changes == 'true'
-        run: |
-          BRANCH="deps/nightly-dependency-upgrade"
-          DATE=$(date -u '+%Y-%m-%d')
-          GITEA_URL="${GITHUB_SERVER_URL}"
-          REPO="${GITHUB_REPOSITORY}"
-          API="${GITEA_URL}/api/v1"
-
-          # ── Create the PR ────────────────────────────────────────────────────
-          echo "Creating PR on ${REPO}..."
-          PR_RESPONSE=$(curl -s -X POST \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "${API}/repos/${REPO}/pulls" \
-            -d "{
-              \"title\": \"chore(deps): nightly dependency upgrade ${DATE}\",
-              \"head\": \"${BRANCH}\",
-              \"base\": \"main\",
-              \"body\": \"## Automated Nightly Dependency Upgrade\n\nAll quality checks passed: **fmt**, **clippy**, **tests**, **cross-compile checks**.\n\nCreated by the Nightly Dependency Upgrade workflow.\"
-            }")
-
-          PR_NUMBER=$(echo "$PR_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))" 2>/dev/null || true)
-
-          if [ -z "$PR_NUMBER" ]; then
-            echo "⚠️  Could not create PR (branch may already have an open PR)."
-            # Try to find the existing open PR for this branch
-            PR_NUMBER=$(curl -s \
-              -H "Authorization: token ${GITEA_TOKEN}" \
-              "${API}/repos/${REPO}/pulls?state=open&head=${BRANCH}" \
-              | python3 -c "import sys,json; prs=json.load(sys.stdin); print(prs[0]['number'] if prs else '')" 2>/dev/null || true)
-          fi
-
-          if [ -z "$PR_NUMBER" ]; then
-            echo "❌ Could not create or find PR. Skipping auto-merge."
-            exit 0
-          fi
-
-          echo "✅ PR #${PR_NUMBER} ready."
-
-          # ── Merge the PR ─────────────────────────────────────────────────────
-          echo "Merging PR #${PR_NUMBER}..."
-          curl -s -X POST \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "${API}/repos/${REPO}/pulls/${PR_NUMBER}/merge" \
-            -d "{
-              \"Do\": \"merge\",
-              \"delete_branch_after_merge\": true
-            }"
-
-          echo "✅ PR #${PR_NUMBER} merged and branch deleted."
-        env:
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN || github.token }}
+          echo "✅ Dependency updates pushed to main."
 
       - name: Nothing to update
         if: steps.check.outputs.has_changes == 'false'
