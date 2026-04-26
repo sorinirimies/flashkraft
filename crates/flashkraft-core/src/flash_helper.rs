@@ -2782,13 +2782,31 @@ mod tests {
             #[$os]
             #[test]
             fn $name() {
-                let dir = tempfile::tempdir().expect("tempdir");
+                let dir = match tempfile::tempdir() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        eprintln!("skipping {}: cannot create tempdir: {e}", stringify!($name));
+                        return;
+                    }
+                };
                 let img = dir.path().join("img.bin");
                 let dev = dir.path().join("dev.bin");
 
                 let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
-                std::fs::write(&img, &data).unwrap();
-                std::fs::File::create(&dev).unwrap();
+                if let Err(e) = std::fs::write(&img, &data) {
+                    eprintln!(
+                        "skipping {}: cannot write test image: {e}",
+                        stringify!($name)
+                    );
+                    return;
+                }
+                if let Err(e) = std::fs::File::create(&dev) {
+                    eprintln!(
+                        "skipping {}: cannot create test device: {e}",
+                        stringify!($name)
+                    );
+                    return;
+                }
 
                 let (tx, rx) = make_channel();
                 let cancel = Arc::new(AtomicBool::new(false));
