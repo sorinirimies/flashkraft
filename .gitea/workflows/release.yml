@@ -195,7 +195,7 @@ jobs:
           sudo dpkg --add-architecture arm64
           sudo apt-get update -qq || true
           # The cross-compiler is essential for this build
-          if sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu; then
+          if sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "⚠️  gcc-aarch64-linux-gnu not available on this runner — skipping aarch64 build."
