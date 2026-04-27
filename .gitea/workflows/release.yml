@@ -177,17 +177,31 @@ jobs:
             libssl-dev
 
       - name: Install musl tools
+        id: musl
         if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: sudo apt-get install -y --no-install-recommends musl-tools
+        run: |
+          if sudo apt-get install -y --no-install-recommends musl-tools; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "⚠️  musl-tools not available on this runner — skipping musl build."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install aarch64 cross-compilation toolchain
+        id: aarch64
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           # Enable multi-arch FIRST so apt can resolve arm64 packages
           sudo dpkg --add-architecture arm64
-          sudo apt-get update -qq
-          # The cross-compiler is essential — must not fail silently
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          sudo apt-get update -qq || true
+          # The cross-compiler is essential for this build
+          if sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "⚠️  gcc-aarch64-linux-gnu not available on this runner — skipping aarch64 build."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # arm64 GUI libraries are best-effort (may not be available on all runners)
           sudo apt-get install -y --no-install-recommends \
             libxkbcommon-dev:arm64 \
@@ -214,14 +228,27 @@ jobs:
           linker = "aarch64-linux-gnu-gcc"
           EOF
 
+      # Skip build steps if the required toolchain could not be installed.
+      # For musl: check steps.musl.outputs.available
+      # For aarch64: check steps.aarch64.outputs.available
+      # For other targets (x86_64-unknown-linux-gnu): always build.
       - name: Build TUI release binary
+        if: |
+          (matrix.target != 'x86_64-unknown-linux-musl' || steps.musl.outputs.available == 'true') &&
+          (matrix.target != 'aarch64-unknown-linux-gnu' || steps.aarch64.outputs.available == 'true')
         run: cargo build --release -p flashkraft-tui --target ${{ matrix.target }}
 
       - name: Build GUI release binary
-        if: matrix.gui_binary != ''
+        if: |
+          matrix.gui_binary != '' &&
+          (matrix.target != 'x86_64-unknown-linux-musl' || steps.musl.outputs.available == 'true') &&
+          (matrix.target != 'aarch64-unknown-linux-gnu' || steps.aarch64.outputs.available == 'true')
         run: cargo build --release -p flashkraft --target ${{ matrix.target }}
 
       - name: Stage release artifacts
+        if: |
+          (matrix.target != 'x86_64-unknown-linux-musl' || steps.musl.outputs.available == 'true') &&
+          (matrix.target != 'aarch64-unknown-linux-gnu' || steps.aarch64.outputs.available == 'true')
         run: |
           mkdir -p dist
           TARGET="${{ matrix.target }}"
@@ -239,7 +266,16 @@ jobs:
             echo "Staged GUI: ${GUI_DST}"
           fi
 
+      - name: Skip notice (toolchain unavailable)
+        if: |
+          (matrix.target == 'x86_64-unknown-linux-musl' && steps.musl.outputs.available != 'true') ||
+          (matrix.target == 'aarch64-unknown-linux-gnu' && steps.aarch64.outputs.available != 'true')
+        run: echo "⏭️  Skipping ${{ matrix.target }} build — required toolchain not available on this runner."
+
       - name: Upload artifacts
+        if: |
+          (matrix.target != 'x86_64-unknown-linux-musl' || steps.musl.outputs.available == 'true') &&
+          (matrix.target != 'aarch64-unknown-linux-gnu' || steps.aarch64.outputs.available == 'true')
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.target }}
