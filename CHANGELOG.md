@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.1.1 - 2026-04-27
+### 📦 Other Changes
+- Install libc6-dev-arm64-cross in release workflow
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.0...v1.1.1
 ## 1.1.0 - 2026-04-27
 ### 📦 Other Changes
 - Make toolchain steps conditional on availability in release workflow
+### 🔧 Chores
+- chore: bump version to 1.1.0
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.9...v1.1.0
 ## 1.0.9 - 2026-04-27
 ### 🐛 Bug Fixes
