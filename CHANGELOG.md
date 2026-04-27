@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.9 - 2026-04-27
+### 🐛 Bug Fixes
+- Fix aarch64 toolchain install order in release workflow
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.8...v1.0.9
 ## 1.0.8 - 2026-04-26
 ### ♻️ Refactor
 - Refactor tests and UI helpers using macros for conciseness
@@ -22,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 1.0.1
 - chore: bump version to 1.0.2
 - chore: bump version to 1.0.3
+- chore: bump version to 1.0.8
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.0...v1.0.8
 ## 1.0.0 - 2026-04-12
 ### 📦 Other Changes
