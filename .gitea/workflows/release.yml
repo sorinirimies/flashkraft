@@ -28,8 +28,6 @@ env:
 
 jobs:
   # ── 0. Validate tag ──────────────────────────────────────────────────────────
-  # Resolve the effective tag from either a tag push or a manual dispatch, then
-  # validate it matches vX.Y.Z before spending time on any build work.
   validate:
     name: Validate tag
     runs-on: ubuntu-latest
@@ -40,8 +38,6 @@ jobs:
       - name: Resolve and validate tag
         id: resolve
         run: |
-          # For a tag push  → github.ref_name is the tag (e.g. "v0.5.0")
-          # For manual runs → the user supplies it via the `tag` input
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ github.event.inputs.tag }}"
           else
@@ -105,8 +101,6 @@ jobs:
         run: cargo test --workspace --all-features
 
       # ── Cross-compile checks ─────────────────────────────────────────────────
-      # Verify platform-specific code (Windows DeviceIoControl, macOS diskutil)
-      # type-checks correctly before we spend time on binary builds.
       - name: Install mingw-w64 (for Windows cross-check)
         run: |
           sudo apt-get update -qq
@@ -121,46 +115,22 @@ jobs:
       - name: cargo check core — aarch64-apple-darwin
         run: cargo check -p flashkraft-core --target aarch64-apple-darwin
 
-  # ── 2. Binary builds ─────────────────────────────────────────────────────────
-  build:
-    name: Build — ${{ matrix.target }}
+  # ── 2. Build all targets + create release (single job) ───────────────────────
+  # Gitea runners do not support actions/upload-artifact@v4 / download-artifact@v4
+  # (they require the GitHub artifact backend).  Building all targets in a single
+  # job avoids cross-job artifact passing entirely.
+  build-and-release:
+    name: Build & Release
     needs: [validate, test]
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ── Linux x86_64 (dynamic) ───────────────────────────────────────────
-          - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
-            gui_binary: flashkraft
-            tui_binary: flashkraft-tui
-            suffix: ""
-            install_gui_libs: true
-
-          # ── Linux x86_64 musl (static TUI only) ─────────────────────────────
-          - target: x86_64-unknown-linux-musl
-            runner: ubuntu-latest
-            gui_binary: ""
-            tui_binary: flashkraft-tui
-            suffix: ""
-            install_gui_libs: false
-
-          # ── Linux aarch64 (dynamic) ──────────────────────────────────────────
-          - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest
-            gui_binary: flashkraft
-            tui_binary: flashkraft-tui
-            suffix: ""
-            install_gui_libs: true
-
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.validate.outputs.tag }}
+          fetch-depth: 0
 
+      # ── System libraries ─────────────────────────────────────────────────────
       - name: Install Linux GUI system libraries
-        if: matrix.install_gui_libs
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -176,51 +146,46 @@ jobs:
             libfontconfig1-dev \
             libssl-dev
 
+      # ── Cross-compilation toolchains (best-effort) ──────────────────────────
       - name: Install musl tools
         id: musl
-        if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
           if sudo apt-get install -y --no-install-recommends musl-tools; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "⚠️  musl-tools not available on this runner — skipping musl build."
+            echo "⚠️  musl-tools not available — skipping musl build."
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install aarch64 cross-compilation toolchain
         id: aarch64
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
-          # Enable multi-arch FIRST so apt can resolve arm64 packages
           sudo dpkg --add-architecture arm64
           sudo apt-get update -qq || true
-          # The cross-compiler is essential for this build
           if sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross; then
             echo "available=true" >> "$GITHUB_OUTPUT"
+            # arm64 GUI libraries are best-effort
+            sudo apt-get install -y --no-install-recommends \
+              libxkbcommon-dev:arm64 \
+              libx11-dev:arm64 \
+              libwayland-dev:arm64 \
+              libfontconfig1-dev:arm64 || true
           else
-            echo "⚠️  gcc-aarch64-linux-gnu not available on this runner — skipping aarch64 build."
+            echo "⚠️  aarch64 cross-toolchain not available — skipping aarch64 build."
             echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
           fi
-          # arm64 GUI libraries are best-effort (may not be available on all runners)
-          sudo apt-get install -y --no-install-recommends \
-            libxkbcommon-dev:arm64 \
-            libx11-dev:arm64 \
-            libwayland-dev:arm64 \
-            libfontconfig1-dev:arm64 || true
 
-      - name: Install Rust stable + target
+      # ── Rust toolchain ───────────────────────────────────────────────────────
+      - name: Install Rust stable + targets
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: x86_64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-gnu
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
 
       - name: Set up cross-linker env (aarch64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        if: steps.aarch64.outputs.available == 'true'
         run: |
           mkdir -p .cargo
           cat >> .cargo/config.toml <<'EOF'
@@ -228,71 +193,52 @@ jobs:
           linker = "aarch64-linux-gnu-gcc"
           EOF
 
-      # Skip build steps if the required toolchain could not be installed.
-      # For musl: check steps.musl.outputs.available
-      # For aarch64: check steps.aarch64.outputs.available
-      # For other targets (x86_64-unknown-linux-gnu): always build.
-      - name: Build TUI release binary
-        if: |
-          (matrix.target != 'x86_64-unknown-linux-musl' || steps.musl.outputs.available == 'true') &&
-          (matrix.target != 'aarch64-unknown-linux-gnu' || steps.aarch64.outputs.available == 'true')
-        run: cargo build --release -p flashkraft-tui --target ${{ matrix.target }}
+      - name: Create dist directory
+        run: mkdir -p dist
 
-      - name: Build GUI release binary
-        if: |
-          matrix.gui_binary != '' &&
-          (matrix.target != 'x86_64-unknown-linux-musl' || steps.musl.outputs.available == 'true') &&
-          (matrix.target != 'aarch64-unknown-linux-gnu' || steps.aarch64.outputs.available == 'true')
-        run: cargo build --release -p flashkraft --target ${{ matrix.target }}
-
-      - name: Stage release artifacts
-        if: |
-          (matrix.target != 'x86_64-unknown-linux-musl' || steps.musl.outputs.available == 'true') &&
-          (matrix.target != 'aarch64-unknown-linux-gnu' || steps.aarch64.outputs.available == 'true')
+      # ── Build: x86_64-unknown-linux-gnu (always) ────────────────────────────
+      - name: Build x86_64-unknown-linux-gnu
         run: |
-          mkdir -p dist
-          TARGET="${{ matrix.target }}"
-          SUFFIX="${{ matrix.suffix }}"
+          echo "── Building x86_64-unknown-linux-gnu ──"
+          cargo build --release -p flashkraft-tui --target x86_64-unknown-linux-gnu
+          cargo build --release -p flashkraft     --target x86_64-unknown-linux-gnu
+          cp target/x86_64-unknown-linux-gnu/release/flashkraft-tui dist/flashkraft-tui-x86_64-unknown-linux-gnu
+          cp target/x86_64-unknown-linux-gnu/release/flashkraft     dist/flashkraft-gui-x86_64-unknown-linux-gnu
+          echo "✅ x86_64-unknown-linux-gnu done."
 
-          TUI_SRC="target/${TARGET}/release/flashkraft-tui${SUFFIX}"
-          TUI_DST="dist/flashkraft-tui-${TARGET}${SUFFIX}"
-          cp "${TUI_SRC}" "${TUI_DST}"
-          echo "Staged TUI: ${TUI_DST}"
+      # ── Build: x86_64-unknown-linux-musl (if musl-tools available) ──────────
+      - name: Build x86_64-unknown-linux-musl
+        if: steps.musl.outputs.available == 'true'
+        run: |
+          echo "── Building x86_64-unknown-linux-musl (TUI only) ──"
+          cargo build --release -p flashkraft-tui --target x86_64-unknown-linux-musl
+          cp target/x86_64-unknown-linux-musl/release/flashkraft-tui dist/flashkraft-tui-x86_64-unknown-linux-musl
+          echo "✅ x86_64-unknown-linux-musl done."
 
-          if [ -n "${{ matrix.gui_binary }}" ]; then
-            GUI_SRC="target/${TARGET}/release/flashkraft${SUFFIX}"
-            GUI_DST="dist/flashkraft-gui-${TARGET}${SUFFIX}"
-            cp "${GUI_SRC}" "${GUI_DST}"
-            echo "Staged GUI: ${GUI_DST}"
-          fi
+      - name: Skip notice (musl)
+        if: steps.musl.outputs.available != 'true'
+        run: echo "⏭️  Skipping x86_64-unknown-linux-musl — musl-tools not available."
 
-      - name: Skip notice (toolchain unavailable)
-        if: |
-          (matrix.target == 'x86_64-unknown-linux-musl' && steps.musl.outputs.available != 'true') ||
-          (matrix.target == 'aarch64-unknown-linux-gnu' && steps.aarch64.outputs.available != 'true')
-        run: echo "⏭️  Skipping ${{ matrix.target }} build — required toolchain not available on this runner."
+      # ── Build: aarch64-unknown-linux-gnu (if cross-toolchain available) ─────
+      - name: Build aarch64-unknown-linux-gnu
+        if: steps.aarch64.outputs.available == 'true'
+        run: |
+          echo "── Building aarch64-unknown-linux-gnu ──"
+          cargo build --release -p flashkraft-tui --target aarch64-unknown-linux-gnu
+          cargo build --release -p flashkraft     --target aarch64-unknown-linux-gnu
+          cp target/aarch64-unknown-linux-gnu/release/flashkraft-tui dist/flashkraft-tui-aarch64-unknown-linux-gnu
+          cp target/aarch64-unknown-linux-gnu/release/flashkraft     dist/flashkraft-gui-aarch64-unknown-linux-gnu
+          echo "✅ aarch64-unknown-linux-gnu done."
 
-      - name: Upload artifacts
-        if: |
-          (matrix.target != 'x86_64-unknown-linux-musl' || steps.musl.outputs.available == 'true') &&
-          (matrix.target != 'aarch64-unknown-linux-gnu' || steps.aarch64.outputs.available == 'true')
-        uses: actions/upload-artifact@v4
-        with:
-          name: binaries-${{ matrix.target }}
-          path: dist/
-          retention-days: 1
+      - name: Skip notice (aarch64)
+        if: steps.aarch64.outputs.available != 'true'
+        run: echo "⏭️  Skipping aarch64-unknown-linux-gnu — cross-toolchain not available."
 
-  # ── 3. Release ───────────────────────────────────────────────────────────────
-  release:
-    name: Create Release
-    needs: [validate, build]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate.outputs.tag }}
-          fetch-depth: 0
+      # ── List built artifacts ─────────────────────────────────────────────────
+      - name: List artifacts
+        run: ls -lh dist/
 
+      # ── Prepare release notes ────────────────────────────────────────────────
       - name: Install git-cliff
         run: cargo install git-cliff --locked
 
@@ -302,42 +248,26 @@ jobs:
       - name: Prepare release (RELEASE_NOTES.md + CHANGELOG.md)
         run: nu scripts/release_prepare.nu ${{ needs.validate.outputs.tag }}
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
-          pattern: binaries-*
-          merge-multiple: true
-
-      - name: List artifacts
-        run: ls -lh artifacts/
-
+      # ── Create Gitea release ─────────────────────────────────────────────────
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
           body_path: RELEASE_NOTES.md
           files: |
-            artifacts/*
+            dist/*
             LICENSE
             README.md
             CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── 4. Publish to crates.io ──────────────────────────────────────────────────
+  # ── 3. Publish to crates.io ──────────────────────────────────────────────────
   # Order matters: core must be published first because gui and tui depend on it.
-  # flashkraft (crates/flashkraft-gui) is published as `flashkraft` (the GUI binary).
-  # flashkraft-tui is published as `flashkraft-tui` (the TUI binary).
   publish:
     name: Publish to crates.io
-    needs: [validate, release]
+    needs: [validate, build-and-release]
     runs-on: ubuntu-latest
-    # `secrets.*` cannot be used in a job-level `if:` on Gitea Actions —
-    # the expression is evaluated before secrets are injected and always
-    # resolves to the empty string, making the condition unparseable.
-    # Instead we expose the secret as an env var and gate every publish
-    # step with `if: env.HAS_TOKEN == 'true'`.
     env:
       HAS_TOKEN: ${{ secrets.CRATES_IO_TOKEN != '' }}
     steps:
@@ -375,8 +305,6 @@ jobs:
         if: env.HAS_TOKEN == 'true'
         uses: Swatinem/rust-cache@v2
 
-      # ── Step 1: publish flashkraft-core ─────────────────────────────────────
-      # gui and tui both depend on this; it must hit the crates.io index first.
       - name: Publish flashkraft-core
         if: env.HAS_TOKEN == 'true'
         env:
@@ -397,7 +325,6 @@ jobs:
             sleep 30
           fi
 
-      # ── Step 2: publish flashkraft (GUI) ────────────────────────────────────
       - name: Publish flashkraft (GUI)
         if: env.HAS_TOKEN == 'true'
         env:
@@ -418,7 +345,6 @@ jobs:
             sleep 20
           fi
 
-      # ── Step 3: publish flashkraft-tui ──────────────────────────────────────
       - name: Publish flashkraft-tui
         if: env.HAS_TOKEN == 'true'
         env:
