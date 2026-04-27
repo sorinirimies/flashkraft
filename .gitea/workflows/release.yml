@@ -183,16 +183,17 @@ jobs:
       - name: Install aarch64 cross-compilation toolchain
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
+          # Enable multi-arch FIRST so apt can resolve arm64 packages
+          sudo dpkg --add-architecture arm64
           sudo apt-get update -qq
+          # The cross-compiler is essential — must not fail silently
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          # arm64 GUI libraries are best-effort (may not be available on all runners)
           sudo apt-get install -y --no-install-recommends \
-            gcc-aarch64-linux-gnu \
             libxkbcommon-dev:arm64 \
             libx11-dev:arm64 \
             libwayland-dev:arm64 \
             libfontconfig1-dev:arm64 || true
-          # Enable multi-arch so apt can fetch arm64 packages
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update -qq || true
 
       - name: Install Rust stable + target
         uses: dtolnay/rust-toolchain@stable
