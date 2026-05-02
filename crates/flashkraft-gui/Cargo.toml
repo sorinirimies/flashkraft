@@ -32,6 +32,9 @@ rfd        = { workspace = true }
 futures       = { workspace = true }
 futures-timer = { workspace = true }
 
+# ── Spinner glyphs (frame constants only — no TUI rendering) ─────────────────
+tui-spinner   = { workspace = true }
+
 # ── Storage / persistence ─────────────────────────────────────────────────────
 redb = { workspace = true }
 dirs = { workspace = true }

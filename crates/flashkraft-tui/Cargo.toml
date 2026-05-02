@@ -30,6 +30,7 @@ tui-file-explorer  = { workspace = true }
 tui-slider   = { workspace = true }
 tui-piechart = { workspace = true }
 tui-checkbox = { workspace = true }
+tui-spinner  = { workspace = true }
 
 # ── Filesystem helpers ────────────────────────────────────────────────────────
 dirs   = { workspace = true }

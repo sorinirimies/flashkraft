@@ -67,6 +67,15 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
         state.flash_stage.clone()
     };
 
+    // Animated spinner glyph — cycles through tui-spinner frame presets
+    let frames: &[char] = if is_verifying {
+        tui_spinner::FluxFrames::CIRCLE_FILL
+    } else {
+        tui_spinner::FluxFrames::BRAILLE
+    };
+    let spinner_idx = (state.animation_time * 10.0) as usize % frames.len();
+    let stage_label = format!("{} {}", frames[spinner_idx], stage_label);
+
     // ── Speed / ETA ───────────────────────────────────────────────────────────
     let (speed_text, eta_text) = if is_verifying {
         let spd = if state.verify_speed_mb_s > 0.0 {

@@ -24,6 +24,7 @@ use ratatui::{
 use tui_checkbox::Checkbox;
 use tui_piechart::{LegendLayout, LegendPosition, PieChart, PieSlice};
 use tui_slider::{Slider, SliderOrientation, SliderState};
+use tui_spinner::{BarSpinner, FluxFrames, FluxSpinner, Spin as SpinDir};
 
 use super::app::{App, AppScreen, FileOpMode, InputMode, UsbEntry};
 use super::theme::TuiPalette;
@@ -727,7 +728,22 @@ fn render_select_drive(
         .block(themed_block!(title_text, pal.accent, pal.accent))
         .highlight_style(Style::default().fg(pal.brand).add_modifier(Modifier::BOLD));
 
-    frame.render_stateful_widget(list, cols[0], &mut list_state);
+    // When scanning, split the list area vertically to fit a bar spinner at the bottom.
+    if app.drives_loading {
+        let list_spinner_rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(1)])
+            .split(cols[0]);
+
+        frame.render_stateful_widget(list, list_spinner_rows[0], &mut list_state);
+
+        let scan_spinner = BarSpinner::new(app.tick_count)
+            .arc_color(pal.brand)
+            .dim_color(pal.dim);
+        frame.render_widget(scan_spinner, list_spinner_rows[1]);
+    } else {
+        frame.render_stateful_widget(list, cols[0], &mut list_state);
+    }
 
     // ── Drive detail panel ────────────────────────────────────────────────────
     let detail_lines: Vec<Line> = if let Some(d) = drives.get(app.drive_cursor) {
@@ -1288,26 +1304,9 @@ fn render_flashing(
     //
     // The log panel is split into two columns:
     //   • left  : the scrolling log text  (fills available width)
-    //   • right : a 1-cell wide spinner column (3 stacked dots, one "lit")
+    //   • right : a 1-cell wide spinner column (bouncing braille dot)
     //
-    // The spinner travels: dot 0 → dot 1 → dot 2 → dot 1 → dot 0 … (bounce)
-    // giving the same feel as Zed / Copilot activity indicators.
-
-    // Spinner state — bounce 0→1→2→1→0→…
-    const BOUNCE: &[usize] = &[0, 1, 2, 1];
-    let active_dot = BOUNCE[(app.tick_count as usize / 3) % BOUNCE.len()];
-
-    // Three dot styles: dim ·  bright ●
-    let dot = |idx: usize| -> Span<'static> {
-        if idx == active_dot {
-            Span::styled(
-                "●",
-                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-            )
-        } else {
-            Span::styled("·", Style::default().fg(pal.dim))
-        }
-    };
+    // Uses tui-spinner's LinearSpinner (vertical bounce) for the Zed/Copilot look.
 
     // The log block — rendered first so we can measure the inner height.
     let log_block = themed_block!(" Log ", pal.accent, pal.dim).padding(Padding::horizontal(1));
@@ -1352,28 +1351,20 @@ fn render_flashing(
         lines
     };
 
-    // Spinner column — 3 dots centred vertically in the available height.
-    // Place them in the bottom 3 rows so they sit next to the latest log line.
-    let spinner_lines: Vec<Line> = {
-        let h = log_cols[1].height as usize;
-        let mut lines: Vec<Line> = vec![Line::from(""); h];
-        if h >= 3 {
-            let start = h - 3;
-            lines[start] = Line::from(dot(0));
-            lines[start + 1] = Line::from(dot(1));
-            lines[start + 2] = Line::from(dot(2));
-        } else {
-            // Fallback for very short panels.
-            for (i, line) in lines.iter_mut().enumerate() {
-                *line = Line::from(dot(i));
-            }
-        }
-        lines
-    };
+    // Render the vertical flux spinner — single-glyph column cycling through
+    // braille frames with a travelling-wave phase offset between rows.
+    let spinner = FluxSpinner::new(app.tick_count)
+        .frames(FluxFrames::BRAILLE)
+        .width(1)
+        .height(log_cols[1].height as usize)
+        .phase_step(1)
+        .spin(SpinDir::Clockwise)
+        .color(pal.brand)
+        .ticks_per_step(2);
 
     frame.render_widget(log_block, stats_log_cols[1]);
     frame.render_widget(Paragraph::new(log_lines), log_cols[0]);
-    frame.render_widget(Paragraph::new(spinner_lines), log_cols[1]);
+    frame.render_widget(spinner, log_cols[1]);
 }
 
 // ── Screen: Complete ──────────────────────────────────────────────────────────
