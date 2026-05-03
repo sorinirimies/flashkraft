@@ -2,10 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## 1.1.3 - 2026-04-27
+## 1.1.4 - 2026-05-03
+### ♻️ Refactor
+- refactor: align GUI/TUI architecture (core/ + ui/screens/ + ui/components/)
 ### ➕ Added
 - Add CI scripts for publish, quality gate, release notes, and artifact
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.2...v1.1.3
+- Add tui-spinner for animated spinners in GUI and TUI
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-04-28
+- chore(deps): nightly dependency upgrade 2026-04-29
+- chore: bump version to 1.1.3
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.2...v1.1.4
 ## 1.1.2 - 2026-04-27
 ### ♻️ Refactor
 - Refactor release workflow to single build-and-release job
