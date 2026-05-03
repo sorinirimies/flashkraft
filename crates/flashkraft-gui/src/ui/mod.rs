@@ -1,15 +1,24 @@
-//! View Logic - The Elm Architecture
+//! UI Module — View Logic & Component Organisation
 //!
 //! This module contains the main view function that renders the UI
-//! based on the application state. Views are pure functions that
-//! take state and return a description of what to display.
+//! based on the application state, plus all reusable components and
+//! per-screen views.
 //!
-//! Most view logic has been extracted into component modules for better organization.
+//! ## Sub-modules
+//!
+//! | Module | What lives here |
+//! |--------|-----------------|
+//! | [`components`] | Reusable widgets (header, progress bars, theme picker, …) |
+//! | [`screens`] | One file per screen (select image, select drive, flashing, …) |
+//! | [`theme`] | Theme helpers and constants |
+
+pub mod components;
+pub mod screens;
+pub mod theme;
 
 use iced::widget::{column, container};
 use iced::{Element, Length};
 
-use crate::components::{device_selector, header, selection_panels, status_views, step_indicators};
 use crate::core::{FlashKraft, Message};
 
 // ============================================================================
@@ -31,14 +40,14 @@ use crate::core::{FlashKraft, Message};
 pub fn view(state: &FlashKraft) -> Element<'_, Message> {
     let content = if state.is_flash_complete() {
         // Flash completed successfully
-        status_views::view_complete(state)
+        screens::complete::view_complete(state)
     } else if state.is_flashing() {
         // Currently flashing
-        status_views::view_flashing(state)
+        screens::flashing::view_flashing(state)
     } else if state.has_error() {
         // Error occurred
         let error = state.error_message.as_deref().unwrap_or("Unknown error");
-        status_views::view_error(state, error)
+        screens::error::view_error(state, error)
     } else {
         // Normal main view
         view_main(state)
@@ -60,16 +69,16 @@ pub fn view(state: &FlashKraft) -> Element<'_, Message> {
 fn view_main(state: &FlashKraft) -> Element<'_, Message> {
     // If device selection is open, show it as an overlay
     if state.device_selection_open {
-        return device_selector::view_device_selector(
+        return screens::select_drive::view_device_selector(
             &state.available_drives,
             &state.selected_target,
             &state.selected_image,
         );
     }
 
-    let header = header::view_header(state);
-    let step_indicators = step_indicators::view_step_indicators(state);
-    let buttons = selection_panels::view_buttons(
+    let header = components::header::view_header(state);
+    let step_indicators = components::step_indicators::view_step_indicators(state);
+    let buttons = screens::select_image::view_buttons(
         &state.selected_image,
         &state.selected_target,
         state.is_ready_to_flash(),

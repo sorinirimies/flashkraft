@@ -30,7 +30,7 @@ use anyhow::Result;
 use crossterm::{
     event::{self, Event},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{enable_raw_mode, EnterAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::sync::mpsc;
@@ -38,8 +38,7 @@ use tokio::time::sleep;
 
 use flashkraft_tui::{
     domain::{DriveInfo, ImageInfo},
-    render,
-    tui::app::{App, AppScreen, FlashEvent},
+    render, restore_terminal, App, AppScreen, FlashEvent,
 };
 
 // ---------------------------------------------------------------------------
@@ -268,14 +267,4 @@ async fn simulate_flash(tx: mpsc::UnboundedSender<FlashEvent>) {
         FlashEvent::Message("Flash complete — device is safe to remove.".to_string()),
     );
     send(&tx, FlashEvent::Completed);
-}
-
-// ---------------------------------------------------------------------------
-// Terminal restore
-// ---------------------------------------------------------------------------
-
-fn restore_terminal() -> Result<()> {
-    disable_raw_mode()?;
-    execute!(io::stdout(), LeaveAlternateScreen)?;
-    Ok(())
 }

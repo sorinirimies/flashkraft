@@ -4,7 +4,7 @@
 //! Framework-agnostic utilities (debug logging macros) live in
 //! `flashkraft-core::utils`.
 
-pub mod icons_bootstrap_mapper;
+pub mod icons;
 
 // Re-export the icon helper for convenient access
-pub use icons_bootstrap_mapper::icon;
+pub use icons::icon;

@@ -18,7 +18,7 @@
 
 use std::path::PathBuf;
 
-use flashkraft_tui::tui::app::{App, AppScreen, InputMode};
+use flashkraft_tui::{App, AppScreen, InputMode};
 
 // ── ANSI colour helpers (no external dep) ────────────────────────────────────
 
@@ -352,7 +352,7 @@ fn main() {
     // ── 11. USB contents scroll ───────────────────────────────────────────────
     section("11. USB contents scroll helpers");
 
-    use flashkraft_tui::tui::app::UsbEntry;
+    use flashkraft_tui::UsbEntry;
 
     app.usb_contents = (0..20)
         .map(|i| UsbEntry {

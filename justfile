@@ -189,7 +189,7 @@ example-theme:
 
 # Run the fully functional TUI application example
 example-tui:
-    cargo run -p flashkraft-tui --example tui
+    cargo run -p flashkraft-tui --example tui_demo
 
 # Run the headless (no TTY) TUI state-machine demo
 example-tui-headless:
@@ -385,8 +385,7 @@ release-preview: _check-git-cliff
     @echo "Workspace version:"
     @grep -A5 '^\[workspace\.package\]' Cargo.toml | grep '^version'
     @echo ""
-    @echo "Published crates:  flashkraft (GUI)  •  flashkraft-tui (TUI)"
-    @echo "Internal crate:    flashkraft-core   (publish = false)"
+    @echo "Published crates:  flashkraft-core (lib) • flashkraft (GUI) • flashkraft-tui (TUI)"
 
 # ── Housekeeping ──────────────────────────────────────────────────────────────
 

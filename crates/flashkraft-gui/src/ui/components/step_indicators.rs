@@ -6,10 +6,10 @@
 use iced::widget::{column, container, row, text};
 use iced::{Alignment, Element, Length};
 
-use crate::components::progress_line;
 use crate::core::message::Message;
 use crate::core::FlashKraft;
-use crate::utils::icons_bootstrap_mapper as icons;
+use crate::ui::components::progress_line;
+use crate::utils::icons;
 use iced_fonts::bootstrap;
 
 /// Build a step-indicator column: icon + label, centred in 220px.

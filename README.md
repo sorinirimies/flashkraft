@@ -5,17 +5,25 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Release](https://github.com/sorinirimies/flashkraft/actions/workflows/release.yml/badge.svg)](https://github.com/sorinirimies/flashkraft/actions/workflows/release.yml)
 [![CI](https://github.com/sorinirimies/flashkraft/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/flashkraft/actions/workflows/ci.yml)
+[![GUI Downloads](https://img.shields.io/crates/d/flashkraft?label=GUI%20downloads)](https://crates.io/crates/flashkraft)
+[![TUI Downloads](https://img.shields.io/crates/d/flashkraft-tui?label=TUI%20downloads)](https://crates.io/crates/flashkraft-tui)
 
-A lightning-fast, lightweight OS image writer built entirely in Rust. Choose your interface:
+FlashKraft is a lightning-fast OS image writer built entirely in Rust.
+No Electron, no shell scripts, no external tooling — pure Rust from UI to block device.
+
+FlashKraft ships two front-ends from a single Rust workspace:
+
+| Binary | Use case |
+|--------|----------|
+| `flashkraft` | Desktop GUI — mouse-driven with animated progress, native file dialogs, 21 themes |
+| `flashkraft-tui` | Terminal UI — keyboard-driven, works over SSH, built-in file explorer & themes |
 
 | | `flashkraft` (GUI) | `flashkraft-tui` (TUI) |
 |---|---|---|
-| Framework | [Iced](https://github.com/iced-rs/iced) 0.13 | [Ratatui](https://github.com/ratatui-org/ratatui) 0.30 |
+| Framework | [Iced](https://github.com/iced-rs/iced) 0.14 | [Ratatui](https://github.com/ratatui-org/ratatui) 0.30 |
 | Input | Mouse + keyboard | Keyboard only |
-| Themes | 21 built-in Iced themes | Multiple themes via `tui-file-explorer` |
+| Themes | 21 built-in Iced themes | 27+ themes via `tui-file-explorer` |
 | Best for | Desktop users | SSH / headless / minimal setups |
-
-No Electron, no shell scripts, no external tooling — pure Rust from UI to block device.
 
 ## Preview
 
@@ -67,6 +75,7 @@ No Electron, no shell scripts, no external tooling — pure Rust from UI to bloc
 - ✅ **Checkbox confirmation screen** — safety checklist before every flash via `tui-checkbox`
 - 🎚️ **Slider progress bar** — smooth flash-progress widget via [`tui-slider`](https://crates.io/crates/tui-slider)
 - 🎨 **Multiple file-explorer themes** — switchable live with `t` / `[`, panel toggled with `T`, powered by [`tui-file-explorer`](https://crates.io/crates/tui-file-explorer)
+- 🌀 **Animated spinners** — braille flux spinners and bouncing bars via [`tui-spinner`](https://crates.io/crates/tui-spinner)
 - 🖥️ **Works over SSH** — no display server required
 
 ## How flashing works
@@ -283,89 +292,114 @@ flashkraft/                              ← workspace root
 │   ├── flashkraft-core/                 ★ shared logic — no GUI/TUI deps
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── flash_helper.rs          ★ privileged flash pipeline (pkexec)
-│   │       ├── flash_writer.rs          ★ wire-protocol parser & speed normaliser
+│   │       ├── flash_helper.rs          ★ privileged flash pipeline
 │   │       ├── domain/
 │   │       │   ├── drive_info.rs
 │   │       │   ├── image_info.rs
 │   │       │   └── constraints.rs       drive/image compatibility checks
 │   │       ├── commands/
-│   │       │   └── drive_detection.rs   async /sys/block enumeration
+│   │       │   ├── drive_detection.rs   async /sys/block enumeration
+│   │       │   └── hotplug.rs           USB connect/disconnect watcher
 │   │       └── utils/
 │   │           └── logger.rs            debug_log!, flash_debug!, status_log! macros
 │   │
 │   ├── flashkraft-gui/                  Iced desktop application
 │   │   ├── examples/
 │   │   │   ├── basic_usage.rs
-│   │   │   ├── custom_theme.rs
-│   │   └── vhs/                    GUI VHS tapes
-│   │       ├── demo-basic.tape
-│   │       ├── demo-build.tape
-│   │       ├── demo-quick.tape
-│   │       └── generated/          output GIFs (Git LFS)
+│   │   │   └── custom_theme.rs
 │   │   └── src/
-│   │       ├── main.rs                  entry point + --flash-helper dispatch
+│   │       ├── main.rs              entry point + privilege escalation
 │   │       ├── lib.rs
-│   │       ├── view.rs                  view orchestration
-│   │       ├── core/                    Elm Architecture
-│   │       │   ├── state.rs             Model + TEA methods
-│   │       │   ├── message.rs           all Message variants
-│   │       │   ├── update.rs            state transition logic
-│   │       │   ├── storage.rs           redb-backed theme persistence
-│   │       │   ├── flash_subscription.rs Iced Subscription — streams FlashProgress
+│   │       ├── core/                Elm Architecture
+│   │       │   ├── state.rs         Model + TEA methods
+│   │       │   ├── message.rs       all Message variants
+│   │       │   ├── update.rs        state transition logic
+│   │       │   ├── flash_runner.rs  Iced Subscription — streams FlashProgress
+│   │       │   ├── storage.rs       redb-backed theme persistence
 │   │       │   └── commands/
-│   │       │       └── file_selection.rs async rfd file dialog
-│   │       └── components/              UI widgets
-│   │           ├── animated_progress.rs
-│   │           ├── device_selector.rs
-│   │           ├── header.rs
-│   │           ├── progress_line.rs
-│   │           ├── selection_panels.rs
-│   │           ├── status_views.rs
-│   │           ├── step_indicators.rs
-│   │           └── theme_selector.rs
+│   │       │       └── file_selection.rs  async rfd file dialog
+│   │       ├── ui/                  presentation layer
+│   │       │   ├── mod.rs           view dispatch
+│   │       │   ├── theme.rs         theme utilities
+│   │       │   ├── screens/         one file per screen
+│   │       │   │   ├── select_image.rs
+│   │       │   │   ├── select_drive.rs
+│   │       │   │   ├── flashing.rs
+│   │       │   │   ├── complete.rs
+│   │       │   │   └── error.rs
+│   │       │   └── components/      reusable widgets
+│   │       │       ├── animated_progress.rs
+│   │       │       ├── header.rs
+│   │       │       ├── progress_line.rs
+│   │       │       ├── step_indicators.rs
+│   │       │       └── theme_selector.rs
+│   │       └── utils/
+│   │           └── icons.rs         Bootstrap icon mapper
 │   │
 │   └── flashkraft-tui/                  Ratatui terminal application
 │       ├── examples/
 │       │   ├── headless_demo.rs
 │       │   ├── tui_demo.rs
-│       │   ├── flash_progress_demo.rs  ← tui-slider progress showcase
-│       │   └── theme_demo.rs           ← file-explorer theme switcher showcase
-│       └── vhs/                    TUI VHS tapes
-│           ├── tui-demo.tape
-│           ├── tui-headless.tape
-│           ├── flash-progress.tape
-│           ├── theme-switcher.tape
-│           └── generated/          output GIFs (Git LFS)
+│       │   ├── flash_progress_demo.rs  tui-slider progress showcase
+│       │   └── theme_demo.rs           file-explorer theme switcher
 │       └── src/
-│           ├── main.rs                  entry point + --flash-helper dispatch
-│           ├── lib.rs
-│           ├── tui/
-│           │   ├── app.rs               App state + all screen transitions
-│           │   ├── ui.rs                ratatui Frame rendering (all screens)
-│           │   ├── events.rs            keyboard event handler per screen
-│           │   ├── flash_runner.rs      async pkexec supervisor + line parser
-│           │   └── mod.rs
-│           └── file_explorer/
-│               └── mod.rs              built-in keyboard-driven file browser
+│           ├── main.rs              entry point + privilege escalation
+│           ├── lib.rs               event loop + terminal setup
+│           ├── core/                business logic
+│           │   ├── state.rs         App state + screen transitions
+│           │   ├── message.rs       AppScreen, FlashEvent, InputMode
+│           │   ├── update.rs        keyboard event handler per screen
+│           │   ├── flash_runner.rs  async flash task bridge
+│           │   └── storage.rs       redb-backed theme persistence
+│           └── ui/                  presentation layer
+│               ├── mod.rs           render dispatch + macros
+│               ├── theme.rs         TuiPalette + 27 theme presets
+│               ├── screens/         one file per screen
+│               │   ├── select_image.rs
+│               │   ├── select_drive.rs
+│               │   ├── confirm.rs
+│               │   ├── flashing.rs
+│               │   ├── complete.rs
+│               │   └── error.rs
+│               └── components/      reusable widgets
+│                   ├── chrome.rs    header, footer, breadcrumbs
+│                   ├── helpers.rs   centred_rect, file_icon, piechart
+│                   ├── file_ops.rs  file operation modals
+│                   └── theme_panel.rs  theme picker overlay
 │
 ├── scripts/
 │   ├── version.nu               print current workspace version
 │   ├── bump_version.nu          automated workspace version bump
-│   ├── check_publish.nu         pre-publish readiness check (all 3 crates)
+│   ├── check_publish.nu         pre-publish readiness check
 │   ├── release_prepare.nu       generate CHANGELOG.md + RELEASE_NOTES.md
+│   ├── upgrade_deps.nu          nightly dependency upgrade
 │   ├── setup_gitea.nu           add / update the Gitea remote
-│   ├── migrate_to_gitea.nu      migrate project to dual GitHub + Gitea hosting
+│   ├── migrate_to_gitea.nu      dual GitHub + Gitea hosting
+│   ├── ci/
+│   │   ├── validate_tag.nu      validate vX.Y.Z tag format
+│   │   ├── publish_crate.nu     idempotent crates.io publisher
+│   │   ├── quality_gate.nu      fmt + clippy + test + nu tests
+│   │   ├── release_notes.nu     CHANGELOG + RELEASE_NOTES generator
+│   │   └── stage_artifacts.nu   binary staging for release
 │   └── tests/
-│       ├── runner.nu            shared test runner (discovers "test …" commands)
-│       ├── run_all.nu           runs every test_*.nu suite with a summary table
-│       ├── test_version.nu      tests for version.nu parsing logic
-│       ├── test_bump_version.nu tests for bump_version.nu update logic
-│       ├── test_check_publish.nu tests for check_publish.nu checks
-│       └── test_release_prepare.nu tests for release_prepare.nu notes generation
+│       ├── runner.nu            shared test runner
+│       ├── run_all.nu           runs every test_*.nu suite
+│       ├── test_version.nu
+│       ├── test_bump_version.nu
+│       ├── test_check_publish.nu
+│       ├── test_release_prepare.nu
+│       ├── test_upgrade_deps.nu
+│       ├── test_validate_tag.nu
+│       └── test_publish_crate.nu
 │
-└── .github/workflows/
+├── .github/workflows/
+│   ├── ci.yml
+│   ├── deps-update.yml
+│   └── release.yml
+│
+└── .gitea/workflows/
     ├── ci.yml
+    ├── deps-update.yml
     └── release.yml
 ```
 
@@ -377,33 +411,35 @@ Items marked ★ form the flash pipeline and are described in detail above.
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| `sysinfo` | 0.30 | Drive enumeration |
-| `nix` | 0.29 | `umount2`, `BLKRRPART` ioctl, `fsync` |
-| `sha2` | 0.10 | SHA-256 write verification |
+| `sysinfo` | 0.38 | Drive enumeration |
+| `nix` | 0.31 | `umount2`, `BLKRRPART` ioctl, `fsync` |
+| `sha2` | 0.11 | SHA-256 write verification |
 | `tokio` | 1 | Async runtime |
 | `futures` / `futures-timer` | 0.3 / 3.0 | Async channel primitives |
-| `redb` | 4.0 | Embedded key-value store |
-| `dirs` | 5.0 | XDG data directory resolution |
+| `redb` | 4.1 | Embedded key-value store |
+| `dirs` | 6.0 | XDG data directory resolution |
 | `anyhow` | 1 | Error handling |
 
 ### `flashkraft-gui`
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| `iced` | 0.13 | Cross-platform GUI framework (Elm Architecture) |
-| `iced_aw` | 0.12 | Additional Iced widgets |
-| `iced_fonts` | 0.1 | Bootstrap icon font |
-| `rfd` | 0.15 | Native file/folder dialogs |
+| `iced` | 0.14.0 | Cross-platform GUI framework (Elm Architecture) |
+| `iced_aw` | 0.14.1 | Additional Iced widgets |
+| `iced_fonts` | 0.3.0 | Bootstrap icon font |
+| `rfd` | 0.17 | Native file/folder dialogs |
 
 ### `flashkraft-tui`
 
 | Crate | Version | Purpose |
-|-------|---------|---------|
+|-------|---------|----------|
 | `ratatui` | 0.30 | Terminal UI framework |
 | `crossterm` | 0.29 | Cross-platform terminal control |
-| `tui-slider` | git | Flash-progress slider widget |
-| `tui-piechart` | git | Drive storage pie-chart widget |
-| `tui-checkbox` | git | Drive-list and confirm-screen checkboxes |
+| `tui-file-explorer` | 1.0.6 | Built-in keyboard-driven file browser |
+| `tui-slider` | 0.3.2 | Flash-progress slider widget |
+| `tui-spinner` | 0.2.3 | Animated braille spinners (flux, bar, linear) |
+| `tui-piechart` | 0.3.3 | Drive storage pie-chart widget |
+| `tui-checkbox` | 0.4.4 | Drive-list and confirm-screen checkboxes |
 
 ## Architecture Highlights
 
@@ -483,9 +519,10 @@ Contributions are welcome! Please:
 1. Keep all flash logic in `flashkraft-core` — neither the GUI nor the TUI crate should contain flash pipeline code
 2. Follow the Elm Architecture pattern in the GUI — all state changes via `update`
 3. Follow the screen-state-machine pattern in the TUI — screen transitions via `App` methods
-4. Keep functions pure where possible
-5. Add unit tests for any new logic, especially in `flash_helper.rs`, `flash_writer.rs`, `app.rs`, and `events.rs`
-6. Run `cargo test --workspace` and `cargo clippy --workspace` before opening a PR
+4. Both frontends share the same `core/` + `ui/screens/` + `ui/components/` layout
+5. Keep functions pure where possible
+6. Add unit tests for any new logic, especially in `flash_helper.rs`, `core/state.rs`, and `core/update.rs`
+7. Run `cargo test --workspace` and `cargo clippy --workspace` before opening a PR
 
 ## Learning Resources
 
@@ -507,4 +544,4 @@ MIT — see [LICENSE](LICENSE) for details.
 - TUI built with [Ratatui](https://github.com/ratatui-org/ratatui)
 - Follows [The Elm Architecture](https://guide.elm-lang.org/architecture/)
 - Flash pipeline design inspired by [Balena Etcher](https://github.com/balena-io/etcher)
-- Terminal widgets: [tui-slider](https://github.com/sorinirimies/tui-slider), [tui-piechart](https://github.com/sorinirimies/tui-piechart), [tui-checkbox](https://github.com/sorinirimies/tui-checkbox)
+- Terminal widgets: [tui-slider](https://github.com/sorinirimies/tui-slider), [tui-spinner](https://github.com/sorinirimies/tui-spinner), [tui-piechart](https://github.com/sorinirimies/tui-piechart), [tui-checkbox](https://github.com/sorinirimies/tui-checkbox)

@@ -72,6 +72,11 @@ pub struct DriveInfo {
 }
 
 impl DriveInfo {
+    /// Return the drive capacity in bytes.
+    pub fn size_bytes(&self) -> u64 {
+        (self.size_gb * 1_073_741_824.0) as u64
+    }
+
     /// Create a `DriveInfo` with the four essential fields.
     ///
     /// `is_system`, `is_read_only`, `disabled`, and `usb_info` all default

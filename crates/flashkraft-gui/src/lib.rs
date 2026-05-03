@@ -6,9 +6,8 @@
 //!
 //! | Module | What lives here |
 //! |--------|-----------------|
-//! | [`core`] | Iced app state, messages, update logic, flash subscription, storage |
-//! | [`components`] | Iced UI widgets and component renderers |
-//! | [`view`] | Top-level view orchestration |
+//! | [`core`] | Iced app state, messages, update logic, flash runner, storage |
+//! | [`ui`] | View dispatch, per-screen views, reusable widgets |
 //! | [`utils`] | GUI-specific utilities (Bootstrap icon mapper) |
 //!
 //! ## Dependency on `flashkraft-core`
@@ -21,9 +20,8 @@
 #[macro_use]
 pub mod utils;
 
-pub mod components;
 pub mod core;
-pub mod view;
+pub mod ui;
 
 // ── Core re-exports ───────────────────────────────────────────────────────────
 
@@ -32,7 +30,7 @@ pub mod view;
 pub use flashkraft_core::domain;
 
 // Re-export the `flash_debug!` macro from flashkraft_core so that
-// `use crate::flash_debug;` in flash_subscription.rs resolves correctly.
+// `use crate::flash_debug;` in flash_runner.rs resolves correctly.
 pub use flashkraft_core::debug_log;
 pub use flashkraft_core::flash_debug;
 pub use flashkraft_core::status_log;

@@ -11,7 +11,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::app::{App, AppScreen, ClipOp, FileOpMode, InputMode};
+use super::message::{AppScreen, ClipOp, FileOpMode, InputMode};
+use super::state::App;
 use tui_file_explorer::ExplorerOutcome;
 
 /// Try `$call`; on error set the error message and transition to the Error screen.
@@ -133,7 +134,7 @@ fn handle_select_image(app: &mut App, key: KeyEvent) -> bool {
                 match app.confirm_image() {
                     Ok(()) => {
                         // Kick off async drive detection.
-                        start_drive_detection(app);
+                        app.start_drive_detection();
                     }
                     Err(msg) => {
                         app.error_message = msg;
@@ -325,7 +326,7 @@ fn handle_select_drive(app: &mut App, key: KeyEvent) -> bool {
 
         // Refresh drive list.
         KeyCode::Char('r') | KeyCode::F(5) => {
-            start_drive_detection(app);
+            app.start_drive_detection();
             true
         }
 
@@ -465,36 +466,14 @@ fn handle_error(app: &mut App, key: KeyEvent) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: kick off async drive detection
-// ---------------------------------------------------------------------------
-
-/// Spawn a Tokio task that calls [`crate::core::commands::load_drives`] and
-/// sends the result through an [`tokio::sync::mpsc`] channel stored in `app`.
-fn start_drive_detection(app: &mut App) {
-    use tokio::sync::mpsc;
-
-    app.drives_loading = true;
-    app.available_drives.clear();
-    app.drive_cursor = 0;
-
-    let (tx, rx) = mpsc::unbounded_channel::<Vec<crate::domain::DriveInfo>>();
-    app.drives_rx = Some(rx);
-
-    tokio::spawn(async move {
-        let drives = crate::core::commands::load_drives().await;
-        let _ = tx.send(drives);
-    });
-}
-
-// ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::message::UsbEntry;
     use crate::domain::{DriveInfo, ImageInfo};
-    use crate::tui::app::UsbEntry;
 
     // ── Key-event constructors ────────────────────────────────────────────────
 

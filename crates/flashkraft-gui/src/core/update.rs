@@ -560,4 +560,273 @@ mod tests {
         assert!(!state.flashing_active);
         assert!(state.flash_progress.is_none());
     }
+
+    // ====================================================================
+    // FlashProgressUpdate
+    // ====================================================================
+
+    #[test]
+    fn test_flash_progress_update_sets_fields() {
+        let mut state = FlashKraft::new();
+
+        let _ = update(&mut state, Message::FlashProgressUpdate(0.5, 1024, 10.0));
+
+        // progress 0.5 is mapped to 0.5 * 0.80 = 0.40
+        assert_eq!(state.flash_progress, Some(0.40));
+        assert_eq!(state.flash_bytes_written, 1024);
+        assert_eq!(state.flash_speed_mb_s, 10.0);
+    }
+
+    #[test]
+    fn test_flash_progress_update_never_goes_backwards() {
+        let mut state = FlashKraft::new();
+
+        // First update to 60 % raw → mapped 0.48
+        let _ = update(&mut state, Message::FlashProgressUpdate(0.6, 2048, 15.0));
+        assert_eq!(state.flash_progress, Some(0.6 * 0.80));
+
+        // Second update to 40 % raw → mapped 0.32 — must NOT go backwards
+        let _ = update(&mut state, Message::FlashProgressUpdate(0.4, 1024, 5.0));
+        assert_eq!(state.flash_progress, Some(0.6 * 0.80));
+        // But speed and bytes still update
+        assert_eq!(state.flash_bytes_written, 1024);
+        assert_eq!(state.flash_speed_mb_s, 5.0);
+    }
+
+    #[test]
+    fn test_flash_progress_update_clamps_to_80_percent() {
+        let mut state = FlashKraft::new();
+
+        // Raw progress beyond 1.0 should be clamped to 0.80 mapped
+        let _ = update(&mut state, Message::FlashProgressUpdate(1.5, 4096, 20.0));
+        assert_eq!(state.flash_progress, Some(0.80));
+    }
+
+    // ====================================================================
+    // VerifyProgressUpdate
+    // ====================================================================
+
+    #[test]
+    fn test_verify_progress_update_sets_fields() {
+        let mut state = FlashKraft::new();
+        state.flash_progress = Some(0.90);
+
+        let _ = update(
+            &mut state,
+            Message::VerifyProgressUpdate(0.5, "device", 500_000, 1_000_000, 42.0),
+        );
+
+        assert_eq!(state.verify_progress, Some(0.5));
+        assert_eq!(state.verify_speed_mb_s, 42.0);
+        assert_eq!(state.verify_phase, "device");
+        // Main bar should advance: 0.92 + 0.5 * 0.08 = 0.96
+        let progress = state.flash_progress.unwrap();
+        assert!(
+            (progress - 0.96).abs() < 1e-5,
+            "expected ~0.96, got {}",
+            progress
+        );
+    }
+
+    // ====================================================================
+    // AnimationTick
+    // ====================================================================
+
+    #[test]
+    fn test_animation_tick_increments_animation_time() {
+        let mut state = FlashKraft::new();
+        assert_eq!(state.animation_time, 0.0);
+
+        state.flash_speed_mb_s = 20.0;
+        let _ = update(&mut state, Message::AnimationTick);
+
+        // speed_multiplier = (20.0 / 20.0).clamp(0.15, 1.2) = 1.0
+        // animation_time += 0.016 * 1.0 = 0.016
+        assert!(
+            (state.animation_time - 0.016).abs() < 1e-6,
+            "expected ~0.016, got {}",
+            state.animation_time
+        );
+    }
+
+    #[test]
+    fn test_animation_tick_scales_with_speed() {
+        let mut state = FlashKraft::new();
+        state.flash_speed_mb_s = 3.0; // low speed
+        let _ = update(&mut state, Message::AnimationTick);
+
+        // speed_multiplier = (3.0 / 20.0).clamp(0.15, 1.2) = 0.15
+        let expected = 0.016 * 0.15;
+        assert!(
+            (state.animation_time - expected).abs() < 1e-6,
+            "expected ~{}, got {}",
+            expected,
+            state.animation_time
+        );
+    }
+
+    // ====================================================================
+    // DrivesRefreshed
+    // ====================================================================
+
+    #[test]
+    fn test_drives_refreshed_populates_drives() {
+        let mut state = FlashKraft::new();
+        assert!(state.available_drives.is_empty());
+
+        let drives = vec![
+            DriveInfo::new(
+                "USB-A".to_string(),
+                "/media/a".to_string(),
+                16.0,
+                "/dev/sdb".to_string(),
+            ),
+            DriveInfo::new(
+                "USB-B".to_string(),
+                "/media/b".to_string(),
+                32.0,
+                "/dev/sdc".to_string(),
+            ),
+        ];
+
+        let _ = update(&mut state, Message::DrivesRefreshed(drives));
+
+        assert_eq!(state.available_drives.len(), 2);
+        assert_eq!(state.available_drives[0].name, "USB-A");
+        assert_eq!(state.available_drives[1].name, "USB-B");
+    }
+
+    #[test]
+    fn test_drives_refreshed_empty_clears_drives() {
+        let mut state = FlashKraft::new();
+        // Pre-populate with a drive
+        state.available_drives = vec![DriveInfo::new(
+            "Old".to_string(),
+            "/media/old".to_string(),
+            8.0,
+            "/dev/sda".to_string(),
+        )];
+
+        let _ = update(&mut state, Message::DrivesRefreshed(vec![]));
+
+        assert!(state.available_drives.is_empty());
+    }
+
+    // ====================================================================
+    // Status (stage floor logic)
+    // ====================================================================
+
+    #[test]
+    fn test_status_writing_sets_flash_stage() {
+        let mut state = FlashKraft::new();
+
+        let _ = update(
+            &mut state,
+            Message::Status("Writing image to device\u{2026}".to_string()),
+        );
+
+        assert_eq!(state.flash_stage, "Writing image to device\u{2026}");
+    }
+
+    #[test]
+    fn test_status_syncing_sets_progress_floor_80() {
+        let mut state = FlashKraft::new();
+        state.flash_progress = Some(0.70);
+
+        let syncing = flashkraft_core::FlashStage::Syncing.to_string();
+        let _ = update(&mut state, Message::Status(syncing.clone()));
+
+        assert_eq!(state.flash_progress, Some(0.80));
+        assert_eq!(state.flash_stage, syncing);
+    }
+
+    #[test]
+    fn test_status_rereading_sets_progress_floor_88() {
+        let mut state = FlashKraft::new();
+        state.flash_progress = Some(0.80);
+
+        let rereading = flashkraft_core::FlashStage::Rereading.to_string();
+        let _ = update(&mut state, Message::Status(rereading.clone()));
+
+        assert_eq!(state.flash_progress, Some(0.88));
+        assert_eq!(state.flash_stage, rereading);
+    }
+
+    #[test]
+    fn test_status_verifying_sets_progress_floor_92() {
+        let mut state = FlashKraft::new();
+        state.flash_progress = Some(0.88);
+
+        let verifying = flashkraft_core::FlashStage::Verifying.to_string();
+        let _ = update(&mut state, Message::Status(verifying.clone()));
+
+        assert_eq!(state.flash_progress, Some(0.92));
+        assert_eq!(state.flash_stage, verifying);
+    }
+
+    #[test]
+    fn test_status_floor_does_not_go_backwards() {
+        let mut state = FlashKraft::new();
+        // Progress already past the syncing floor
+        state.flash_progress = Some(0.90);
+
+        let syncing = flashkraft_core::FlashStage::Syncing.to_string();
+        let _ = update(&mut state, Message::Status(syncing));
+
+        // Floor is 0.80, but current is 0.90 — must NOT go backwards
+        assert_eq!(state.flash_progress, Some(0.90));
+    }
+
+    #[test]
+    fn test_status_non_stage_message_does_not_update_flash_stage() {
+        let mut state = FlashKraft::new();
+        state.flash_stage = "Writing image to device\u{2026}".to_string();
+
+        let _ = update(
+            &mut state,
+            Message::Status("some debug log line".to_string()),
+        );
+
+        // flash_stage should not change for non-stage messages
+        assert_eq!(state.flash_stage, "Writing image to device\u{2026}");
+    }
+
+    // ====================================================================
+    // ThemeChanged
+    // ====================================================================
+
+    #[test]
+    fn test_theme_changed_updates_theme() {
+        let mut state = FlashKraft::new();
+        // Default is Dark (loaded from storage or fallback)
+        assert!(matches!(state.theme, iced::Theme::Dark));
+
+        let _ = update(&mut state, Message::ThemeChanged(iced::Theme::Light));
+
+        assert!(matches!(state.theme, iced::Theme::Light));
+    }
+
+    // ====================================================================
+    // OpenDeviceSelection / CloseDeviceSelection
+    // ====================================================================
+
+    #[test]
+    fn test_open_device_selection() {
+        let mut state = FlashKraft::new();
+        assert!(!state.device_selection_open);
+
+        let _ = update(&mut state, Message::OpenDeviceSelection);
+
+        assert!(state.device_selection_open);
+    }
+
+    #[test]
+    fn test_close_device_selection() {
+        let mut state = FlashKraft::new();
+        state.device_selection_open = true;
+
+        let _ = update(&mut state, Message::CloseDeviceSelection);
+
+        assert!(!state.device_selection_open);
+    }
 }

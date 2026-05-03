@@ -19,12 +19,12 @@
 //! Following The Elm Architecture, this module also implements the core
 //! application methods: update, view, and subscription.
 
-use crate::components::animated_progress::AnimatedProgress;
-use crate::core::flash_subscription::FlashProgress;
+use crate::core::flash_runner::FlashProgress;
 use crate::core::storage::Storage;
 use crate::core::{update, Message};
 use crate::domain::{DriveInfo, ImageInfo};
-use crate::view;
+use crate::ui;
+use crate::ui::components::animated_progress::AnimatedProgress;
 use flashkraft_core::commands::watch_usb_events;
 use futures::StreamExt as _;
 use iced::Color;
@@ -254,7 +254,7 @@ impl FlashKraft {
     /// An Element describing the UI to render
     pub fn view(&self) -> Element<'_, Message> {
         // Delegate to the view function
-        view::view(self)
+        ui::view(self)
     }
 
     /// Subscribe to long-running operations
@@ -282,7 +282,7 @@ impl FlashKraft {
         // ── Flash progress ────────────────────────────────────────────────────
         if self.flashing_active {
             if let (Some(image), Some(target)) = (&self.selected_image, &self.selected_target) {
-                let flash_sub = crate::core::flash_subscription::flash_progress(
+                let flash_sub = crate::core::flash_runner::flash_progress(
                     image.path.clone(),
                     target.device_path.clone().into(),
                     self.flash_cancel_token.clone(),
@@ -313,15 +313,10 @@ impl FlashKraft {
                 });
                 subscriptions.push(flash_sub);
             }
-
-            // Animation tick subscription (during flash)
-            let animation_sub = iced::window::frames().map(|_| Message::AnimationTick);
-            subscriptions.push(animation_sub);
-        } else {
-            // Always run animation tick for progress line glow effects
-            let animation_sub = iced::window::frames().map(|_| Message::AnimationTick);
-            subscriptions.push(animation_sub);
         }
+
+        // Animation tick — always active for progress-line glow and spinner effects
+        subscriptions.push(iced::window::frames().map(|_| Message::AnimationTick));
 
         Subscription::batch(subscriptions)
     }

@@ -5,10 +5,10 @@
 use iced::widget::{column, container, row, text, Space};
 use iced::{Alignment, Element, Length, Theme};
 
-use crate::components::theme_selector;
 use crate::core::message::Message;
 use crate::core::FlashKraft;
-use crate::utils::icons_bootstrap_mapper as icons;
+use crate::ui::components::theme_selector;
+use crate::utils::icons;
 use iced_fonts::bootstrap;
 
 /// Application header with title and theme selector

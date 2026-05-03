@@ -19,7 +19,7 @@
 //!        │                                │
 //!   FlashEvent (core)               writes image
 //!        │
-//!   → FlashEvent (tui::app)
+//!   → FlashEvent (core::message)
 //!        │
 //!   TUI UI update
 //! ```
@@ -42,7 +42,7 @@ use std::{
 
 use tokio::sync::mpsc;
 
-use crate::tui::app::FlashEvent;
+use super::message::FlashEvent;
 use flashkraft_core::flash_helper::{run_pipeline, FlashEvent as CoreFlashEvent};
 use flashkraft_core::FlashUpdate;
 

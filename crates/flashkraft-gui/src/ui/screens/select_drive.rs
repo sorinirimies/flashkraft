@@ -8,7 +8,7 @@ use iced::{Alignment, Color, Element, Length};
 
 use crate::core::message::Message;
 use crate::domain::{constraints, DriveInfo, ImageInfo};
-use crate::utils::icons_bootstrap_mapper as icons;
+use crate::utils::icons;
 use iced_fonts::bootstrap;
 
 /// Build an [`iced::widget::Text`] that is dimmed when disabled.
@@ -131,7 +131,7 @@ fn view_device_row<'a>(
     // Apply grayed-out styling for disabled drives
     let name_text = styled_text!(&drive.name, 18, is_disabled);
     let size_text = styled_text!(
-        flashkraft_core::fmt_bytes((drive.size_gb * 1_073_741_824.0) as u64),
+        flashkraft_core::fmt_bytes(drive.size_bytes()),
         14,
         is_disabled
     );

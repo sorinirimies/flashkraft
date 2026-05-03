@@ -12,7 +12,7 @@
 //! # Usage
 //!
 //! ```no_run
-//! use flashkraft_tui::tui::storage::TuiStorage;
+//! use flashkraft_tui::core::storage::TuiStorage;
 //! let storage = TuiStorage::open();          // never panics
 //! storage.save_theme("Tokyo Night");
 //! let name = storage.load_theme();           // → Some("Tokyo Night")

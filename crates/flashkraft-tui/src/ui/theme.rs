@@ -9,7 +9,7 @@
 //! # Usage
 //!
 //! ```no_run
-//! use flashkraft_tui::tui::theme::all_app_themes;
+//! use flashkraft_tui::ui::theme::all_app_themes;
 //! let themes = all_app_themes();           // Vec<(String, TuiPalette)>
 //! let pal    = &themes[0].1;
 //! // then pass `pal` into every render_* function
@@ -154,4 +154,182 @@ theme_extras! {
     "Moonfly"              => bg(8,8,8)        warn(226,164,120)  err(255,115,131);
     "Nightfly"             => bg(1,22,38)      warn(243,218,11)   err(252,87,73);
     "Oxocarbon"            => bg(22,22,22)     warn(250,204,55)   err(255,97,101)
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_app_themes_non_empty() {
+        let themes = all_app_themes();
+        assert!(
+            !themes.is_empty(),
+            "all_app_themes() must return at least one theme"
+        );
+    }
+
+    #[test]
+    fn all_app_themes_have_names() {
+        for (name, _palette) in all_app_themes() {
+            assert!(!name.is_empty(), "theme name must not be empty");
+        }
+    }
+
+    #[test]
+    fn all_app_themes_palettes_have_distinct_fg_bg() {
+        for (name, pal) in all_app_themes() {
+            // fg and bg should not both be the zero color (black)
+            let both_black = matches!((pal.fg, pal.bg), (Color::Rgb(0, 0, 0), Color::Rgb(0, 0, 0)));
+            assert!(!both_black, "theme {name:?} has both fg and bg as (0,0,0)",);
+        }
+    }
+
+    #[test]
+    fn all_app_themes_palettes_fg_differs_from_bg() {
+        for (name, pal) in all_app_themes() {
+            assert_ne!(
+                pal.fg, pal.bg,
+                "theme {name:?} has identical fg and bg — text would be invisible",
+            );
+        }
+    }
+
+    #[test]
+    fn default_palette_is_valid() {
+        let pal = TuiPalette::default();
+        // Brand colour should be the known orange
+        assert_eq!(pal.brand, Color::Rgb(255, 100, 30));
+        // fg should be white
+        assert_eq!(pal.fg, Color::White);
+        // bg should be the dark blue-ish
+        assert_eq!(pal.bg, Color::Rgb(18, 18, 26));
+        // fg != bg
+        assert_ne!(pal.fg, pal.bg);
+    }
+
+    #[test]
+    fn default_palette_matches_first_theme() {
+        let themes = all_app_themes();
+        let (name, first) = &themes[0];
+        assert_eq!(name, "Default");
+        let def = TuiPalette::default();
+        assert_eq!(first.brand, def.brand);
+        assert_eq!(first.bg, def.bg);
+        assert_eq!(first.fg, def.fg);
+    }
+
+    // -- Additional tests -----------------------------------------------------
+
+    #[test]
+    fn all_theme_names_are_unique() {
+        let themes = all_app_themes();
+        let mut seen = std::collections::HashSet::new();
+        for (name, _) in &themes {
+            assert!(seen.insert(name.clone()), "duplicate theme name: {name:?}");
+        }
+    }
+
+    #[test]
+    fn no_theme_has_pure_black_bg_unless_intended() {
+        // Pure black (0,0,0) as bg is unusual — only allow it if the theme
+        // name explicitly suggests it.  Currently none of our themes use it.
+        let allow_black = ["Mono"]; // add names here if a theme intentionally uses #000
+        for (name, pal) in all_app_themes() {
+            if allow_black.contains(&name.as_str()) {
+                continue;
+            }
+            let is_pure_black = matches!(pal.bg, Color::Rgb(0, 0, 0));
+            assert!(
+                !is_pure_black,
+                "theme {name:?} has pure-black bg (0,0,0) — is this intentional?"
+            );
+        }
+    }
+
+    #[test]
+    fn default_palette_has_reasonable_field_values() {
+        let pal = TuiPalette::default();
+        // accent should be set (not black)
+        assert_ne!(pal.accent, Color::Rgb(0, 0, 0));
+        // success should be set
+        assert_ne!(pal.success, Color::Rgb(0, 0, 0));
+        // warn and err should be set
+        assert_ne!(pal.warn, Color::Rgb(0, 0, 0));
+        assert_ne!(pal.err, Color::Rgb(0, 0, 0));
+        // dim should be set
+        assert_ne!(pal.dim, Color::Rgb(0, 0, 0));
+        // sel_bg should be set
+        assert_ne!(pal.sel_bg, Color::Rgb(0, 0, 0));
+        // dir should be set
+        assert_ne!(pal.dir, Color::Rgb(0, 0, 0));
+    }
+
+    #[test]
+    fn default_palette_semantic_colors_are_distinct() {
+        let pal = TuiPalette::default();
+        let semantic = [pal.brand, pal.accent, pal.warn, pal.err];
+        // All four should be different from each other.
+        for i in 0..semantic.len() {
+            for j in (i + 1)..semantic.len() {
+                assert_ne!(
+                    semantic[i], semantic[j],
+                    "default palette: semantic color at index {i} equals color at index {j}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_palette_has_distinct_brand_accent_warn_err() {
+        // Some themes legitimately share semantic colours when the explorer
+        // preset's palette is inherently constrained (e.g. Gruvbox, Kanagawa).
+        // These overlaps are documented here so we still catch regressions in
+        // all other themes.
+        let known_overlaps: &[(&str, &str, &str)] = &[
+            ("Gruvbox Dark", "accent", "warn"),
+            ("Gruvbox Light", "brand", "err"),
+            ("Gruvbox Light", "accent", "warn"),
+            ("Kanagawa Wave", "brand", "err"),
+            ("Kanagawa Dragon", "brand", "err"),
+        ];
+
+        for (name, pal) in all_app_themes() {
+            let colors = [pal.brand, pal.accent, pal.warn, pal.err];
+            let labels = ["brand", "accent", "warn", "err"];
+            for i in 0..colors.len() {
+                for j in (i + 1)..colors.len() {
+                    let is_known = known_overlaps.iter().any(|(n, a, b)| {
+                        *n == name
+                            && ((*a == labels[i] && *b == labels[j])
+                                || (*a == labels[j] && *b == labels[i]))
+                    });
+                    if is_known {
+                        continue;
+                    }
+                    assert_ne!(
+                        colors[i],
+                        colors[j],
+                        "theme {name:?}: {l1} and {l2} are identical",
+                        l1 = labels[i],
+                        l2 = labels[j],
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn palette_clone_produces_equal_values() {
+        let pal = TuiPalette::default();
+        let cloned = pal.clone();
+        assert_eq!(cloned.brand, pal.brand);
+        assert_eq!(cloned.bg, pal.bg);
+        assert_eq!(cloned.fg, pal.fg);
+        assert_eq!(cloned.accent, pal.accent);
+        assert_eq!(cloned.warn, pal.warn);
+        assert_eq!(cloned.err, pal.err);
+    }
 }

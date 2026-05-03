@@ -97,3 +97,119 @@ pub enum Message {
     /// User changed the application theme
     ThemeChanged(Theme),
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    // ── Debug + Clone ────────────────────────────────────────────────────
+
+    #[test]
+    fn message_implements_debug() {
+        let msg = Message::SelectImageClicked;
+        // Debug formatting should not panic.
+        let debug_str = format!("{:?}", msg);
+        assert!(!debug_str.is_empty());
+    }
+
+    #[test]
+    fn message_implements_clone() {
+        let msg = Message::AnimationTick;
+        let cloned = msg.clone();
+        // Both should produce identical debug output.
+        assert_eq!(format!("{:?}", msg), format!("{:?}", cloned));
+    }
+
+    // ── Unit variant construction ────────────────────────────────────────
+
+    #[test]
+    fn select_image_clicked_can_be_constructed() {
+        let _msg = Message::SelectImageClicked;
+    }
+
+    #[test]
+    fn animation_tick_can_be_constructed() {
+        let _msg = Message::AnimationTick;
+    }
+
+    // ── Tuple variant construction ───────────────────────────────────────
+
+    #[test]
+    fn flash_progress_update_holds_values() {
+        let msg = Message::FlashProgressUpdate(0.5, 1024, 10.0);
+        match msg {
+            Message::FlashProgressUpdate(progress, bytes, speed) => {
+                assert!((progress - 0.5).abs() < f32::EPSILON);
+                assert_eq!(bytes, 1024);
+                assert!((speed - 10.0).abs() < f32::EPSILON);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn flash_completed_ok() {
+        let msg = Message::FlashCompleted(Ok(()));
+        match msg {
+            Message::FlashCompleted(Ok(())) => {} // success
+            _ => panic!("expected FlashCompleted(Ok(()))"),
+        }
+    }
+
+    #[test]
+    fn flash_completed_err() {
+        let msg = Message::FlashCompleted(Err("test".into()));
+        match msg {
+            Message::FlashCompleted(Err(e)) => assert_eq!(e, "test"),
+            _ => panic!("expected FlashCompleted(Err(..))"),
+        }
+    }
+
+    #[test]
+    fn status_holds_string() {
+        let msg = Message::Status("test".into());
+        match msg {
+            Message::Status(s) => assert_eq!(s, "test"),
+            _ => panic!("expected Status"),
+        }
+    }
+
+    // ── ThemeChanged ─────────────────────────────────────────────────────
+
+    #[test]
+    fn theme_changed_holds_theme() {
+        let msg = Message::ThemeChanged(Theme::Light);
+        match msg {
+            Message::ThemeChanged(t) => {
+                // Just verify the variant can hold a theme.
+                let _ = format!("{:?}", t);
+            }
+            _ => panic!("expected ThemeChanged"),
+        }
+    }
+
+    // ── ImageSelected ────────────────────────────────────────────────────
+
+    #[test]
+    fn image_selected_none() {
+        let msg = Message::ImageSelected(None);
+        match msg {
+            Message::ImageSelected(None) => {} // ok
+            _ => panic!("expected ImageSelected(None)"),
+        }
+    }
+
+    #[test]
+    fn image_selected_some_path() {
+        let msg = Message::ImageSelected(Some(PathBuf::from("/test")));
+        match msg {
+            Message::ImageSelected(Some(p)) => assert_eq!(p, PathBuf::from("/test")),
+            _ => panic!("expected ImageSelected(Some(..))"),
+        }
+    }
+}

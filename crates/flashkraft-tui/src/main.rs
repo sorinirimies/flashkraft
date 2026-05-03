@@ -1,7 +1,7 @@
 //! FlashKraft TUI — binary entry point
 //!
 //! This file is intentionally thin.  All application logic lives in
-//! `lib.rs` and the `tui/` submodules so that examples and integration
+//! `lib.rs` and the `core/` + `ui/` submodules so that examples and integration
 //! tests can import from `flashkraft_tui::` without also pulling in the
 //! `main` function.
 //!

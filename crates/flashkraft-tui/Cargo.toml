@@ -44,7 +44,7 @@ futures = { workspace = true }
 anyhow  = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
 
 # ── Build dependencies ────────────────────────────────────────────────────────
 # winres embeds the UAC manifest into the Windows PE binary at compile time

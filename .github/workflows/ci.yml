@@ -83,7 +83,7 @@ jobs:
       - name: Run clippy (workspace)
         uses: clechasseur/rs-clippy-check@v4
         with:
-          args: --workspace --all-targets --all-features
+          args: --workspace --all-targets --all-features -- -D warnings -A deprecated
 
   # ── 3. Tests ─────────────────────────────────────────────────────────────────
   test:

@@ -283,3 +283,192 @@ fn interpolate_color(start: Color, end: Color, t: f32) -> Color {
         a: start.a + (end.a - start.a) * t,
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── new() defaults ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_new_defaults() {
+        let bar = AnimatedProgress::new();
+        assert_eq!(bar.progress, 0.0);
+        assert_eq!(bar.animation_time, 0.0);
+        assert!(bar.color_override.is_none());
+    }
+
+    #[test]
+    fn test_default_trait_matches_new() {
+        let a = AnimatedProgress::new();
+        let b = AnimatedProgress::default();
+        assert_eq!(a.progress, b.progress);
+        assert_eq!(a.animation_time, b.animation_time);
+        assert_eq!(a.color_override.is_none(), b.color_override.is_none());
+    }
+
+    // ── new_with_color ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_new_with_color() {
+        let green = Color::from_rgb(0.0, 1.0, 0.0);
+        let bar = AnimatedProgress::new_with_color(green);
+        let c = bar.color_override().unwrap();
+        assert_eq!(c.r, 0.0);
+        assert_eq!(c.g, 1.0);
+        assert_eq!(c.b, 0.0);
+    }
+
+    // ── set_progress clamping ────────────────────────────────────────────────
+
+    #[test]
+    fn test_set_progress_normal_value() {
+        let mut bar = AnimatedProgress::new();
+        bar.set_progress(0.5);
+        assert!((bar.progress - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_set_progress_clamps_above_one() {
+        let mut bar = AnimatedProgress::new();
+        bar.set_progress(1.5);
+        assert!((bar.progress - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_set_progress_clamps_below_zero() {
+        let mut bar = AnimatedProgress::new();
+        bar.set_progress(-0.3);
+        assert!((bar.progress - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_set_progress_skips_tiny_change() {
+        let mut bar = AnimatedProgress::new();
+        bar.set_progress(0.5);
+        // A delta of 0.0001 is below the 0.001 threshold — progress should stay at 0.5.
+        bar.set_progress(0.5001);
+        assert!((bar.progress - 0.5).abs() < 1e-6);
+    }
+
+    // ── tick ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_tick_increments_animation_time() {
+        let mut bar = AnimatedProgress::new();
+        assert_eq!(bar.animation_time, 0.0);
+        bar.tick(20.0); // speed_multiplier = 1.0 → +0.016
+        assert!(bar.animation_time > 0.0);
+    }
+
+    #[test]
+    fn test_tick_wraps_at_1000() {
+        let mut bar = AnimatedProgress::new();
+        bar.animation_time = 999.999;
+        bar.tick(20.0); // should push past 1000 and wrap to 0
+        assert!(bar.animation_time < 1.0, "animation_time should wrap to 0");
+    }
+
+    // ── interpolate_color ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_interpolate_color_extremes() {
+        let black = Color::from_rgba(0.0, 0.0, 0.0, 1.0);
+        let white = Color::from_rgba(1.0, 1.0, 1.0, 1.0);
+
+        // t=0 → start
+        let c0 = interpolate_color(black, white, 0.0);
+        assert!((c0.r - 0.0).abs() < 1e-6);
+        assert!((c0.g - 0.0).abs() < 1e-6);
+        assert!((c0.b - 0.0).abs() < 1e-6);
+
+        // t=1 → end
+        let c1 = interpolate_color(black, white, 1.0);
+        assert!((c1.r - 1.0).abs() < 1e-6);
+        assert!((c1.g - 1.0).abs() < 1e-6);
+        assert!((c1.b - 1.0).abs() < 1e-6);
+
+        // t=0.5 → midpoint
+        let c05 = interpolate_color(black, white, 0.5);
+        assert!((c05.r - 0.5).abs() < 1e-6);
+        assert!((c05.g - 0.5).abs() < 1e-6);
+        assert!((c05.b - 0.5).abs() < 1e-6);
+    }
+
+    // ── set_color_override ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_set_color_override_and_clear() {
+        let mut bar = AnimatedProgress::new();
+        assert!(bar.color_override().is_none());
+
+        let red = Color::from_rgb(1.0, 0.0, 0.0);
+        bar.set_color_override(Some(red));
+        assert!(bar.color_override().is_some());
+
+        bar.set_color_override(None);
+        assert!(bar.color_override().is_none());
+    }
+
+    // ── set_progress edge cases ──────────────────────────────────────────
+
+    #[test]
+    fn test_set_progress_clamps_negative_half() {
+        let mut bar = AnimatedProgress::new();
+        bar.set_progress(-0.5);
+        assert!((bar.progress - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_set_progress_same_value_no_panic() {
+        let mut bar = AnimatedProgress::new();
+        bar.set_progress(0.5);
+        // Setting the exact same value again should be a no-op (delta < 0.001).
+        bar.set_progress(0.5);
+        assert!((bar.progress - 0.5).abs() < 1e-6);
+    }
+
+    // ── tick speed clamping ──────────────────────────────────────────────
+
+    #[test]
+    fn test_tick_with_zero_speed_uses_minimum_multiplier() {
+        let mut bar = AnimatedProgress::new();
+        bar.tick(0.0);
+        // speed_multiplier = (0.0 / 20.0).clamp(0.15, 1.2) = 0.15
+        // animation_time += 0.016 * 0.15 = 0.0024
+        let expected = 0.016 * 0.15;
+        assert!(
+            (bar.animation_time - expected).abs() < 1e-6,
+            "expected {expected}, got {}",
+            bar.animation_time,
+        );
+    }
+
+    #[test]
+    fn test_tick_with_high_speed_uses_maximum_multiplier() {
+        let mut bar = AnimatedProgress::new();
+        bar.tick(200.0);
+        // speed_multiplier = (200.0 / 20.0).clamp(0.15, 1.2) = 1.2
+        // animation_time += 0.016 * 1.2 = 0.0192
+        let expected = 0.016 * 1.2;
+        assert!(
+            (bar.animation_time - expected).abs() < 1e-6,
+            "expected {expected}, got {}",
+            bar.animation_time,
+        );
+    }
+
+    // ── set_theme ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_set_theme_does_not_panic() {
+        let mut bar = AnimatedProgress::new();
+        bar.set_theme(Theme::Light);
+        bar.set_theme(Theme::Dark);
+        // If we got here, set_theme works without panic.
+    }
+}

@@ -35,9 +35,6 @@
 //! shows a clear error message with the manual setuid instructions when the
 //! user tries to flash.
 
-use flashkraft_gui::{FlashKraft, Message};
-use iced::{Settings, Task};
-
 fn main() -> iced::Result {
     // ── Unix privilege bootstrap ─────────────────────────────────────────────
     //
@@ -75,36 +72,7 @@ fn main() -> iced::Result {
     }
 
     // ── Start the Iced GUI ───────────────────────────────────────────────────
-    iced::application(
-        || {
-            // Initialise application state.
-            let initial_state = FlashKraft::new();
-
-            // Kick off drive detection immediately on startup.
-            let initial_command = Task::perform(
-                flashkraft_core::commands::load_drives(),
-                Message::DrivesRefreshed,
-            );
-
-            (initial_state, initial_command)
-        },
-        FlashKraft::update,
-        FlashKraft::view,
-    )
-    .title("FlashKraft - OS Image Writer")
-    .subscription(FlashKraft::subscription)
-    .theme(|state: &FlashKraft| state.theme.clone())
-    .settings(Settings {
-        fonts: vec![iced_fonts::BOOTSTRAP_FONT_BYTES.into()],
-        ..Default::default()
-    })
-    .window(iced::window::Settings {
-        size: iced::Size::new(1300.0, 700.0),
-        resizable: false,
-        decorations: true,
-        ..Default::default()
-    })
-    .run()
+    flashkraft_gui::run_gui()
 }
 
 // ---------------------------------------------------------------------------

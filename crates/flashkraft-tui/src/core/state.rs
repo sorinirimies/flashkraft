@@ -18,103 +18,11 @@ use crate::domain::{DriveInfo, ImageInfo};
 use tui_file_explorer::{FileExplorer, Theme};
 
 use super::storage::TuiStorage;
-use super::theme::{all_app_themes, TuiPalette};
+use crate::ui::theme::{all_app_themes, TuiPalette};
 
-// ---------------------------------------------------------------------------
-// Flash progress events
-// ---------------------------------------------------------------------------
-
-/// Progress events produced by the background flash task.
-///
-/// This is a type alias for [`flashkraft_core::FlashUpdate`] — the
-/// normalised frontend event defined in core so both the TUI and GUI share
-/// the same representation.
-pub use flashkraft_core::FlashUpdate as FlashEvent;
-
-// ---------------------------------------------------------------------------
-// USB content entry (shown on the completion screen)
-// ---------------------------------------------------------------------------
-
-/// A single entry in the post-flash USB content listing.
-#[derive(Debug, Clone)]
-pub struct UsbEntry {
-    pub name: String,
-    pub size_bytes: u64,
-    pub is_dir: bool,
-    /// Nesting depth for tree-style display (0 = root)
-    pub depth: usize,
-}
-
-// ---------------------------------------------------------------------------
-// Application screens
-// ---------------------------------------------------------------------------
-
-/// The currently active screen / step.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub enum AppScreen {
-    /// Step 1 — type (or paste) the path to an OS image.
-    #[default]
-    SelectImage,
-    /// Step 1b — interactive file-browser overlay for picking the OS image.
-    BrowseImage,
-    /// Step 2 — choose a USB drive from the detected list.
-    SelectDrive,
-    /// Step 2½ — pie-chart overview of the selected drive's storage.
-    DriveInfo,
-    /// Step 3 — confirmation dialog before writing.
-    ConfirmFlash,
-    /// Step 4 — flash operation in progress (tui-slider).
-    Flashing,
-    /// Step 5 — flash complete; show USB contents + pie-chart.
-    Complete,
-    /// Error screen — displayed whenever a fatal error occurs.
-    Error,
-}
-
-// ---------------------------------------------------------------------------
-// Input mode
-// ---------------------------------------------------------------------------
-
-/// Whether the app is currently capturing keyboard input for a text field.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub enum InputMode {
-    /// Normal navigation mode.
-    #[default]
-    Normal,
-    /// Typing into the image-path text field.
-    Editing,
-}
-
-// ---------------------------------------------------------------------------
-// File-explorer clipboard / operation mode
-// ---------------------------------------------------------------------------
-
-/// Whether a file is being copied or moved.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClipOp {
-    Copy,
-    Cut,
-}
-
-/// Pending clipboard entry for the file explorer.
-#[derive(Debug, Clone)]
-pub struct FileClipboard {
-    pub path: std::path::PathBuf,
-    pub op: ClipOp,
-}
-
-/// Confirmation modal state for the file explorer.
-#[derive(Debug, Default, Clone)]
-pub enum FileOpMode {
-    #[default]
-    Normal,
-    ConfirmDelete(std::path::PathBuf),
-    ConfirmOverwrite {
-        src: std::path::PathBuf,
-        dst: std::path::PathBuf,
-        op: ClipOp,
-    },
-}
+use super::message::{
+    AppScreen, ClipOp, FileClipboard, FileOpMode, FlashEvent, InputMode, UsbEntry,
+};
 
 // ---------------------------------------------------------------------------
 // Main application state
@@ -254,6 +162,17 @@ impl App {
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("/"));
 
+        // Open persistent storage once and resolve the saved theme index.
+        let storage = TuiStorage::open();
+        let explorer_theme_idx = storage
+            .load_theme()
+            .and_then(|name| {
+                Theme::all_presets()
+                    .into_iter()
+                    .position(|(n, _, _)| n == name)
+            })
+            .unwrap_or(0);
+
         Self {
             screen: AppScreen::SelectImage,
             image_input: String::new(),
@@ -269,7 +188,7 @@ impl App {
             flash_progress: 0.0,
             flash_bytes: 0,
             flash_speed: 0.0,
-            flash_stage: "Initialising…".to_string(),
+            flash_stage: "Initialising\u{2026}".to_string(),
             flash_log: Vec::new(),
             cancel_token: Arc::new(AtomicBool::new(false)),
             flash_rx: None,
@@ -284,24 +203,12 @@ impl App {
                 .map(|(name, _, t)| (name.to_string(), t))
                 .collect(),
             app_themes: all_app_themes(),
-            explorer_theme_idx: {
-                // Resolve the saved theme index at construction time so we
-                // can use it as a plain usize field everywhere else.
-                let storage = TuiStorage::open();
-                let saved = storage.load_theme();
-                saved
-                    .and_then(|name| {
-                        Theme::all_presets()
-                            .into_iter()
-                            .position(|(n, _, _)| n == name)
-                    })
-                    .unwrap_or(0)
-            },
+            explorer_theme_idx,
             show_app_theme_panel: false,
             show_browse_options: false,
             show_browse_editor: false,
             app_theme_panel_cursor: 0,
-            storage: TuiStorage::open(),
+            storage,
             file_clipboard: None,
             file_op_mode: FileOpMode::Normal,
             file_op_status: String::new(),
@@ -314,6 +221,29 @@ impl App {
     // -----------------------------------------------------------------------
     // Channel polling — called on every tick from the main event loop
     // -----------------------------------------------------------------------
+
+    /// Kick off an asynchronous drive-detection task.
+    ///
+    /// Sets the loading flag, clears the current drive list, creates a
+    /// channel, and spawns a Tokio task that calls
+    /// [`crate::core::commands::load_drives`].  The result is later consumed
+    /// by [`Self::poll_drives`].
+    ///
+    /// This is called from the hotplug handler, from key-event refresh
+    /// (`r` / `F5`), and after confirming an image path.
+    pub fn start_drive_detection(&mut self) {
+        self.drives_loading = true;
+        self.available_drives.clear();
+        self.drive_cursor = 0;
+
+        let (tx, rx) = mpsc::unbounded_channel::<Vec<crate::domain::DriveInfo>>();
+        self.drives_rx = Some(rx);
+
+        tokio::spawn(async move {
+            let drives = crate::core::commands::load_drives().await;
+            let _ = tx.send(drives);
+        });
+    }
 
     /// Drain the USB hotplug channel and trigger drive re-detection on any event.
     ///
@@ -348,17 +278,7 @@ impl App {
             // would be confusing and is unnecessary).
             let flashing = matches!(self.screen, AppScreen::Flashing);
             if !flashing {
-                // Reuse the same channel-based detection path used by r/F5.
-                use tokio::sync::mpsc;
-                self.drives_loading = true;
-                self.available_drives.clear();
-                self.drive_cursor = 0;
-                let (tx, new_rx) = mpsc::unbounded_channel::<Vec<crate::domain::DriveInfo>>();
-                self.drives_rx = Some(new_rx);
-                tokio::spawn(async move {
-                    let drives = crate::core::commands::load_drives().await;
-                    let _ = tx.send(drives);
-                });
+                self.start_drive_detection();
             }
         }
     }
@@ -622,7 +542,7 @@ impl App {
         let cancel = self.cancel_token.clone();
 
         // Spawn the flash task onto the Tokio runtime that owns this thread.
-        tokio::spawn(crate::tui::flash_runner::run_flash(
+        tokio::spawn(crate::core::flash_runner::run_flash(
             image.path,
             PathBuf::from(&drive.device_path),
             cancel,
@@ -1001,10 +921,6 @@ fn collect_entries(dir: &PathBuf, depth: usize, out: &mut Vec<UsbEntry>, max_dep
 }
 
 // ---------------------------------------------------------------------------
-// Unit tests
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // File-system helpers (used by file-op methods above)
 // ---------------------------------------------------------------------------
 
@@ -1031,6 +947,10 @@ fn explorer_fs_delete(path: &std::path::Path) -> std::io::Result<()> {
         std::fs::remove_file(path)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Unit tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -1121,9 +1041,9 @@ mod tests {
     #[test]
     fn test_image_insert_unicode_chars() {
         let mut app = App::new();
-        app.image_insert('→');
-        app.image_insert('∞');
-        assert_eq!(app.image_input, "→∞");
+        app.image_insert('\u{2192}');
+        app.image_insert('\u{221e}');
+        assert_eq!(app.image_input, "\u{2192}\u{221e}");
         assert_eq!(app.image_cursor, 2);
     }
 
@@ -1512,18 +1432,22 @@ mod tests {
     #[test]
     fn test_apply_flash_event_stage_sets_label_and_logs() {
         let mut app = App::new();
-        app.apply_flash_event(FlashEvent::Message("Writing image to device…".to_string()));
-        assert_eq!(app.flash_stage, "Writing image to device…");
+        app.apply_flash_event(FlashEvent::Message(
+            "Writing image to device\u{2026}".to_string(),
+        ));
+        assert_eq!(app.flash_stage, "Writing image to device\u{2026}");
         assert!(app
             .flash_log
-            .contains(&"Writing image to device…".to_string()));
+            .contains(&"Writing image to device\u{2026}".to_string()));
     }
 
     #[test]
     fn test_apply_flash_event_log_appends_to_log() {
         let mut app = App::new();
-        app.apply_flash_event(FlashEvent::Message("SHA-256 verified ✓".to_string()));
-        assert!(app.flash_log.contains(&"SHA-256 verified ✓".to_string()));
+        app.apply_flash_event(FlashEvent::Message("SHA-256 verified \u{2713}".to_string()));
+        assert!(app
+            .flash_log
+            .contains(&"SHA-256 verified \u{2713}".to_string()));
     }
 
     #[test]
@@ -1843,7 +1767,7 @@ mod tests {
         let mut app = App::new();
         app.selected_image = Some(make_image(512.0)); // 512 MB
         let expected = (512.0_f64 * 1024.0 * 1024.0) as u64;
-        // Allow ±1 for floating-point truncation
+        // Allow +/-1 for floating-point truncation
         assert!(
             (app.image_size_bytes() as i64 - expected as i64).abs() <= 1,
             "expected ~{expected} bytes, got {}",
@@ -2083,7 +2007,7 @@ mod tests {
     #[test]
     fn test_apply_explorer_selection_unicode_path() {
         let mut app = App::new();
-        let path = PathBuf::from("/home/utilisateur/téléchargements/debian.iso");
+        let path = PathBuf::from("/home/utilisateur/t\u{e9}l\u{e9}chargements/debian.iso");
         app.apply_explorer_selection(path.clone());
         let expected_len = path.to_string_lossy().chars().count();
         assert_eq!(app.image_cursor, expected_len);

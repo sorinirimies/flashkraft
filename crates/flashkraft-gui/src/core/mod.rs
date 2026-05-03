@@ -10,7 +10,7 @@
 //! | [`state`] | Application state (`FlashKraft` struct) + Elm methods |
 //! | [`message`] | All `Message` variants (user events + async results) |
 //! | [`update()`] | Pure state-transition function |
-//! | [`flash_subscription`] | Iced [`iced::Subscription`] that streams flash progress |
+//! | [`flash_runner`] | Iced [`iced::Subscription`] that streams flash progress |
 //! | [`storage`] | Persistent theme preference via `redb` |
 //! | [`commands`] | Async side effects (file picker dialog) |
 //!
@@ -21,7 +21,7 @@
 //! - Drive detection — also in `flashkraft-core::commands::drive_detection`.
 
 pub mod commands;
-pub mod flash_subscription;
+pub mod flash_runner;
 pub mod message;
 pub mod state;
 pub mod storage;

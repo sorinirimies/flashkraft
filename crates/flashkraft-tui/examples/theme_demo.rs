@@ -30,15 +30,11 @@ use anyhow::Result;
 use crossterm::{
     event::{self, Event},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{enable_raw_mode, EnterAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use flashkraft_tui::{
-    render,
-    tui::app::{App, AppScreen},
-    tui::events::handle_key,
-};
+use flashkraft_tui::{handle_key, render, restore_terminal, App, AppScreen};
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -116,14 +112,4 @@ fn build_app() -> App {
     app.open_file_explorer();
 
     app
-}
-
-// ---------------------------------------------------------------------------
-// Terminal restore
-// ---------------------------------------------------------------------------
-
-fn restore_terminal() -> Result<()> {
-    disable_raw_mode()?;
-    execute!(io::stdout(), LeaveAlternateScreen)?;
-    Ok(())
 }

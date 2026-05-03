@@ -17,6 +17,11 @@ pub struct ImageInfo {
 }
 
 impl ImageInfo {
+    /// Return the image size in bytes.
+    pub fn size_bytes(&self) -> u64 {
+        (self.size_mb * 1_048_576.0) as u64
+    }
+
     /// Create a new ImageInfo from a PathBuf
     ///
     /// # Arguments

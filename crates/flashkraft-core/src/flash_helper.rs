@@ -51,6 +51,45 @@ const BLOCK_SIZE: usize = 4 * 1024 * 1024;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(400);
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Compute transfer speed in MB/s from bytes transferred and elapsed time.
+fn compute_speed_mb_s(bytes: u64, elapsed: Duration) -> f32 {
+    let s = elapsed.as_secs_f32();
+    if s > 0.001 {
+        (bytes as f32 / (1024.0 * 1024.0)) / s
+    } else {
+        0.0
+    }
+}
+
+/// Extract the basename of a device path (e.g. "/dev/sdb" → "sdb").
+fn device_basename(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
+/// Returns `Some(speed_mb_s)` if enough time has passed since `last_report`
+/// for a progress update, otherwise `None`.  Updates `last_report` in place.
+fn should_report_progress(
+    bytes: u64,
+    start: Instant,
+    last_report: &mut Instant,
+    force: bool,
+) -> Option<f32> {
+    let now = Instant::now();
+    if now.duration_since(*last_report) >= PROGRESS_INTERVAL || force {
+        *last_report = now;
+        Some(compute_speed_mb_s(bytes, now.duration_since(start)))
+    } else {
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Real-UID registry
 // ---------------------------------------------------------------------------
 
@@ -194,8 +233,8 @@ fn reexec_as_root_inner() {
     // Tell the child it was already escalated so it won't recurse.
     std::env::set_var("FLASHKRAFT_ESCALATED", "1");
 
-    // ── Try pkexec first (graphical polkit dialog) ────────────────────────────
-    if unix_which_exists("pkexec") {
+    // ── Try pkexec first (graphical polkit dialog) ────────────────────
+    if which_exists("pkexec") {
         let mut argv: Vec<CString> = Vec::new();
         argv.push(unix_c_str("pkexec"));
         argv.push(unix_c_str(&self_exe_str));
@@ -205,8 +244,8 @@ fn reexec_as_root_inner() {
         let _ = nix::unistd::execvp(&unix_c_str("pkexec"), &argv);
     }
 
-    // ── Try sudo -E (terminal fallback) ───────────────────────────────────────
-    if unix_which_exists("sudo") {
+    // ── Try sudo -E (terminal fallback) ─────────────────────────────
+    if which_exists("sudo") {
         let mut argv: Vec<CString> = Vec::new();
         argv.push(unix_c_str("sudo"));
         argv.push(unix_c_str("-E")); // preserve DISPLAY / WAYLAND_DISPLAY
@@ -226,20 +265,18 @@ fn reexec_as_root_inner() {
 pub fn reexec_as_root() {}
 
 /// Return `true` if `name` is an executable file reachable via `PATH`.
-#[cfg(all(unix, not(test)))]
-fn unix_which_exists(name: &str) -> bool {
+#[cfg(unix)]
+fn which_exists(name: &str) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    if let Ok(path_var) = std::env::var("PATH") {
-        for dir in path_var.split(':') {
-            let candidate = std::path::Path::new(dir).join(name);
-            if let Ok(meta) = std::fs::metadata(&candidate) {
-                if meta.is_file() && meta.permissions().mode() & 0o111 != 0 {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    std::env::var("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .any(|dir| {
+            let p = std::path::Path::new(dir).join(name);
+            std::fs::metadata(&p)
+                .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+                .unwrap_or(false)
+        })
 }
 
 /// Build a `CString`, replacing embedded NUL bytes with `?`.
@@ -643,24 +680,46 @@ where
 
 #[cfg(target_os = "linux")]
 fn reject_partition_node(device_path: &str) -> Result<(), String> {
-    let dev_name = Path::new(device_path)
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
+    let dev_name = device_basename(device_path);
 
     let is_partition = {
         let bytes = dev_name.as_bytes();
-        !bytes.is_empty() && bytes[bytes.len() - 1].is_ascii_digit() && {
+        if bytes.is_empty() || !bytes[bytes.len() - 1].is_ascii_digit() {
+            false
+        } else {
             let stem = dev_name.trim_end_matches(|c: char| c.is_ascii_digit());
-            stem.ends_with('p')
-                || (!stem.is_empty()
-                    && !stem.ends_with(|c: char| c.is_ascii_digit())
-                    && stem.chars().any(|c| c.is_ascii_alphabetic()))
+            if stem.ends_with('p') && stem.len() > 1 {
+                // "disk0p1" style: partition of a digit-indexed device
+                // (mmcblk0p1, nvme0n1p1, loop0p1).  Confirm char before 'p'
+                // is a digit so we don't false-positive on e.g. "sdp".
+                stem[..stem.len() - 1].ends_with(|c: char| c.is_ascii_digit())
+            } else {
+                // "sda1" style: partition of a letter-indexed device.
+                // The stem must be purely alphabetic AND start with a known
+                // disk-type prefix.  This avoids false positives on whole
+                // disks whose names happen to be all-alpha (mmcblk0, loop0).
+                !stem.is_empty()
+                    && stem.chars().all(|c| c.is_ascii_alphabetic())
+                    && (stem.starts_with("sd")
+                        || stem.starts_with("hd")
+                        || stem.starts_with("vd")
+                        || stem.starts_with("xvd"))
+            }
         }
     };
 
     if is_partition {
-        let whole = dev_name.trim_end_matches(|c: char| c.is_ascii_digit() || c == 'p');
+        let whole = if dev_name
+            .trim_end_matches(|c: char| c.is_ascii_digit())
+            .ends_with('p')
+        {
+            // mmcblk0p1 → mmcblk0: strip trailing digits then the 'p'
+            let stem = dev_name.trim_end_matches(|c: char| c.is_ascii_digit());
+            &stem[..stem.len() - 1]
+        } else {
+            // sda1 → sda: strip trailing digits
+            dev_name.trim_end_matches(|c: char| c.is_ascii_digit())
+        };
         return Err(format!(
             "Refusing to write to partition node '{device_path}'. \
              Select the whole-disk device (e.g. /dev/{whole}) instead."
@@ -761,10 +820,7 @@ fn open_device_for_writing(device_path: &str) -> Result<std::fs::File, String> {
 // ---------------------------------------------------------------------------
 
 fn unmount_device(device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
-    let device_name = Path::new(device_path)
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
+    let device_name = device_basename(device_path);
 
     let partitions = find_mounted_partitions(&device_name, device_path);
 
@@ -838,22 +894,6 @@ fn is_partition_of(dev: &str, device_name: &str) -> bool {
     }
     let first = suffix.chars().next().unwrap();
     first.is_ascii_digit() || (first == 'p' && suffix.len() > 1)
-}
-
-/// Return `true` if `name` resolves to an executable on `PATH`.
-/// Used by `do_unmount` to prefer `udisksctl` when available.
-#[cfg(target_os = "linux")]
-fn which_exists(name: &str) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|dir| {
-            let p = std::path::Path::new(dir).join(name);
-            std::fs::metadata(&p)
-                .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-                .unwrap_or(false)
-        })
 }
 
 fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
@@ -1021,15 +1061,12 @@ fn write_image(
 
         bytes_written += n as u64;
 
-        let now = Instant::now();
-        if now.duration_since(last_report) >= PROGRESS_INTERVAL || bytes_written >= image_size {
-            let elapsed_s = now.duration_since(start).as_secs_f32();
-            let speed_mb_s = if elapsed_s > 0.001 {
-                (bytes_written as f32 / (1024.0 * 1024.0)) / elapsed_s
-            } else {
-                0.0
-            };
-
+        if let Some(speed_mb_s) = should_report_progress(
+            bytes_written,
+            start,
+            &mut last_report,
+            bytes_written >= image_size,
+        ) {
             send(
                 tx,
                 FlashEvent::Progress {
@@ -1038,7 +1075,6 @@ fn write_image(
                     speed_mb_s,
                 },
             );
-            last_report = now;
         }
     }
 
@@ -1071,12 +1107,7 @@ fn write_image(
     }
 
     // Emit a final progress event at 100 %.
-    let elapsed_s = start.elapsed().as_secs_f32();
-    let speed_mb_s = if elapsed_s > 0.001 {
-        (bytes_written as f32 / (1024.0 * 1024.0)) / elapsed_s
-    } else {
-        0.0
-    };
+    let speed_mb_s = compute_speed_mb_s(bytes_written, start.elapsed());
     send(
         tx,
         FlashEvent::Progress {
@@ -1289,14 +1320,9 @@ fn sha256_with_progress(
         bytes_read += n as u64;
         remaining -= n as u64;
 
-        let now = Instant::now();
-        if now.duration_since(last_report) >= PROGRESS_INTERVAL || remaining == 0 {
-            let elapsed_s = now.duration_since(start).as_secs_f32();
-            let speed_mb_s = if elapsed_s > 0.001 {
-                (bytes_read as f32 / (1024.0 * 1024.0)) / elapsed_s
-            } else {
-                0.0
-            };
+        if let Some(speed_mb_s) =
+            should_report_progress(bytes_read, start, &mut last_report, remaining == 0)
+        {
             send(
                 tx,
                 FlashEvent::VerifyProgress {
@@ -1306,7 +1332,6 @@ fn sha256_with_progress(
                     speed_mb_s,
                 },
             );
-            last_report = now;
         }
     }
 
@@ -1315,13 +1340,6 @@ fn sha256_with_progress(
         .iter()
         .map(|b| format!("{:02x}", b))
         .collect())
-}
-
-/// Legacy non-progress variant kept for unit tests that don't need a channel.
-#[cfg(test)]
-fn sha256_first_n_bytes(path: &str, max_bytes: u64) -> Result<String, String> {
-    let (tx, _rx) = mpsc::channel();
-    sha256_with_progress(path, max_bytes, "image", &tx)
 }
 
 // ---------------------------------------------------------------------------
@@ -1683,6 +1701,12 @@ mod tests {
         })
     }
 
+    /// Legacy non-progress variant kept for unit tests that don't need a channel.
+    fn sha256_first_n_bytes(path: &str, max_bytes: u64) -> Result<String, String> {
+        let (tx, _rx) = mpsc::channel();
+        sha256_with_progress(path, max_bytes, "image", &tx)
+    }
+
     // ── set_real_uid ────────────────────────────────────────────────────────
 
     #[test]
@@ -1772,6 +1796,41 @@ mod tests {
         // pattern, not whether the path exists.
         let result = reject_partition_node("/dev/sdb");
         assert!(result.is_ok(), "whole-disk node should not be rejected");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_reject_partition_node_mmcblk0p1() {
+        let result = reject_partition_node("/dev/mmcblk0p1");
+        assert!(
+            result.is_err(),
+            "mmcblk0p1 should be rejected as a partition"
+        );
+        assert!(result.unwrap_err().contains("partition"));
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_reject_partition_node_mmcblk0_whole_disk() {
+        let result = reject_partition_node("/dev/mmcblk0");
+        assert!(result.is_ok(), "mmcblk0 should be accepted as whole disk");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_reject_partition_node_nvme0n1p1() {
+        let result = reject_partition_node("/dev/nvme0n1p1");
+        assert!(
+            result.is_err(),
+            "nvme0n1p1 should be rejected as a partition"
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_reject_partition_node_nvme0n1_whole_disk() {
+        let result = reject_partition_node("/dev/nvme0n1");
+        assert!(result.is_ok(), "nvme0n1 should be accepted as whole disk");
     }
 
     // ── find_mounted_partitions ──────────────────────────────────────────────
@@ -2896,6 +2955,201 @@ mod tests {
                 !msg.contains("already in use"),
                 "non-existent device must not emit a spurious 'already in use' message: {msg}"
             );
+        }
+    }
+
+    // ── compute_speed_mb_s tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_compute_speed_mb_s_normal() {
+        use std::time::Duration;
+        let speed = compute_speed_mb_s(10 * 1024 * 1024, Duration::from_secs(1));
+        assert!(
+            (speed - 10.0).abs() < 0.1,
+            "10 MiB in 1s ≈ 10 MB/s, got {speed}"
+        );
+    }
+
+    #[test]
+    fn test_compute_speed_mb_s_zero_elapsed() {
+        use std::time::Duration;
+        let speed = compute_speed_mb_s(1024 * 1024, Duration::from_secs(0));
+        assert_eq!(speed, 0.0);
+    }
+
+    #[test]
+    fn test_compute_speed_mb_s_tiny_elapsed() {
+        use std::time::Duration;
+        // Less than 1ms → should return 0.0 to avoid division explosion
+        let speed = compute_speed_mb_s(1024 * 1024, Duration::from_micros(500));
+        assert_eq!(speed, 0.0);
+    }
+
+    #[test]
+    fn test_compute_speed_mb_s_zero_bytes() {
+        use std::time::Duration;
+        let speed = compute_speed_mb_s(0, Duration::from_secs(5));
+        assert_eq!(speed, 0.0);
+    }
+
+    #[test]
+    fn test_compute_speed_mb_s_large_transfer() {
+        use std::time::Duration;
+        // 1 GiB in 10 seconds = ~102.4 MB/s
+        let speed = compute_speed_mb_s(1024 * 1024 * 1024, Duration::from_secs(10));
+        assert!((speed - 102.4).abs() < 1.0, "got {speed}");
+    }
+
+    // ── FlashUpdate::from(FlashEvent) tests ──────────────────────────────────
+
+    #[test]
+    fn test_flash_update_from_progress_normal() {
+        let event = FlashEvent::Progress {
+            bytes_written: 500,
+            total_bytes: 1000,
+            speed_mb_s: 10.0,
+        };
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::Progress {
+                progress,
+                bytes_written,
+                speed_mb_s,
+            } => {
+                assert!((progress - 0.5).abs() < 0.01);
+                assert_eq!(bytes_written, 500);
+                assert_eq!(speed_mb_s, 10.0);
+            }
+            _ => panic!("expected Progress variant"),
+        }
+    }
+
+    #[test]
+    fn test_flash_update_from_progress_zero_total() {
+        let event = FlashEvent::Progress {
+            bytes_written: 100,
+            total_bytes: 0,
+            speed_mb_s: 5.0,
+        };
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::Progress { progress, .. } => {
+                assert_eq!(progress, 0.0, "zero total_bytes should give 0.0 progress");
+            }
+            _ => panic!("expected Progress variant"),
+        }
+    }
+
+    #[test]
+    fn test_flash_update_from_progress_exceeds_total() {
+        let event = FlashEvent::Progress {
+            bytes_written: 2000,
+            total_bytes: 1000,
+            speed_mb_s: 50.0,
+        };
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::Progress { progress, .. } => {
+                assert_eq!(progress, 1.0, "progress should clamp to 1.0");
+            }
+            _ => panic!("expected Progress variant"),
+        }
+    }
+
+    #[test]
+    fn test_flash_update_from_verify_progress_image_phase() {
+        let event = FlashEvent::VerifyProgress {
+            phase: "image",
+            bytes_read: 500,
+            total_bytes: 1000,
+            speed_mb_s: 20.0,
+        };
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::VerifyProgress { phase, overall, .. } => {
+                assert_eq!(phase, "image");
+                // image phase at 50% → overall 25%
+                assert!((overall - 0.25).abs() < 0.01, "got {overall}");
+            }
+            _ => panic!("expected VerifyProgress variant"),
+        }
+    }
+
+    #[test]
+    fn test_flash_update_from_verify_progress_device_phase() {
+        let event = FlashEvent::VerifyProgress {
+            phase: "device",
+            bytes_read: 1000,
+            total_bytes: 1000,
+            speed_mb_s: 30.0,
+        };
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::VerifyProgress { phase, overall, .. } => {
+                assert_eq!(phase, "device");
+                // device phase at 100% → overall 100%
+                assert!((overall - 1.0).abs() < 0.01, "got {overall}");
+            }
+            _ => panic!("expected VerifyProgress variant"),
+        }
+    }
+
+    #[test]
+    fn test_flash_update_from_verify_progress_zero_total() {
+        let event = FlashEvent::VerifyProgress {
+            phase: "image",
+            bytes_read: 100,
+            total_bytes: 0,
+            speed_mb_s: 0.0,
+        };
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::VerifyProgress { overall, .. } => {
+                assert_eq!(overall, 0.0);
+            }
+            _ => panic!("expected VerifyProgress variant"),
+        }
+    }
+
+    #[test]
+    fn test_flash_update_from_stage() {
+        let event = FlashEvent::Stage(FlashStage::Writing);
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::Message(msg) => {
+                assert!(!msg.is_empty());
+                // Should contain the Display string of FlashStage::Writing
+            }
+            _ => panic!("expected Message variant"),
+        }
+    }
+
+    #[test]
+    fn test_flash_update_from_log() {
+        let event = FlashEvent::Log("some log message".to_string());
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::Message(msg) => {
+                assert_eq!(msg, "some log message");
+            }
+            _ => panic!("expected Message variant"),
+        }
+    }
+
+    #[test]
+    fn test_flash_update_from_done() {
+        let event = FlashEvent::Done;
+        let update: FlashUpdate = event.into();
+        assert!(matches!(update, FlashUpdate::Completed));
+    }
+
+    #[test]
+    fn test_flash_update_from_error() {
+        let event = FlashEvent::Error("write failed".to_string());
+        let update: FlashUpdate = event.into();
+        match update {
+            FlashUpdate::Failed(msg) => assert_eq!(msg, "write failed"),
+            _ => panic!("expected Failed variant"),
         }
     }
 }

@@ -10,7 +10,7 @@ use iced::{Alignment, Element, Length};
 
 use crate::core::message::Message;
 use crate::domain::{DriveInfo, ImageInfo};
-use crate::utils::icons_bootstrap_mapper as icons;
+use crate::utils::icons;
 use iced_fonts::bootstrap;
 
 /// Three buttons section
@@ -52,10 +52,7 @@ fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
         column![
             icons::icon(bootstrap::check_circle(), 50.0),
             text(&img.name).size(16),
-            text(flashkraft_core::fmt_bytes(
-                (img.size_mb * 1_048_576.0) as u64
-            ))
-            .size(12),
+            text(flashkraft_core::fmt_bytes(img.size_bytes())).size(12),
         ]
     } else {
         column![
@@ -83,10 +80,7 @@ fn view_target_section(selected: &Option<DriveInfo>) -> Element<'_, Message> {
         column![
             icons::icon(bootstrap::check_circle(), 50.0),
             text(&target.name).size(16),
-            text(flashkraft_core::fmt_bytes(
-                (target.size_gb * 1_073_741_824.0) as u64
-            ))
-            .size(12),
+            text(flashkraft_core::fmt_bytes(target.size_bytes())).size(12),
             text(&target.mount_point).size(10),
         ]
     } else {

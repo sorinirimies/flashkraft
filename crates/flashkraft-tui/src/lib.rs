@@ -9,46 +9,39 @@
 //! ```text
 //! flashkraft_tui
 //! ├── domain  ← re-exported from flashkraft_core::domain
-//! ├── core    ← re-exported from flashkraft_core (commands, flash_writer, …)
-//! └── tui     ← Ratatui front-end (app / events / flash_runner / ui)
+//! ├── core    ← app state, messages, key handling, flash runner, storage
+//! │             + re-exports from flashkraft_core (commands, flash_helper, …)
+//! └── ui      ← Ratatui front-end (theme, components, screen renderers)
 //! ```
 //!
 //! The file-browser widget is provided by the [`tui-file-explorer`](https://crates.io/crates/tui-file-explorer)
 //! crate and consumed directly via `tui_file_explorer::*`.
 
-// ── Core re-exports ───────────────────────────────────────────────────────────
+// ── Module declarations ───────────────────────────────────────────────────────
 
-/// Re-export `flashkraft_core` under the short alias `core` so that
-/// `crate::core::commands::load_drives()`, `crate::core::flash_helper::*`,
-/// etc. resolve correctly from every submodule and from examples via
-/// `flashkraft_tui::core::*`.
-pub mod core {
-    pub use flashkraft_core::commands;
-    pub use flashkraft_core::domain;
-    pub use flashkraft_core::flash_helper;
-    pub use flashkraft_core::utils;
-}
+/// Core module — app state, messages, key handling, flash runner, storage.
+///
+/// Also re-exports `flashkraft_core::{commands, domain, flash_helper, utils}`
+/// so that `crate::core::commands::load_drives()` etc. resolve from every
+/// submodule and from examples via `flashkraft_tui::core::*`.
+pub mod core;
 
 /// Re-export `flashkraft_core::domain` at the crate root so that
 /// `crate::domain::DriveInfo` / `crate::domain::ImageInfo` resolve in
 /// submodules, and so that examples can write `flashkraft_tui::domain::*`.
 pub use flashkraft_core::domain;
 
-// ── TUI submodules ────────────────────────────────────────────────────────────
-
-/// Ratatui front-end — app state, event handling, flash runner, UI rendering.
-///
-/// Submodules: `app` (state machine), `events` (key handling),
-/// `flash_runner` (background flash task), `ui` (frame rendering).
-pub mod tui;
+/// Ratatui front-end — theme, components (chrome, helpers, etc.), screen renderers.
+pub mod ui;
 
 // ── Convenience re-exports for examples and tests ────────────────────────────
 
+pub use core::message::{AppScreen, FlashEvent, InputMode, UsbEntry};
+pub use core::state::App;
+pub use core::update::handle_key;
 pub use flashkraft_core::flash_helper;
-pub use tui::app::{App, AppScreen, FlashEvent, InputMode, UsbEntry};
-pub use tui::events::handle_key;
-pub use tui::ui::render;
 pub use tui_file_explorer::{ExplorerOutcome, FileExplorer, FsEntry};
+pub use ui::render;
 
 // ── Public event-loop API ─────────────────────────────────────────────────────
 
