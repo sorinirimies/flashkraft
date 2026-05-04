@@ -13,7 +13,7 @@
 //! All themes come directly from [`flashkraft_core::THEME_NAMES`] — **the
 //! single source of truth** shared with the TUI.  Every core theme is
 //! represented as an [`iced::Theme::Custom`] built via
-//! [`theme_from_core`], so GUI and TUI always show exactly the same set.
+//! `theme_from_core`, so GUI and TUI always show exactly the same set.
 
 use iced::Theme;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 // ── Core → Iced conversion ────────────────────────────────────────────────────
 
-/// Build an Iced [`Theme::Custom`] from a core [`AppTheme`] preset.
+/// Build an Iced [`Theme::Custom`] from a core `AppTheme` preset.
 ///
 /// This is the **only** theme-construction path in the GUI — every theme,
 /// including those that happen to share a name with an Iced built-in, is

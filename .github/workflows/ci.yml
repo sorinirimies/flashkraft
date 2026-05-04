@@ -161,7 +161,7 @@ jobs:
       - name: Build TUI (dev)
         run: cargo build -p flashkraft-tui
 
-  # ── 5. Docs ──────────────────────────────────────────────────────────────────
+  # ── 5. Docs ──────────────────────────────────────────────────────────────
   doc:
     name: doc
     runs-on: ubuntu-latest
@@ -184,23 +184,17 @@ jobs:
             libfontconfig1-dev \
             libssl-dev
 
-      # Use nightly for doc(cfg) and intra-doc link checking.
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      # Build docs for the two published crates (core is an internal dep).
-      - name: cargo doc (flashkraft)
-        run: cargo doc --no-deps -p flashkraft --all-features
+      # Treat all rustdoc warnings as errors — same flag used in release.
+      - name: cargo doc (workspace, no deps)
         env:
-          RUSTDOCFLAGS: --cfg docsrs -D warnings
-
-      - name: cargo doc (flashkraft-tui)
-        run: cargo doc --no-deps -p flashkraft-tui --all-features
-        env:
-          RUSTDOCFLAGS: --cfg docsrs -D warnings
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps
 
   # ── 6. Cross-compile check (Windows + macOS from Linux runner) ───────────────
   #

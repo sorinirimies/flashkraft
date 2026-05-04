@@ -179,21 +179,17 @@ jobs:
             libfontconfig1-dev \
             libssl-dev
 
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: cargo doc (flashkraft)
-        run: cargo doc --no-deps -p flashkraft --all-features
+      # Treat all rustdoc warnings as errors — same flag used in release.
+      - name: cargo doc (workspace, no deps)
         env:
-          RUSTDOCFLAGS: --cfg docsrs -D warnings
-
-      - name: cargo doc (flashkraft-tui)
-        run: cargo doc --no-deps -p flashkraft-tui --all-features
-        env:
-          RUSTDOCFLAGS: --cfg docsrs -D warnings
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps
 
   # ── 6. Cross-compile check (Windows + macOS from Linux runner) ───────────────
   #

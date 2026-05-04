@@ -9,7 +9,7 @@
 //! | Module | What lives here |
 //! |--------|-----------------|
 //! | [`domain`] | Domain models — [`DriveInfo`], [`ImageInfo`], drive constraints |
-//! | [`flash_helper`] | In-process flash pipeline — [`run_pipeline`], [`FlashEvent`], [`FlashStage`] |
+//! | [`flash_helper`] | In-process flash pipeline — `run_pipeline`, [`FlashEvent`], [`FlashStage`] |
 //! | [`commands`] | Async helpers — drive detection |
 //! | [`utils`] | Debug-logging macros (`debug_log!`, `flash_debug!`, …) |
 //!
