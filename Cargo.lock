@@ -1218,7 +1218,7 @@ checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "flashkraft"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "dirs",
  "flashkraft-core",
@@ -1237,7 +1237,7 @@ dependencies = [
 
 [[package]]
 name = "flashkraft-core"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "dirs",
  "futures",
@@ -1254,7 +1254,7 @@ dependencies = [
 
 [[package]]
 name = "flashkraft-tui"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "anyhow",
  "crossterm",

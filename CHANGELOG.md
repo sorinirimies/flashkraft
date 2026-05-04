@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.1.6 - 2026-05-04
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-05-04
+- chore: bump version to 1.1.5
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.4...v1.1.6
 ## 1.1.4 - 2026-05-03
 ### ♻️ Refactor
 - refactor: align GUI/TUI architecture (core/ + ui/screens/ + ui/components/)
