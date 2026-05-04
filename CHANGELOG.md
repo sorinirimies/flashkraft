@@ -2,10 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.2.0 - 2026-05-04
+### 📦 Other Changes
+- Switch TUI and GUI settings persistence from redb to JSON
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.6...v1.2.0
 ## 1.1.6 - 2026-05-04
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-05-04
 - chore: bump version to 1.1.5
+- chore: bump version to 1.1.6
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.4...v1.1.6
 ## 1.1.4 - 2026-05-03
 ### ♻️ Refactor
