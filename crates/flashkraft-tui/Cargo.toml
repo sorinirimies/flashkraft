@@ -36,7 +36,8 @@ tui-spinner  = { workspace = true }
 dirs   = { workspace = true }
 
 # ── Persistence ───────────────────────────────────────────────────────────────
-redb   = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
 
 # ── Async runtime ─────────────────────────────────────────────────────────────
 tokio   = { workspace = true }

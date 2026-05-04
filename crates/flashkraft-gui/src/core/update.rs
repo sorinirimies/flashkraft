@@ -319,7 +319,7 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             state.animated_progress.set_theme(theme.clone());
 
             // Save theme to persistent storage
-            if let Some(storage) = &state.storage {
+            if let Some(storage) = &mut state.storage {
                 if let Err(e) = storage.save_theme(&theme) {
                     eprintln!("Failed to save theme preference: {}", e);
                 }
@@ -798,7 +798,9 @@ mod tests {
     #[test]
     fn test_theme_changed_updates_theme() {
         let mut state = FlashKraft::new();
-        // Default is Dark (loaded from storage or fallback)
+        // Force a known starting theme so the test is deterministic
+        // regardless of what is saved in the real settings file.
+        state.theme = iced::Theme::Dark;
         assert!(matches!(state.theme, iced::Theme::Dark));
 
         let _ = update(&mut state, Message::ThemeChanged(iced::Theme::Light));

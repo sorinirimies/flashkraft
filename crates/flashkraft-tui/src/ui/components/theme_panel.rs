@@ -39,7 +39,7 @@ pub(in crate::ui) fn render_app_theme_panel(
         )),
         Line::from(vec![]),
     ];
-    for (i, (name, _)) in app.explorer_themes.iter().enumerate() {
+    for (i, (name, _)) in app.app_themes.iter().enumerate() {
         let is_active = i == app.explorer_theme_idx;
         let is_cursor = i == app.app_theme_panel_cursor;
 
@@ -73,8 +73,8 @@ pub(in crate::ui) fn render_app_theme_panel(
     frame.render_widget(panel, split[0]);
 
     // Footer: shows active theme name + hint
-    let active_name = &app.explorer_themes[app.explorer_theme_idx].0;
-    let cursor_name = &app.explorer_themes[app.app_theme_panel_cursor].0;
+    let active_name = &app.app_themes[app.explorer_theme_idx].0;
+    let cursor_name = &app.app_themes[app.app_theme_panel_cursor].0;
     let footer_lines = vec![
         Line::from(Span::styled(
             format!("  \u{25cf} {cursor_name}"),

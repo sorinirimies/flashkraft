@@ -1,4 +1,5 @@
-# VHS tape for FlashKraft TUI — Full Demo
+# VHS tape for FlashKraft TUI — Full Workflow Demo
+# Shows the complete SelectImage → SelectDrive → DriveInfo → ConfirmFlash flow.
 # Run: vhs crates/flashkraft-tui/examples/vhs/tui-demo.tape
 
 Output crates/flashkraft-tui/examples/vhs/generated/tui-demo.gif
@@ -9,32 +10,35 @@ Set Height 900
 Set FontSize 14
 Set PlaybackSpeed 1.5
 
-Type "dd if=/dev/zero of=/tmp/flashkraft-demo.iso bs=1M count=1 2>/dev/null && cargo run -p flashkraft-tui --example tui_demo"
+# ── Launch silently — skip the shell prompt entirely ──────────────────────────
+Hide
+Type "dd if=/dev/zero of=/tmp/flashkraft-demo.iso bs=1M count=1 2>/dev/null"
+Enter
+Sleep 1s
+Type "cargo run -p flashkraft-tui --example tui_demo"
 Enter
 Sleep 5s
+Show
 
-# SelectImage landing screen
-Sleep 1s
+# ── SelectImage screen — already in Editing mode ──────────────────────────────
+Sleep 800ms
 
-# Enter editing mode and type image path
-Type "i"
-Sleep 500ms
-
+# Type an image path
 Type "/tmp/flashkraft-demo.iso"
-Sleep 500ms
+Sleep 600ms
 
 # Open the file browser with Tab
 Tab
-Sleep 1s
+Sleep 1200ms
 
-# Navigate down
-Type "j"
+# Navigate the explorer a bit
+Down
 Sleep 300ms
-Type "j"
+Down
 Sleep 300ms
-Type "j"
+Down
 Sleep 300ms
-Type "k"
+Up
 Sleep 300ms
 
 # Page through the listing
@@ -43,45 +47,46 @@ Sleep 500ms
 PageUp
 Sleep 500ms
 
-# Ascend to parent
+# Ascend to parent directory
 Backspace
 Sleep 800ms
 
-# Dismiss browser
+# Dismiss browser — back to SelectImage with path filled
 Escape
 Sleep 800ms
 
-# Confirm the image path → SelectDrive
+# Confirm the path → SelectDrive
 Enter
-Sleep 1s
+Sleep 1200ms
 
-# Refresh and navigate the drive list
+# ── SelectDrive screen ────────────────────────────────────────────────────────
+# Refresh drive list
 Type "r"
 Sleep 2s
 
-Type "j"
+Down
 Sleep 400ms
-Type "j"
+Down
 Sleep 400ms
-Type "k"
+Up
 Sleep 400ms
 
-# Attempt to confirm first drive (no-op if list empty)
+# Attempt to confirm (no-op if list is empty in CI)
 Enter
-Sleep 1s
+Sleep 1000ms
 
-# DriveInfo → ConfirmFlash (ignored if not on DriveInfo)
+# ── DriveInfo → ConfirmFlash ──────────────────────────────────────────────────
 Type "f"
-Sleep 1s
+Sleep 1000ms
 
-# Cancel back — never write to real hardware
+# ── Back out safely — never write to real hardware ───────────────────────────
 Type "b"
-Sleep 500ms
+Sleep 400ms
 Type "b"
-Sleep 500ms
+Sleep 400ms
 Type "b"
-Sleep 500ms
+Sleep 400ms
 
-# Back on SelectImage — quit
+# ── Quit ─────────────────────────────────────────────────────────────────────
 Escape
-Sleep 1s
+Sleep 800ms

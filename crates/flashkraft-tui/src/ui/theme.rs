@@ -1,22 +1,17 @@
 //! TUI Application Colour Palette
 //!
-//! This module bridges the [`tui_file_explorer::Theme`] preset catalogue with
-//! the colour needs of the FlashKraft TUI.  Every named preset from the file
-//! explorer is represented here as a [`TuiPalette`] that additionally carries
-//! a background colour (`bg`) plus semantic `warn` and `err` colours that are
-//! not part of the explorer's theme model.
-//!
-//! # Usage
-//!
-//! ```no_run
-//! use flashkraft_tui::ui::theme::all_app_themes;
-//! let themes = all_app_themes();           // Vec<(String, TuiPalette)>
-//! let pal    = &themes[0].1;
-//! // then pass `pal` into every render_* function
-//! ```
+//! Derives [`TuiPalette`] from the platform-agnostic [`flashkraft_core::AppTheme`]
+//! presets, giving the TUI access to all 28 themes including Cyberpunk.
 
+use flashkraft_core::{theme_by_index, AppTheme, THEME_COUNT, THEME_NAMES};
 use ratatui::style::Color;
-use tui_file_explorer::Theme;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Convert a core [`flashkraft_core::Rgb`] to a ratatui [`Color`].
+fn rgb(c: flashkraft_core::Rgb) -> Color {
+    Color::Rgb(c.r, c.g, c.b)
+}
 
 // ── Palette struct ────────────────────────────────────────────────────────────
 
@@ -48,11 +43,11 @@ pub struct TuiPalette {
 }
 
 impl Default for TuiPalette {
-    /// The original FlashKraft palette — orange brand, sky-blue accent.
+    /// The FlashKraft palette — sky-blue brand, matching the GUI default.
     fn default() -> Self {
         Self {
-            brand: Color::Rgb(255, 100, 30),
-            accent: Color::Rgb(80, 200, 255),
+            brand: Color::Rgb(80, 200, 255), // sky-blue — primary brand
+            accent: Color::Rgb(60, 80, 100), // steel-blue — borders, badges, hints
             success: Color::Rgb(80, 220, 120),
             warn: Color::Rgb(255, 200, 50),
             err: Color::Rgb(255, 80, 80),
@@ -60,100 +55,45 @@ impl Default for TuiPalette {
             fg: Color::White,
             bg: Color::Rgb(18, 18, 26),
             sel_bg: Color::Rgb(40, 60, 80),
-            dir: Color::Rgb(255, 210, 80),
+            dir: Color::Rgb(255, 100, 30), // orange — directory names
         }
     }
 }
 
 // ── Catalogue ─────────────────────────────────────────────────────────────────
 
-/// Build the full list of named app themes.
+/// Build the full list of named app themes from core presets.
 ///
-/// The order mirrors [`tui_file_explorer::Theme::all_presets`] so that
-/// `explorer_theme_idx` can serve as a shared index into both lists.
+/// Returns one entry per theme in `flashkraft_core::THEME_NAMES` order,
+/// covering all 28 themes including Cyberpunk.
 pub fn all_app_themes() -> Vec<(String, TuiPalette)> {
-    Theme::all_presets()
-        .into_iter()
-        .map(|(name, _, t)| (name.to_string(), palette_from_preset(name, &t)))
+    (0..THEME_COUNT)
+        .map(|i| (THEME_NAMES[i].to_string(), palette_from_theme(i)))
         .collect()
 }
 
-// ── Internal mapping ──────────────────────────────────────────────────────────
+// ── Conversion ────────────────────────────────────────────────────────────────
 
-/// Derive a [`TuiPalette`] from a file-explorer [`Theme`] preset.
-///
-/// The explorer theme already provides `brand`, `accent`, `success`, `dim`,
-/// `fg`, `sel_bg`, and `dir`.  We add `bg`, `warn`, and `err` from a
-/// hard-coded per-preset table that matches the visual intent of each scheme.
-fn palette_from_preset(name: &str, t: &Theme) -> TuiPalette {
-    let (bg, warn, err) = extras(name);
+/// Convert a core [`AppTheme`] index into a [`TuiPalette`].
+pub fn palette_from_theme(index: usize) -> TuiPalette {
+    let t = theme_by_index(index);
+    palette_from_app_theme(&t)
+}
+
+/// Convert a core [`AppTheme`] into a [`TuiPalette`].
+pub fn palette_from_app_theme(t: &AppTheme) -> TuiPalette {
     TuiPalette {
-        brand: t.brand,
-        accent: t.accent,
-        success: t.success,
-        warn,
-        err,
-        dim: t.dim,
-        fg: t.fg,
-        bg,
-        sel_bg: t.sel_bg,
-        dir: t.dir,
+        brand: rgb(t.accent),  // primary brand colour (bold, titles, active elements)
+        accent: rgb(t.border), // secondary accent (softer, borders, badges, hints)
+        success: rgb(t.success),
+        warn: rgb(t.warning),
+        err: rgb(t.error),
+        dim: rgb(t.text_muted),
+        fg: rgb(t.text_primary),
+        bg: rgb(t.background),
+        sel_bg: rgb(t.selection),
+        dir: rgb(t.text_secondary), // directory names — secondary colour
     }
-}
-
-/// Per-theme background, warn, and error colours.
-///
-/// Returns `(bg, warn, err)`.
-macro_rules! theme_extras {
-    ( $( $name:expr => bg($br:expr,$bg:expr,$bb:expr) warn($wr:expr,$wg:expr,$wb:expr) err($er:expr,$eg:expr,$eb:expr) );+ $(;)? ) => {
-        fn extras(name: &str) -> (Color, Color, Color) {
-            match name {
-                $( $name => (
-                    Color::Rgb($br, $bg, $bb),
-                    Color::Rgb($wr, $wg, $wb),
-                    Color::Rgb($er, $eg, $eb),
-                ), )+
-                _ => (
-                    Color::Rgb(18, 18, 26),
-                    Color::Rgb(255, 200, 50),
-                    Color::Rgb(255, 80, 80),
-                ),
-            }
-        }
-    };
-}
-
-theme_extras! {
-    // ── Built-in ─────────────────────────────────────────────────────────
-    "Default"              => bg(18,18,26)     warn(255,200,50)   err(255,80,80);
-    // ── Decorative ───────────────────────────────────────────────────────
-    "Grape"                => bg(18,12,30)     warn(210,170,255)  err(255,80,150);
-    "Ocean"                => bg(0,20,35)      warn(255,220,80)   err(255,100,100);
-    "Sunset"               => bg(22,8,6)       warn(255,230,80)   err(255,50,50);
-    "Forest"               => bg(8,18,8)       warn(220,200,80)   err(210,80,80);
-    "Rose"                 => bg(28,6,16)      warn(255,220,180)  err(220,60,100);
-    "Mono"                 => bg(8,8,10)       warn(200,200,200)  err(160,160,160);
-    "Neon"                 => bg(6,0,14)       warn(255,220,0)    err(255,30,80);
-    // ── Editor / terminal presets ────────────────────────────────────────
-    "Dracula"              => bg(40,42,54)     warn(241,250,140)  err(255,85,85);
-    "Nord"                 => bg(29,35,42)     warn(235,203,139)  err(191,97,106);
-    "Solarized Dark"       => bg(0,43,54)      warn(181,137,0)    err(220,50,47);
-    "Solarized Light"      => bg(253,246,227)  warn(181,137,0)    err(220,50,47);
-    "Gruvbox Dark"         => bg(29,28,27)     warn(250,189,47)   err(251,73,52);
-    "Gruvbox Light"        => bg(251,241,199)  warn(215,153,33)   err(214,93,14);
-    "Catppuccin Latte"     => bg(239,241,245)  warn(223,142,29)   err(210,15,57);
-    "Catppuccin Frappé"    => bg(48,52,70)     warn(229,200,144)  err(231,130,132);
-    "Catppuccin Macchiato" => bg(36,39,58)     warn(238,212,159)  err(237,135,150);
-    "Catppuccin Mocha"     => bg(30,30,46)     warn(249,226,175)  err(243,139,168);
-    "Tokyo Night"          => bg(26,27,38)     warn(224,175,104)  err(247,118,142);
-    "Tokyo Night Storm"    => bg(36,40,59)     warn(224,175,104)  err(247,118,142);
-    "Tokyo Night Light"    => bg(213,214,219)  warn(140,108,62)   err(210,15,57);
-    "Kanagawa Wave"        => bg(22,22,30)     warn(220,165,97)   err(210,126,153);
-    "Kanagawa Dragon"      => bg(20,20,20)     warn(200,170,109)  err(210,126,153);
-    "Kanagawa Lotus"       => bg(246,243,228)  warn(119,113,63)   err(192,71,71);
-    "Moonfly"              => bg(8,8,8)        warn(226,164,120)  err(255,115,131);
-    "Nightfly"             => bg(1,22,38)      warn(243,218,11)   err(252,87,73);
-    "Oxocarbon"            => bg(22,22,22)     warn(250,204,55)   err(255,97,101)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -168,6 +108,35 @@ mod tests {
         assert!(
             !themes.is_empty(),
             "all_app_themes() must return at least one theme"
+        );
+    }
+
+    #[test]
+    fn all_app_themes_returns_43_themes() {
+        assert_eq!(all_app_themes().len(), 43, "expected exactly 43 themes");
+    }
+
+    #[test]
+    fn cyberpunk_is_present() {
+        let names: Vec<String> = all_app_themes().into_iter().map(|(n, _)| n).collect();
+        assert!(
+            names.iter().any(|n| n == "Cyberpunk"),
+            "Cyberpunk theme must be in the catalogue"
+        );
+    }
+
+    #[test]
+    fn cyberpunk_is_dark() {
+        let themes = all_app_themes();
+        let cyberpunk = themes.iter().find(|(n, _)| n == "Cyberpunk").unwrap();
+        // Dark theme — bg should have low luminance (sum of channels < 100)
+        let bg_sum = match cyberpunk.1.bg {
+            Color::Rgb(r, g, b) => r as u32 + g as u32 + b as u32,
+            _ => 999,
+        };
+        assert!(
+            bg_sum < 100,
+            "Cyberpunk background should be dark, got bg sum {bg_sum}"
         );
     }
 
@@ -200,25 +169,14 @@ mod tests {
     #[test]
     fn default_palette_is_valid() {
         let pal = TuiPalette::default();
-        // Brand colour should be the known orange
-        assert_eq!(pal.brand, Color::Rgb(255, 100, 30));
+        // Brand colour should be sky-blue (matches GUI default)
+        assert_eq!(pal.brand, Color::Rgb(80, 200, 255));
         // fg should be white
         assert_eq!(pal.fg, Color::White);
         // bg should be the dark blue-ish
         assert_eq!(pal.bg, Color::Rgb(18, 18, 26));
         // fg != bg
         assert_ne!(pal.fg, pal.bg);
-    }
-
-    #[test]
-    fn default_palette_matches_first_theme() {
-        let themes = all_app_themes();
-        let (name, first) = &themes[0];
-        assert_eq!(name, "Default");
-        let def = TuiPalette::default();
-        assert_eq!(first.brand, def.brand);
-        assert_eq!(first.bg, def.bg);
-        assert_eq!(first.fg, def.fg);
     }
 
     // -- Additional tests -----------------------------------------------------
@@ -236,7 +194,7 @@ mod tests {
     fn no_theme_has_pure_black_bg_unless_intended() {
         // Pure black (0,0,0) as bg is unusual — only allow it if the theme
         // name explicitly suggests it.  Currently none of our themes use it.
-        let allow_black = ["Mono"]; // add names here if a theme intentionally uses #000
+        let allow_black: &[&str] = &[]; // add names here if a theme intentionally uses #000
         for (name, pal) in all_app_themes() {
             if allow_black.contains(&name.as_str()) {
                 continue;
@@ -284,16 +242,41 @@ mod tests {
 
     #[test]
     fn every_palette_has_distinct_brand_accent_warn_err() {
-        // Some themes legitimately share semantic colours when the explorer
-        // preset's palette is inherently constrained (e.g. Gruvbox, Kanagawa).
+        // Some themes legitimately share semantic colours.
         // These overlaps are documented here so we still catch regressions in
         // all other themes.
         let known_overlaps: &[(&str, &str, &str)] = &[
+            // Mono themes use the same greyscale for multiple semantic slots
+            ("Mono", "brand", "accent"),
+            ("Mono", "brand", "warn"),
+            ("Mono", "brand", "err"),
+            ("Mono", "accent", "warn"),
+            ("Mono", "accent", "err"),
+            ("Mono", "warn", "err"),
+            // Solarized Dark/Light: accent=brand (both blue)
+            ("Solarized Dark", "brand", "accent"),
+            ("Solarized Light", "brand", "accent"),
+            // Gruvbox: accent from text_secondary matches warning slot
             ("Gruvbox Dark", "accent", "warn"),
+            // Gruvbox Light: brand (accent) and error use the same orange
             ("Gruvbox Light", "brand", "err"),
             ("Gruvbox Light", "accent", "warn"),
+            // Kanagawa: brand == error (both use the pink/sakura)
             ("Kanagawa Wave", "brand", "err"),
             ("Kanagawa Dragon", "brand", "err"),
+            // Tokyo Night variants share the same purple accent
+            ("Tokyo Night", "brand", "accent"),
+            ("Tokyo Night Storm", "brand", "accent"),
+            // Synthwave: accent and error are both the hot-pink
+            ("Synthwave", "brand", "err"),
+            // Everforest Dark: accent and success are both sage-green
+            ("Everforest Dark", "brand", "success"),
+            // Andromeda: accent and success are both the green
+            ("Andromeda", "brand", "success"),
+            // Poimandres: accent and success are both the teal
+            ("Poimandres", "brand", "success"),
+            // Ayu Mirage: accent == text_secondary (both cyan)
+            ("Ayu Mirage", "brand", "accent"),
         ];
 
         for (name, pal) in all_app_themes() {

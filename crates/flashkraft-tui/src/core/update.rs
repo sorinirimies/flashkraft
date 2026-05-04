@@ -1361,7 +1361,7 @@ mod tests {
     #[test]
     fn t_wraps_theme_index_around() {
         let mut app = app_on(AppScreen::SelectDrive);
-        let total = app.explorer_themes.len();
+        let total = app.app_themes.len();
         app.explorer_theme_idx = total - 1;
         handle_key(&mut app, key(KeyCode::Char('t')));
         assert_eq!(app.explorer_theme_idx, 0, "theme index must wrap to 0");
@@ -1373,7 +1373,7 @@ mod tests {
         handle_key(&mut app, key(KeyCode::Char('t')));
         // palette() should return the palette at the new index without panicking
         let _pal = app.palette();
-        let expected_name = &app.explorer_themes[app.explorer_theme_idx].0;
+        let expected_name = &app.app_themes[app.explorer_theme_idx].0;
         assert_eq!(app.current_theme_name(), expected_name.as_str());
     }
 
@@ -1476,7 +1476,7 @@ mod tests {
     fn theme_panel_down_clamps_at_last() {
         let mut app = app_on(AppScreen::SelectDrive);
         app.open_app_theme_panel();
-        let last = app.explorer_themes.len() - 1;
+        let last = app.app_themes.len() - 1;
         app.app_theme_panel_cursor = last;
         handle_key(&mut app, key(KeyCode::Down));
         assert_eq!(
@@ -1488,13 +1488,21 @@ mod tests {
     #[test]
     fn theme_panel_enter_applies_cursor_theme_and_closes() {
         let mut app = app_on(AppScreen::SelectDrive);
+        app.explorer_theme_idx = 0; // start from a known index regardless of saved settings
         app.open_app_theme_panel();
-        app.app_theme_panel_cursor = 4;
+        // Navigate down to index 4 — live preview should already set it
+        for _ in 0..4 {
+            handle_key(&mut app, key(KeyCode::Down));
+        }
+        assert_eq!(
+            app.explorer_theme_idx, 4,
+            "live preview must update theme during navigation"
+        );
         let consumed = handle_key(&mut app, key(KeyCode::Enter));
         assert!(consumed);
         assert_eq!(
             app.explorer_theme_idx, 4,
-            "active theme must update to cursor position"
+            "active theme must remain at cursor position after Enter"
         );
         assert!(!app.show_app_theme_panel, "panel must close after Enter");
     }
@@ -1515,16 +1523,41 @@ mod tests {
     }
 
     #[test]
-    fn theme_panel_navigation_does_not_affect_active_theme_until_enter() {
+    fn theme_panel_navigation_live_preview_updates_active_theme() {
+        // Navigation immediately updates the active theme for live preview.
         let mut app = app_on(AppScreen::SelectDrive);
         app.explorer_theme_idx = 1;
         app.open_app_theme_panel();
         handle_key(&mut app, key(KeyCode::Down));
+        assert_eq!(app.explorer_theme_idx, 2, "Down must preview theme index 2");
         handle_key(&mut app, key(KeyCode::Down));
-        handle_key(&mut app, key(KeyCode::Down));
+        assert_eq!(app.explorer_theme_idx, 3, "Down must preview theme index 3");
+        handle_key(&mut app, key(KeyCode::Up));
         assert_eq!(
-            app.explorer_theme_idx, 1,
-            "active theme must not change while navigating the panel"
+            app.explorer_theme_idx, 2,
+            "Up must revert preview to index 2"
+        );
+    }
+
+    #[test]
+    fn theme_panel_esc_reverts_live_preview_to_original_theme() {
+        // Esc must roll back the live preview to the theme that was active
+        // when the panel was opened.
+        let mut app = app_on(AppScreen::SelectDrive);
+        app.explorer_theme_idx = 2;
+        app.open_app_theme_panel();
+        handle_key(&mut app, key(KeyCode::Down)); // preview index 3
+        handle_key(&mut app, key(KeyCode::Down)); // preview index 4
+        assert_eq!(
+            app.explorer_theme_idx, 4,
+            "live preview should be at 4 before Esc"
+        );
+        let consumed = handle_key(&mut app, key(KeyCode::Esc));
+        assert!(consumed);
+        assert!(!app.show_app_theme_panel, "panel must close on Esc");
+        assert_eq!(
+            app.explorer_theme_idx, 2,
+            "Esc must revert to the theme active when the panel was opened"
         );
     }
 

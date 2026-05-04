@@ -117,7 +117,12 @@ impl FlashKraft {
         let theme = storage
             .as_ref()
             .and_then(|s| s.load_theme())
-            .unwrap_or(Theme::Dark);
+            .unwrap_or_else(|| {
+                crate::core::storage::custom_theme_from_core(
+                    "Default",
+                    &flashkraft_core::theme_by_index(0),
+                )
+            });
 
         // Initialize animated progress with theme
         let mut animated_progress = AnimatedProgress::new();

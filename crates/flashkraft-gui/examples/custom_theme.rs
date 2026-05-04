@@ -47,7 +47,7 @@ fn main() -> iced::Result {
     // Persist the Tokyo Night preference so it survives a restart.
     // (Storage is opened transiently here; the boot closure will pick it up
     // via `FlashKraft::new()` → `Storage::load_theme()`.)
-    if let Ok(storage) = flashkraft_gui::core::storage::Storage::new() {
+    if let Ok(mut storage) = flashkraft_gui::core::storage::Storage::new() {
         let _ = storage.save_theme(&Theme::TokyoNight);
     }
 

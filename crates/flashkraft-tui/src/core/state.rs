@@ -19,6 +19,7 @@ use tui_file_explorer::{FileExplorer, Theme};
 
 use super::storage::TuiStorage;
 use crate::ui::theme::{all_app_themes, TuiPalette};
+use flashkraft_core::THEME_NAMES;
 
 use super::message::{
     AppScreen, ClipOp, FileClipboard, FileOpMode, FlashEvent, InputMode, UsbEntry,
@@ -107,6 +108,9 @@ pub struct App {
     pub show_browse_editor: bool,
     /// Cursor position inside the global theme panel (for keyboard navigation).
     pub app_theme_panel_cursor: usize,
+    /// The `explorer_theme_idx` that was active when the panel was opened —
+    /// restored on Esc so the live preview is rolled back if cancelled.
+    pub theme_panel_prev_idx: usize,
     /// Redb-backed preference store — used to persist the active theme across restarts.
     pub storage: TuiStorage,
     /// Clipboard entry for copy/cut operations inside the file explorer.
@@ -148,7 +152,6 @@ macro_rules! cursor_nav {
 
 cursor_nav!(up: drive_up,        down: drive_down,        cursor: drive_cursor,           list: available_drives);
 cursor_nav!(up: contents_up,      down: contents_down,      cursor: contents_scroll,        list: usb_contents);
-cursor_nav!(up: theme_panel_up,   down: theme_panel_down,   cursor: app_theme_panel_cursor, list: explorer_themes);
 
 impl App {
     // -----------------------------------------------------------------------
@@ -166,11 +169,7 @@ impl App {
         let storage = TuiStorage::open();
         let explorer_theme_idx = storage
             .load_theme()
-            .and_then(|name| {
-                Theme::all_presets()
-                    .into_iter()
-                    .position(|(n, _, _)| n == name)
-            })
+            .and_then(|name| THEME_NAMES.iter().position(|n| *n == name))
             .unwrap_or(0);
 
         Self {
@@ -208,6 +207,7 @@ impl App {
             show_browse_options: false,
             show_browse_editor: false,
             app_theme_panel_cursor: 0,
+            theme_panel_prev_idx: 0,
             storage,
             file_clipboard: None,
             file_op_mode: FileOpMode::Normal,
@@ -623,8 +623,15 @@ impl App {
     // -----------------------------------------------------------------------
 
     /// The currently active file-explorer theme.
+    ///
+    /// Clamps the index to the explorer's smaller catalogue (27 entries vs
+    /// the full 28-entry app palette), so themes beyond the explorer's range
+    /// (e.g. Cyberpunk) fall back to the Default explorer theme.
     pub fn current_explorer_theme(&self) -> &Theme {
-        &self.explorer_themes[self.explorer_theme_idx].1
+        let idx = self
+            .explorer_theme_idx
+            .min(self.explorer_themes.len().saturating_sub(1));
+        &self.explorer_themes[idx].1
     }
 
     /// The currently active TUI application palette.
@@ -639,13 +646,13 @@ impl App {
 
     /// Advance to the next theme (wraps around) and persist the choice.
     pub fn next_explorer_theme(&mut self) {
-        self.explorer_theme_idx = (self.explorer_theme_idx + 1) % self.explorer_themes.len();
+        self.explorer_theme_idx = (self.explorer_theme_idx + 1) % self.app_themes.len();
         self.persist_theme();
     }
 
     /// Go back to the previous theme (wraps around) and persist the choice.
     pub fn prev_explorer_theme(&mut self) {
-        let n = self.explorer_themes.len();
+        let n = self.app_themes.len();
         self.explorer_theme_idx = (self.explorer_theme_idx + n - 1) % n;
         self.persist_theme();
     }
@@ -656,26 +663,45 @@ impl App {
 
     /// Open the global theme panel, positioning the cursor at the active theme.
     pub fn open_app_theme_panel(&mut self) {
+        self.theme_panel_prev_idx = self.explorer_theme_idx; // save for Esc rollback
         self.app_theme_panel_cursor = self.explorer_theme_idx;
         self.show_app_theme_panel = true;
     }
 
-    /// Close the global theme panel without applying any change.
+    /// Close the global theme panel, reverting the live preview to the original theme.
     pub fn close_app_theme_panel(&mut self) {
+        self.explorer_theme_idx = self.theme_panel_prev_idx; // roll back live preview
         self.show_app_theme_panel = false;
     }
 
     /// Apply the theme currently under the panel cursor, persist it, and close the panel.
     pub fn theme_panel_confirm(&mut self) {
-        self.explorer_theme_idx = self.app_theme_panel_cursor;
+        // explorer_theme_idx is already set to app_theme_panel_cursor via live preview
         self.show_app_theme_panel = false;
         self.persist_theme();
     }
 
-    /// Write the current theme name to the redb store.
-    fn persist_theme(&self) {
-        let name = &self.explorer_themes[self.explorer_theme_idx].0;
-        self.storage.save_theme(name);
+    /// Move the theme-panel cursor up and immediately preview the theme.
+    pub fn theme_panel_up(&mut self) {
+        if self.app_theme_panel_cursor > 0 {
+            self.app_theme_panel_cursor -= 1;
+            self.explorer_theme_idx = self.app_theme_panel_cursor;
+        }
+    }
+
+    /// Move the theme-panel cursor down and immediately preview the theme.
+    pub fn theme_panel_down(&mut self) {
+        let last = self.app_themes.len().saturating_sub(1);
+        if self.app_theme_panel_cursor < last {
+            self.app_theme_panel_cursor += 1;
+            self.explorer_theme_idx = self.app_theme_panel_cursor;
+        }
+    }
+
+    /// Write the current theme name to the JSON settings file.
+    fn persist_theme(&mut self) {
+        let name = self.app_themes[self.explorer_theme_idx].0.clone();
+        self.storage.save_theme(&name);
     }
 
     // -----------------------------------------------------------------------

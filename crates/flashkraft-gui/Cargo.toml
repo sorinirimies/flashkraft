@@ -36,8 +36,9 @@ futures-timer = { workspace = true }
 tui-spinner   = { workspace = true }
 
 # ── Storage / persistence ─────────────────────────────────────────────────────
-redb = { workspace = true }
-dirs = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+dirs       = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Explicitly enable both Wayland and X11 backends so the app works on any
@@ -51,6 +52,9 @@ iced_winit = { version = "0.14", features = ["x11", "wayland"] }
 # The target gate means it is not even fetched on Linux / macOS.
 [target.'cfg(target_os = "windows")'.build-dependencies]
 winres = "0.1"
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true }

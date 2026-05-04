@@ -10,13 +10,25 @@ architectural decisions across the FlashKraft workspace.
 ```
 flashkraft/
 ├── crates/
-│   ├── flashkraft-core/   # Domain types, commands, flash writer, utils (no UI)
-│   ├── flashkraft-tui/    # Ratatui terminal UI (lib + bin)
-│   └── flashkraft-gui/    # Iced graphical UI
-├── Cargo.toml             # Workspace manifest — all shared dep versions pinned here
-├── justfile               # Developer task runner
-├── cliff.toml             # git-cliff changelog config
-└── rules.md               # This file
+│   ├── flashkraft-core/          # Domain types, flash pipeline, theme catalogue (no UI)
+│   │   └── src/
+│   │       ├── commands/         # Drive detection, USB hotplug
+│   │       ├── domain/           # DriveInfo, ImageInfo, constraints
+│   │       ├── theme/            # AppTheme, Rgb, all 43 presets (SINGLE SOURCE OF TRUTH)
+│   │       ├── utils/            # fmt_bytes, debug macros
+│   │       └── flash_helper.rs   # Privileged flash pipeline
+│   ├── flashkraft-tui/           # Ratatui terminal UI (lib + bin)
+│   │   └── src/
+│   │       ├── core/             # State, events/update, storage, flash_runner, message
+│   │       └── ui/               # Rendering: mod.rs + components/ + screens/ + theme.rs
+│   └── flashkraft-gui/           # Iced graphical UI (lib + bin)
+│       └── src/
+│           ├── core/             # State, update, storage, flash_runner, message, commands/
+│           └── ui/               # Rendering: mod.rs + components/ + screens/ + theme.rs
+├── Cargo.toml                    # Workspace manifest — all shared dep versions pinned here
+├── justfile                      # Developer task runner
+├── cliff.toml                    # git-cliff changelog config
+└── .zed/rules.md                 # This file
 ```
 
 **Rules:**
@@ -24,10 +36,7 @@ flashkraft/
   `Cargo.toml` files reference them with `{ workspace = true }`. No version is
   ever duplicated.
 - `flashkraft-core` must never depend on `flashkraft-tui` or `flashkraft-gui`.
-  The dependency graph is strictly: `tui` → `core` ← `gui`.
-- External standalone crates (e.g. `tui-file-explorer`) are added to the
-  workspace as path dependencies during development, then switched to a version
-  reference on publication.
+  Dependency graph is strictly: `tui` → `core` ← `gui`.
 
 ---
 
@@ -35,7 +44,6 @@ flashkraft/
 
 ### Formatting
 - `rustfmt` is mandatory. Run `cargo fmt --all` before every commit.
-- `max_width = 100` (see `rustfmt.toml` in each crate).
 - CI rejects unformatted code.
 
 ### Naming
@@ -43,9 +51,9 @@ flashkraft/
 |---|---|---|
 | Types / Traits | `UpperCamelCase` | `App`, `DriveInfo`, `FlashEvent` |
 | Functions / methods | `snake_case` | `handle_key`, `poll_drives` |
-| Constants | `SCREAMING_SNAKE_CASE` | `KEY_THEME`, `MAX_LOG_LINES` |
+| Constants | `SCREAMING_SNAKE_CASE` | `THEME_COUNT`, `MAX_LOG_LINES` |
 | Modules | `snake_case` | `flash_runner`, `storage`, `theme` |
-| Async tasks | `snake_case` with `_task` / `_runner` suffix | `flash_runner` |
+| Macros | `snake_case!` | `themed_block!`, `cursor_nav!`, `kv_line!` |
 
 ### Clippy
 - Zero warnings in CI: `cargo clippy -- -D warnings -A deprecated`.
@@ -62,140 +70,200 @@ flashkraft/
 ## 3. Module Responsibilities
 
 ### `flashkraft-core`
-- **Domain** (`domain/`) — pure data: `DriveInfo`, `ImageInfo`. No I/O.
-- **Commands** (`commands/`) — OS queries: drive detection via `sysinfo`/`nix`.
-- **Flash writer** (`flash_writer/`) — synchronous raw-write pipeline.
-- **Flash helper** (`flash_helper/`) — privileged subprocess entry-point
-  (`pkexec` target).
-- **Utils** (`utils/`) — shared helpers (hashing, size formatting, etc.).
+- **`domain/`** — pure data: `DriveInfo`, `ImageInfo`, drive constraints. No I/O.
+- **`commands/`** — OS queries: drive detection (`sysinfo`/`nix`), USB hotplug.
+- **`theme/`** — `AppTheme`, `Rgb`, and all 43 named presets. **Single source of
+  truth for every colour in both frontends.** See §4.
+- **`flash_helper.rs`** — privileged flash pipeline (`pkexec` target).
+- **`utils/`** — `fmt_bytes`, debug logging macros.
 
 ### `flashkraft-tui`
-- **`lib.rs`** — crate root, re-exports, async `run()` entry-point.
-- **`tui/app.rs`** — `App` state machine. All state mutations and transitions
-  live here. Owns `TuiStorage` and calls `persist_theme()` after every theme
-  change.
-- **`tui/events.rs`** — keyboard events → state transitions. Pure functions
-  only; no direct I/O.
-- **`tui/flash_runner.rs`** — Tokio task driving the privileged flash child.
-- **`tui/ui.rs`** — all ratatui `Frame` rendering. No state mutation. Receives
-  a cloned `TuiPalette` from `app.palette()` at the top of `render()` and
-  threads it through every `render_*` function.
-- **`tui/theme.rs`** — `TuiPalette` struct and `all_app_themes()`. Maps each
-  `tui_file_explorer::Theme` preset to a `TuiPalette`, adding `bg`, `warn`,
-  and `err` colours that the explorer theme model does not carry.
-- **`tui/storage.rs`** — `TuiStorage`: redb-backed preference store. Persists
-  the active theme name across restarts. All operations are infallible from the
-  caller's perspective — a missing or corrupt DB is silently ignored.
+- **`core/state.rs`** — `App` state machine. All state mutations. Owns
+  `TuiStorage` and calls `persist_theme()` after every theme change.
+- **`core/update.rs`** — keyboard events → state transitions. Pure functions;
+  no direct I/O. Contains `handle_key` and all `handle_*` screen handlers.
+- **`core/flash_runner.rs`** — Tokio task driving the privileged flash child.
+- **`core/storage.rs`** — `TuiStorage`: JSON-backed preference store at
+  `~/.config/flashkraft/tui-settings.json`. Infallible from caller's perspective.
+- **`core/message.rs`** — `AppScreen`, `InputMode`, `ClipOp`, `UsbEntry`, etc.
+- **`ui/mod.rs`** — top-level `render()` dispatcher + shared macros
+  (`themed_block!`, `kv_line!`, `themed_checkbox!`).
+- **`ui/theme.rs`** — `TuiPalette` struct and `all_app_themes()`. Derives
+  palettes from `flashkraft_core::AppTheme` — never from `tui_file_explorer`.
+- **`ui/components/`** — reusable widgets: `chrome.rs` (header/footer/breadcrumbs),
+  `theme_panel.rs`, `helpers.rs`, `file_ops.rs`.
+- **`ui/screens/`** — one file per screen: `select_image.rs`, `select_drive.rs`,
+  `confirm.rs`, `flashing.rs`, `complete.rs`, `error.rs`.
 
-**Rules:**
-- `ui.rs` must not mutate `App` — it receives `&mut App` only for ratatui
-  scroll state synchronisation.
-- `events.rs` functions are pure: given `(&mut App, KeyEvent)` they return
-  a `bool` (consumed flag); all side-effects go through `App` state fields.
-- `flash_runner.rs` communicates exclusively via `tokio::sync::mpsc` channels.
-  Never share state directly between the runner task and the UI.
-- `storage.rs` operations must never panic. Wrap every redb call in `.ok()` or
-  `.unwrap_or_default()`.
+**TUI Rules:**
+- Screen renders must not mutate `App` (except scroll-state sync).
+- `handle_*` functions are pure: `(&mut App, KeyEvent) → bool`.
+- `flash_runner.rs` communicates only via `tokio::sync::mpsc` channels.
+- Storage operations must never panic.
+
+### `flashkraft-gui`
+- **`core/state.rs`** — `FlashKraft` struct (Elm state). `begin_flash_state()`,
+  `reset()`, `cancel_selections()`.
+- **`core/update.rs`** — pure `update(state, message) → Task<Message>`.
+- **`core/storage.rs`** — `Storage` + `GuiSettings`: JSON at
+  `~/.config/flashkraft/gui-settings.json`. Derives all themes from core —
+  see §4 and §10.
+- **`core/flash_runner.rs`** — Iced `Subscription` streaming `FlashProgress`.
+- **`ui/mod.rs`** — top-level `view()` dispatcher.
+- **`ui/theme.rs`** — placeholder; theme logic lives in `core/storage.rs`.
+- **`ui/components/`** — `header.rs`, `step_indicators.rs` (uses `step_indicator!`
+  macro), `animated_progress.rs`, `theme_selector.rs`, `progress_line.rs`.
+- **`ui/screens/`** — `select_image.rs`, `select_drive.rs` (uses `styled_text!`),
+  `flashing.rs`, `complete.rs`, `error.rs`.
 
 ---
 
-## 4. Theme System (TUI)
+## 4. Theme System — Single Source of Truth
 
-The TUI colour system is built around `TuiPalette`, derived from
-`tui_file_explorer::Theme::all_presets()`.
+**All 43 themes live in `flashkraft-core::theme::presets`.**
+Adding a theme to core automatically makes it available in both frontends
+with no other changes required.
 
-### Data flow
 ```
-tui_file_explorer::Theme::all_presets()
-    ├─ App::explorer_themes  Vec<(String, Theme)>   ← drives the file explorer
-    └─ App::app_themes       Vec<(String, TuiPalette)>  ← drives the full TUI
-         (both indexed by App::explorer_theme_idx — one source of truth)
+flashkraft_core::THEME_NAMES  [43 entries]  ← single source of truth
+        │
+        ├──► flashkraft-tui   all_app_themes()   0..THEME_COUNT  (43 TuiPalettes)
+        │
+        └──► flashkraft-gui   all_themes()       0..THEME_COUNT  (43 Theme::Custom)
 ```
 
-### Palette threading
+### Core theme types (`theme/types.rs`)
+- `Rgb` — `const`-constructible `(r, g, b: u8)` triplet.
+- `AppTheme` — 12 semantic fields: `background`, `surface`, `border`,
+  `selection`, `text_primary`, `text_secondary`, `text_muted`, `accent`,
+  `success`, `warning`, `error`, `is_dark`.
+
+### Adding a new theme
+1. Add the name to `THEME_NAMES` in `presets.rs`.
+2. Bump `THEME_COUNT`.
+3. Add an arm to `theme_by_index()`.
+4. Write the constructor function with `pub fn my_theme() -> AppTheme { … }`.
+5. Add at least one test (light/dark flag, accent colour).
+6. **Nothing else** — both frontends pick it up automatically.
+
+### TUI palette mapping (`ui/theme.rs`)
 ```rust
-pub fn render(app: &mut App, frame: &mut Frame) {
-    let pal = app.palette().clone();      // cloned once at the top
-    render_select_image(app, frame, area, &pal, theme_name);
-    // every render_* receives &TuiPalette
+TuiPalette {
+    brand:   rgb(t.accent),          // primary — titles, active elements
+    accent:  rgb(t.border),          // secondary — borders, badges, hints
+    success: rgb(t.success),
+    warn:    rgb(t.warning),
+    err:     rgb(t.error),
+    dim:     rgb(t.text_muted),
+    fg:      rgb(t.text_primary),
+    bg:      rgb(t.background),
+    sel_bg:  rgb(t.selection),
+    dir:     rgb(t.text_secondary),  // directory names in file explorer
 }
 ```
 
-Never hardcode `Color::Rgb(...)` inline in render functions.
-Always reference `pal.brand`, `pal.accent`, `pal.dim`, etc.
+Never hardcode `Color::Rgb(…)` inline in render functions.
+Always use `pal.brand`, `pal.accent`, etc.
 
-### TuiPalette fields
-| Field | Role |
-|---|---|
-| `brand` | Primary accent (titles, active elements) |
-| `accent` | Secondary accent (borders, key hints) |
-| `success` | Positive / success state |
-| `warn` | Warning / caution state |
-| `err` | Error / destructive state |
-| `dim` | Muted / secondary text |
-| `fg` | Default foreground |
-| `bg` | Terminal background fill |
-| `sel_bg` | Selected-row background |
-| `dir` | Directory names in the file explorer |
+### GUI theme construction (`core/storage.rs`)
+Every GUI theme is `Theme::Custom` built from core via `custom_theme_from_core()`.
+No Iced built-in variants (`Theme::Dark`, `Theme::TokyoNight`, etc.) are used.
+This guarantees pixel-perfect parity with the TUI colour definitions.
 
 ### Theme key bindings (TUI)
 | Key | Scope | Action |
 |---|---|---|
 | `Ctrl+T` | Every screen, every mode | Cycle to next theme and persist |
 | `t` | Every screen except SelectImage Editing mode | Cycle to next theme and persist |
-| `[` | BrowseImage only | Cycle to previous theme and persist |
 | `Shift+T` | Every screen, every mode | Toggle global theme panel |
+| Panel ↑/↓ or j/k | Theme panel open | Live-preview the highlighted theme |
+| Panel `Enter` | Theme panel open | Confirm and persist live preview |
+| Panel `Esc` | Theme panel open | Close and revert live preview |
 
 ### Theme persistence
-Every theme change (`next_explorer_theme`, `prev_explorer_theme`,
-`theme_panel_confirm`) calls `App::persist_theme()`, which writes the theme
-name string to redb via `TuiStorage::save_theme`. On startup `App::new()`
-reads the saved name back and resolves its index in `all_presets()`.
-
-Config DB paths:
-- **macOS:** `~/Library/Application Support/flashkraft/tui-prefs.db`
-- **Linux:** `~/.config/flashkraft/tui-prefs.db`
-- **Windows:** `%APPDATA%\flashkraft\tui-prefs.db`
+- **TUI**: `TuiStorage::save_theme(name)` → `~/.config/flashkraft/tui-settings.json`
+- **GUI**: `Storage::save_theme(theme)` → `~/.config/flashkraft/gui-settings.json`
+- Both store the theme as a plain UTF-8 name string matching `THEME_NAMES`.
+- Default theme for both is `"Default"` (index 0).
 
 ---
 
-## 5. Async Patterns
+## 5. Macros
 
-- The async runtime is **Tokio** (`tokio = { version = "1", features = ["full"] }`).
-- The single `#[tokio::main]` entry-point is in `main.rs`. All async logic
-  flows from there.
+FlashKraft uses `macro_rules!` macros to eliminate boilerplate. **Prefer macros
+over duplicated code blocks.** Existing macros:
+
+### Core (`utils/logger.rs`)
+- `debug_log!(…)` — debug-only `eprintln!("[DEBUG] …")`.
+- `flash_debug!(…)` — debug-only `eprintln!("[FLASH_DEBUG] …")`.
+- `status_log!(…)` — debug-only `eprintln!("[STATUS] …")`.
+- `debug_if!(cond, …)` — conditional debug logging.
+All three logging macros delegate to `__debug_log_impl!`.
+
+### Core (test-only)
+- `skip_device_tests!` — generates `should_skip_device` test table.
+- `translate_event_test!` — generates hotplug event test functions.
+- `pipeline_test_events!` — runs flash pipeline on temp files.
+- `assert_pipeline_emits_stage!` — generates stage-emission tests.
+- `busy_check_test!` — generates errno-specific busy-check tests.
+- `pipeline_stage_order_test!` — generates platform-gated stage-order tests.
+
+### TUI (`ui/mod.rs`)
+- `themed_block!(title, title_color, border_color)` — builds a `Block` with
+  rounded borders and a bold styled title. Used ~16 times in render functions.
+- `kv_line!(label, value, pal)` / `kv_line!(…, bold color)` — builds a
+  key-value `Line` with a dim label and a styled value.
+- `themed_checkbox!(label, checked, color, pal)` — builds a palette-styled
+  `Checkbox` widget.
+
+### TUI (`core/state.rs`)
+- `cursor_nav!(up: fn_up, down: fn_down, cursor: field, list: field)` — generates
+  a pair of cursor-clamp navigation methods on `impl App`.
+
+### TUI (`core/update.rs`)
+- `try_or_error_screen!(app, call)` — matches `Ok(())`/`Err(msg)` and
+  transitions to the Error screen on failure.
+
+### GUI (`ui/components/step_indicators.rs`)
+- `step_indicator!(icon, label)` — builds a centred 220px step indicator.
+
+### GUI (`ui/screens/select_drive.rs`)
+- `styled_text!(content, size, disabled)` — applies grey colour when disabled.
+
+### Rule
+When the same code pattern appears **3 or more times** with only data varying,
+extract it into a `macro_rules!` macro. Document it in this section.
+
+---
+
+## 6. Async Patterns
+
+- Async runtime: **Tokio** (`tokio = { version = "1", features = ["full"] }`).
+- Single `#[tokio::main]` entry-point in `main.rs`.
 - Channel types:
-  - Drive detection: `tokio::sync::mpsc::channel` — one sender in a spawned
-    task, one receiver polled in the event loop.
-  - Flash progress: `tokio::sync::mpsc::channel` — same pattern.
+  - Drive detection + flash progress: `tokio::sync::mpsc::channel`.
   - Cancellation: `Arc<AtomicBool>`.
-- **No `std::thread::spawn`** inside async code. Use `tokio::task::spawn_blocking`
-  for synchronous I/O that would block the executor.
-- Poll channels in `App::poll_drives()` and `App::poll_flash()` — these are
-  called once per event-loop tick (100 ms). Do not block in them.
+- **No `std::thread::spawn`** inside async code — use `tokio::task::spawn_blocking`.
+- Poll channels in `poll_drives()` / `poll_flash()` once per event-loop tick.
 
 ---
 
-## 6. Error Handling
+## 7. Error Handling
 
-- **Application layer** (`flashkraft-tui`, `flashkraft-gui`): use `anyhow::Result`
-  for the top-level `run()` and `main()` return types. Propagate with `?`.
-- **Library layer** (`flashkraft-core`): use typed errors where the caller needs
-  to distinguish variants; use `anyhow` where errors are terminal.
-- **UI layer**: errors shown to the user are stored as `String` fields on `App`
-  (e.g. `app.error_message`). Never panic in UI code.
-- The flash helper subprocess exits with code `0` (success) or `2` (bad args).
-  All other errors are written to stdout as structured lines and parsed by
-  `flash_runner.rs`.
-- Install a `panic::set_hook` in `run()` that restores the terminal before
-  printing the panic message (already done in `lib.rs`).
+- **Application layer** (`tui`, `gui`): `anyhow::Result` for top-level `run()`.
+- **Library layer** (`core`): typed errors where variant matters; `anyhow` for
+  terminal errors.
+- **UI layer**: errors stored as `String` on `App`/`FlashKraft`. Never panic.
+- Flash helper subprocess: exits `0` (success) or `2` (bad args). All other
+  errors written to stdout as structured lines.
+- `panic::set_hook` in `run()` restores the terminal before printing.
 
 ---
 
-## 7. Privileged Flash Pipeline
+## 8. Privileged Flash Pipeline
 
 ```
-[TUI process]
+[TUI/GUI process]
     └─ flash_runner::start_flash()
            └─ tokio::process::Command → pkexec flashkraft-tui --flash-helper <img> <dev>
                   └─ [privileged child process]
@@ -204,95 +272,72 @@ Config DB paths:
                                    progress lines → child stdout → parent mpsc → UI
 ```
 
-- The `--flash-helper` branch is entered in `main.rs` **before** any TUI code runs.
-- Structured stdout lines from the child: `SIZE:<bytes>`, `PROGRESS:<pct>`,
-  `STAGE:<label>`, `LOG:<msg>`, `DONE`, `ERROR:<msg>`.
-- The parent never writes to the child's stdin.
-- Cancellation sends `SIGTERM` to the child process group.
+Structured stdout lines: `SIZE:<bytes>`, `PROGRESS:<pct>`, `STAGE:<label>`,
+`LOG:<msg>`, `DONE`, `ERROR:<msg>`.
 
 ---
 
-## 8. Testing
+## 9. Testing
 
 > **Rule: every new feature or behaviour change must be accompanied by tests.**
 > A PR that adds functionality without tests will not be merged.
 
 ### Where tests live
-- Unit tests go in `#[cfg(test)] mod tests` at the **bottom of the same file**
-  as the code under test.
-- Integration-style tests that span multiple modules go in `tests/` at the
-  crate root.
-- Use `tempfile::tempdir()` for all filesystem tests (including redb storage).
+- Unit tests: `#[cfg(test)] mod tests` at the bottom of the same file.
+- Integration tests spanning modules: `tests/` at the crate root.
+- Use `tempfile::tempdir()` for all filesystem tests.
 
-### What to test
-- **State transitions** — every `App` method that mutates state gets at least
-  one happy-path test and one edge/error test.
-- **Key handlers** — every key binding in `events.rs` gets a test asserting
-  `consumed == true/false` and the expected state change.
-- **Storage roundtrips** — every value written to `TuiStorage` must have a
-  save/load roundtrip test.
-- **Theme coverage** — when adding theme-aware code, iterate over
-  `Theme::all_presets()` to ensure no preset is forgotten.
-- **Palette invariants** — new `TuiPalette` fields must be exercised in at
-  least one render path; smoke-test via the existing theme cycling tests.
+### What to test (mandatory)
+| Area | Required tests |
+|---|---|
+| **State transitions** | Every `App`/`FlashKraft` method that mutates state: happy path + edge/error path |
+| **Key handlers** | Every key binding: `consumed == true/false` + expected state change |
+| **Storage roundtrips** | Every persisted value: save → load → assert equal |
+| **Theme coverage** | New theme code: iterate `THEME_NAMES` / `all_app_themes()` |
+| **Theme parity** | `every_core_theme_is_present_in_gui()` — always keep this passing |
+| **Palette invariants** | New `TuiPalette` fields: at least one render-path smoke test |
+| **Macro smoke tests** | New macros: at least one compile + output test |
 
 ### Test naming
 ```rust
 fn <subject>_<condition>_<expectation>()
 // e.g.:
-fn theme_panel_enter_applies_cursor_theme_and_closes()
+fn theme_panel_esc_reverts_live_preview_to_original_theme()
 fn save_and_load_theme_roundtrip()
-fn t_inserts_char_on_select_image_editing_mode()
+fn every_core_theme_is_present_in_gui()
+fn default_light_is_not_dark()
 ```
 
-Prefix with `test_` for `app.rs` / `core` tests; omit it in `events.rs` and
-`storage.rs` where the name is self-documenting without the prefix.
+Omit `test_` prefix in `storage.rs`, `update.rs` — names are self-documenting.
+Use `test_` prefix in `state.rs` and core domain tests.
 
 ### Running
 ```bash
 cargo test -p flashkraft-core
 cargo test -p flashkraft-tui
-cargo test --workspace
+cargo test -p flashkraft
+cargo test --workspace          # full suite — must always be green
+cargo clippy --workspace -- -D warnings -A deprecated
 ```
 
 ---
 
-## 9. Ratatui Conventions
+## 10. Persistence (JSON Settings)
 
-- Each screen has one rendering function in `tui/ui.rs`:
-  `render_select_image`, `render_select_drive`, etc.
-  The top-level `render(app, frame)` dispatches to these.
-- **Do not use module-level colour constants.** All colours come from
-  `TuiPalette`, cloned once at the top of `render()` and passed as
-  `pal: &TuiPalette` to every `render_*` function. This is what makes
-  runtime theme switching work.
-- Widget construction is always local to the render function — no widgets
-  stored in `App`.
-- The `tick_count` field on `App` drives animations. Use
-  `app.tick_count.wrapping_add(1)` to prevent overflow.
-- The event-loop poll timeout is 100 ms. This is the UI update cadence.
-  Do not change it without considering animation smoothness vs CPU usage.
-- Overlay panels (e.g. the global theme panel) are rendered **after** the
-  active screen's render function in `render()`, so they float on top.
-  Use `frame.render_widget(Clear, area)` before drawing the overlay.
+Both frontends persist preferences as human-readable JSON files.
 
----
+| Frontend | File | Struct |
+|---|---|---|
+| GUI | `~/.config/flashkraft/gui-settings.json` | `GuiSettings { theme: String }` |
+| TUI | `~/.config/flashkraft/tui-settings.json` | `TuiSettings { theme: String }` |
 
-## 10. Persistence (redb)
-
-- Both `flashkraft-gui` and `flashkraft-tui` use `redb` for user preferences.
-  The DB files are separate:
-  - GUI: `flashkraft/preferences.db`
-  - TUI: `flashkraft/tui-prefs.db`
-- Keys are `&[u8]` constants defined at the top of the storage module:
-  ```rust
-  const KEY_THEME: &[u8] = b"tui_theme";
-  ```
-- Values are UTF-8 strings. No binary serialisation formats (no serde, no
-  bincode) — plain strings are enough.
-- Always commit the write transaction after inserts to guarantee durability.
-- Wrap every redb operation in `.ok()` — storage failures must never crash
-  the application.
+**Rules:**
+- Theme is stored as a plain name string matching `flashkraft_core::THEME_NAMES`.
+- Default theme name: `"Default"` for both frontends.
+- Missing or corrupt file silently yields defaults — never crash.
+- New persistent fields: add to the settings struct with `#[serde(default)]`
+  and add a save/load roundtrip test.
+- No binary serialisation formats — plain strings only.
 
 ---
 
@@ -301,20 +346,16 @@ cargo test --workspace
 - **One version per dependency, defined in `[workspace.dependencies]`.**
 - Prefer minor-version pins (`"1"`, `"0.30"`) over patch pins.
 - Run `cargo update` + review `Cargo.lock` diffs before each release.
-- Do not add GUI dependencies (`iced`, `rfd`, etc.) to `flashkraft-core` or
+- Do not add GUI dependencies (`iced`, `rfd`) to `flashkraft-core` or
   `flashkraft-tui`.
-- `dirs` and `redb` are workspace-wide — used by both GUI and TUI for config
-  directory resolution and preference storage respectively.
-- Git dependencies (`tui-slider`, `tui-piechart`, `tui-checkbox`) must be
-  switched to crates.io versions when those crates are published.
+- Do not add TUI dependencies (`ratatui`, `crossterm`) to `flashkraft-core`.
 
 ---
 
 ## 12. Versioning & Release
 
 - All crates share the same version via `version.workspace = true`.
-- Bump with: `just bump <version>` (updates `Cargo.toml`, generates changelog,
-  commits, tags).
+- Bump with: `just bump <version>`.
 - Push the tag to trigger the release workflow:
   ```bash
   just release <version>       # GitHub only
@@ -337,23 +378,20 @@ cargo test --workspace
 
 ## 13. Git Hygiene
 
-- Never commit `target/`, `*.rs.bk`, `.DS_Store`, `.zed/`, `.vscode/`,
-  `.idea/` — all in `.gitignore`.
+- Never commit `target/`, `*.rs.bk`, `.DS_Store`, `.zed/`, `.vscode/`, `.idea/`.
 - Commit messages follow Conventional Commits.
 - PRs are squash-merged.
 - Tag format: `v<semver>`. Tags are immutable after push.
-- The `Cargo.lock` is committed for reproducible builds.
+- `Cargo.lock` is committed for reproducible builds.
 
 ---
 
 ## 14. Security
 
-- The flash writer requires root. **Never run the full TUI as root.**
-  Always delegate the privileged operation to the helper subprocess via `pkexec`.
-- Do not store API keys, tokens, or credentials in source. Use environment
-  variables or secret management (GitHub Secrets for CI).
-- `CRATES_IO_TOKEN` lives only in GitHub/Gitea repository secrets, never in
-  any file tracked by git.
+- The flash writer requires root. **Never run the full TUI/GUI as root.**
+  Always delegate to the helper subprocess via `pkexec`.
+- Do not store API keys or credentials in source — use environment variables or
+  GitHub Secrets.
 
 ---
 
@@ -363,11 +401,17 @@ cargo test --workspace
 - [ ] `cargo clippy --workspace -- -D warnings -A deprecated` passes
 - [ ] `cargo test --workspace` passes with **zero failures**
 - [ ] **Every new feature or behaviour change has accompanying tests**
-- [ ] New `TuiPalette` fields or theme presets are covered by tests
-- [ ] New `TuiStorage` keys have save/load roundtrip tests
+- [ ] New theme presets: `THEME_COUNT` bumped, `THEME_NAMES` updated, constructor
+      written, at least one test added
+- [ ] New `TuiPalette` fields: palette mapping updated in `ui/theme.rs`,
+      invariant tests updated
+- [ ] New persistent settings fields: `#[serde(default)]` applied, roundtrip
+      test added
+- [ ] New repeated code patterns (≥3 occurrences): extracted into a macro,
+      documented in §5
 - [ ] New public items have `///` doc comments
+- [ ] No `Color::Rgb(…)` hardcoded in render functions — use `pal.*` fields
 - [ ] No new `[dependencies]` added without updating `[workspace.dependencies]`
-- [ ] No inline `Color::Rgb(...)` added to render functions — use `pal.*` fields
 - [ ] `Cargo.toml` version is **not** bumped in the PR (release workflow owns that)
 - [ ] Commit messages follow Conventional Commits
 - [ ] `target/` and editor directories not staged

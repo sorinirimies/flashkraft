@@ -15,14 +15,14 @@ FlashKraft ships two front-ends from a single Rust workspace:
 
 | Binary | Use case |
 |--------|----------|
-| `flashkraft` | Desktop GUI — mouse-driven with animated progress, native file dialogs, 21 themes |
+| `flashkraft` | Desktop GUI — mouse-driven with animated progress, native file dialogs, 43 themes |
 | `flashkraft-tui` | Terminal UI — keyboard-driven, works over SSH, built-in file explorer & themes |
 
 | | `flashkraft` (GUI) | `flashkraft-tui` (TUI) |
 |---|---|---|
 | Framework | [Iced](https://github.com/iced-rs/iced) 0.14 | [Ratatui](https://github.com/ratatui-org/ratatui) 0.30 |
 | Input | Mouse + keyboard | Keyboard only |
-| Themes | 21 built-in Iced themes | 27+ themes via `tui-file-explorer` |
+| Themes | 43 themes from `flashkraft-core` | 43 themes from `flashkraft-core` |
 | Best for | Desktop users | SSH / headless / minimal setups |
 
 ## Preview
@@ -64,7 +64,7 @@ FlashKraft ships two front-ends from a single Rust workspace:
 
 ### GUI extras
 
-- 🎨 **21 beautiful Iced themes** to choose from, persisted across sessions via `redb`
+- 🎨 **43 themes** shared with the TUI — all from `flashkraft-core`, persisted across sessions in `gui-settings.json`
 - 🖱️ **Native file picker** — powered by `rfd` for OS-native open dialogs
 
 ### TUI extras
@@ -74,7 +74,7 @@ FlashKraft ships two front-ends from a single Rust workspace:
 - 📊 **Pie-chart drive overview** — storage breakdown rendered inline using `tui-piechart`
 - ✅ **Checkbox confirmation screen** — safety checklist before every flash via `tui-checkbox`
 - 🎚️ **Slider progress bar** — smooth flash-progress widget via [`tui-slider`](https://crates.io/crates/tui-slider)
-- 🎨 **Multiple file-explorer themes** — switchable live with `t` / `[`, panel toggled with `T`, powered by [`tui-file-explorer`](https://crates.io/crates/tui-file-explorer)
+- 🎨 **43 themes shared with the GUI** — all from `flashkraft-core`, switchable live with `t`, instant live-preview panel with `Shift+T`, persisted in `tui-settings.json`
 - 🌀 **Animated spinners** — braille flux spinners and bouncing bars via [`tui-spinner`](https://crates.io/crates/tui-spinner)
 - 🖥️ **Works over SSH** — no display server required
 
@@ -293,6 +293,10 @@ flashkraft/                              ← workspace root
 │   │   └── src/
 │   │       ├── lib.rs
 │   │       ├── flash_helper.rs          ★ privileged flash pipeline
+│   │       ├── theme/                   ★ single source of truth for all 43 themes
+│   │       │   ├── mod.rs
+│   │       │   ├── types.rs             AppTheme, Rgb
+│   │       │   └── presets.rs           all 43 constructors + THEME_NAMES
 │   │       ├── domain/
 │   │       │   ├── drive_info.rs
 │   │       │   ├── image_info.rs
@@ -315,7 +319,7 @@ flashkraft/                              ← workspace root
 │   │       │   ├── message.rs       all Message variants
 │   │       │   ├── update.rs        state transition logic
 │   │       │   ├── flash_runner.rs  Iced Subscription — streams FlashProgress
-│   │       │   ├── storage.rs       redb-backed theme persistence
+│   │       │   ├── storage.rs       JSON settings (gui-settings.json)
 │   │       │   └── commands/
 │   │       │       └── file_selection.rs  async rfd file dialog
 │   │       ├── ui/                  presentation layer
@@ -341,7 +345,7 @@ flashkraft/                              ← workspace root
 │       │   ├── headless_demo.rs
 │       │   ├── tui_demo.rs
 │       │   ├── flash_progress_demo.rs  tui-slider progress showcase
-│       │   └── theme_demo.rs           file-explorer theme switcher
+│       │   └── theme_demo.rs           full theme switcher + live-preview panel
 │       └── src/
 │           ├── main.rs              entry point + privilege escalation
 │           ├── lib.rs               event loop + terminal setup
@@ -350,10 +354,10 @@ flashkraft/                              ← workspace root
 │           │   ├── message.rs       AppScreen, FlashEvent, InputMode
 │           │   ├── update.rs        keyboard event handler per screen
 │           │   ├── flash_runner.rs  async flash task bridge
-│           │   └── storage.rs       redb-backed theme persistence
+│           │   └── storage.rs       JSON settings (tui-settings.json)
 │           └── ui/                  presentation layer
-│               ├── mod.rs           render dispatch + macros
-│               ├── theme.rs         TuiPalette + 27 theme presets
+│               ├── mod.rs           render dispatch + themed_block!, kv_line! macros
+│               ├── theme.rs         TuiPalette — derives from flashkraft-core (43 themes)
 │               ├── screens/         one file per screen
 │               │   ├── select_image.rs
 │               │   ├── select_drive.rs
@@ -365,7 +369,7 @@ flashkraft/                              ← workspace root
 │                   ├── chrome.rs    header, footer, breadcrumbs
 │                   ├── helpers.rs   centred_rect, file_icon, piechart
 │                   ├── file_ops.rs  file operation modals
-│                   └── theme_panel.rs  theme picker overlay
+│                   └── theme_panel.rs  live-preview theme picker overlay
 │
 ├── scripts/
 │   ├── version.nu               print current workspace version
@@ -410,24 +414,24 @@ Items marked ★ form the flash pipeline and are described in detail above.
 ### `flashkraft-core`
 
 | Crate | Version | Purpose |
-|-------|---------|---------|
+|-------|---------|------|
 | `sysinfo` | 0.38 | Drive enumeration |
 | `nix` | 0.31 | `umount2`, `BLKRRPART` ioctl, `fsync` |
 | `sha2` | 0.11 | SHA-256 write verification |
 | `tokio` | 1 | Async runtime |
 | `futures` / `futures-timer` | 0.3 / 3.0 | Async channel primitives |
-| `redb` | 4.1 | Embedded key-value store |
 | `dirs` | 6.0 | XDG data directory resolution |
 | `anyhow` | 1 | Error handling |
 
 ### `flashkraft-gui`
 
 | Crate | Version | Purpose |
-|-------|---------|---------|
+|-------|---------|------|
 | `iced` | 0.14.0 | Cross-platform GUI framework (Elm Architecture) |
 | `iced_aw` | 0.14.1 | Additional Iced widgets |
 | `iced_fonts` | 0.3.0 | Bootstrap icon font |
 | `rfd` | 0.17 | Native file/folder dialogs |
+| `serde` / `serde_json` | 1 | JSON settings persistence |
 
 ### `flashkraft-tui`
 
@@ -440,15 +444,18 @@ Items marked ★ form the flash pipeline and are described in detail above.
 | `tui-spinner` | 0.2.3 | Animated braille spinners (flux, bar, linear) |
 | `tui-piechart` | 0.3.3 | Drive storage pie-chart widget |
 | `tui-checkbox` | 0.4.4 | Drive-list and confirm-screen checkboxes |
+| `serde` / `serde_json` | 1 | JSON settings persistence |
 
 ## Architecture Highlights
 
-- **Shared core crate** — `flashkraft-core` contains all flash logic; both UIs are thin frontends over the same engine
+- **Shared core crate** — `flashkraft-core` contains all flash logic and all 43 themes; both UIs are thin frontends over the same engine
+- **Centralised theme catalogue** — `flashkraft-core::theme` is the single source of truth; adding a theme to core automatically makes it available in both GUI and TUI with no other changes
 - **Pure-Rust flash engine** — zero shell scripts or external binaries
 - **Self-elevating helper** — single binary per UI, no install-time setup beyond `polkit`
 - **Elm Architecture (GUI)** — unidirectional data flow, pure `update`/`view` functions
 - **Screen-based state machine (TUI)** — each `AppScreen` variant owns its event handler and render function
-- **0 warnings** — clean `cargo build --workspace` and `cargo test --workspace`
+- **JSON settings** — human-readable `gui-settings.json` / `tui-settings.json` in the OS config dir
+- **557 tests, 0 warnings** — clean `cargo test --workspace` and `cargo clippy --workspace`
 
 ## Demo GIFs & Git LFS
 
@@ -482,7 +489,7 @@ just vhs-list
 | `tui-demo` | Full keyboard-driven wizard: image → drive → flash → complete |
 | `tui-headless` | Headless state-machine demo (no TTY required) |
 | `flash-progress` | Animated `tui-slider` progress bar during a simulated write |
-| `theme-switcher` | Live file-explorer theme cycling (`t` / `[`) and theme panel (`T`) |
+| `theme-switcher` | Live-preview theme panel (`Shift+T`), 43-theme catalogue, `t` cycling |
 | `demo-basic` | GUI basic usage |
 | `demo-build` | GUI build walkthrough |
 | `demo-quick` | GUI quick-start |

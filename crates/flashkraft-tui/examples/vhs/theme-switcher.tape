@@ -1,12 +1,6 @@
 # VHS tape — FlashKraft TUI · Theme Switcher Demo
-# Showcases the file-explorer theme switcher: cycling themes with t/[ and the
-# theme-picker side panel toggled with T.
-#
-# Prerequisites:
-#   cargo build -p flashkraft-tui --example theme_demo
-#
-# Run:
-#   vhs crates/flashkraft-tui/examples/vhs/theme-switcher.tape
+# Showcases 43-theme catalogue, live-preview panel (Shift+T), and t cycling.
+# Run: vhs crates/flashkraft-tui/examples/vhs/theme-switcher.tape
 
 Output crates/flashkraft-tui/examples/vhs/generated/theme-switcher.gif
 
@@ -16,75 +10,94 @@ Set Height 900
 Set FontSize 14
 Set PlaybackSpeed 1.0
 
-# ── Launch ────────────────────────────────────────────────────────────────────
+# ── Launch silently ───────────────────────────────────────────────────────────
+Hide
 Type "cargo run -p flashkraft-tui --example theme_demo"
 Enter
+Sleep 6s
+Show
 
-# Wait for the file explorer to open with the theme panel visible
-Sleep 5s
-
-# ── Cycle forward through themes ──────────────────────────────────────────────
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
+# ── Theme panel is open at startup — navigate it with live preview ────────────
 Sleep 800ms
 
-# ── Cycle backward a few steps ────────────────────────────────────────────────
-Type "["
-Sleep 600ms
-Type "["
-Sleep 600ms
-Type "["
-Sleep 800ms
-
-# ── Continue forward through more themes ──────────────────────────────────────
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 600ms
-Type "t"
-Sleep 800ms
-
-# ── Hide the theme panel and navigate the explorer ────────────────────────────
-Type "T"
-Sleep 1s
-
-Type "j"
-Sleep 300ms
-Type "j"
-Sleep 300ms
-Type "j"
-Sleep 300ms
-Type "k"
+# Scroll down through the catalogue — each move previews immediately
+Down
 Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 600ms
 
-# ── Cycle a couple more themes without the panel ─────────────────────────────
+# Scroll back up a few entries
+Up
+Sleep 500ms
+Up
+Sleep 500ms
+Up
+Sleep 600ms
+
+# Continue down into the Ghostty-sourced themes
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 600ms
+
+# ── Confirm the current selection (Enter) ─────────────────────────────────────
+Enter
+Sleep 1000ms
+
+# ── Close panel and cycle with t ─────────────────────────────────────────────
+Type "t"
+Sleep 600ms
+Type "t"
+Sleep 600ms
+Type "t"
+Sleep 600ms
 Type "t"
 Sleep 600ms
 Type "t"
 Sleep 800ms
 
-# ── Re-open the theme panel to show the final selection ───────────────────────
+# ── Re-open the panel with Shift+T to show scrolling ─────────────────────────
 Type "T"
+Sleep 1000ms
+
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+
+# ── Esc to revert live preview back to previously confirmed theme ─────────────
+Escape
 Sleep 1500ms
 
-# ── Hold on the final state so viewers can read the theme panel ───────────────
+# ── Hold on final state ───────────────────────────────────────────────────────
 Sleep 2s
 
 # ── Quit ─────────────────────────────────────────────────────────────────────

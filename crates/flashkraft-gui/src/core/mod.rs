@@ -11,7 +11,7 @@
 //! | [`message`] | All `Message` variants (user events + async results) |
 //! | [`update()`] | Pure state-transition function |
 //! | [`flash_runner`] | Iced [`iced::Subscription`] that streams flash progress |
-//! | [`storage`] | Persistent theme preference via `redb` |
+//! | [`storage`] | Persistent theme preference via JSON (`gui-settings.json`) |
 //! | [`commands`] | Async side effects (file picker dialog) |
 //!
 //! ## What does NOT live here

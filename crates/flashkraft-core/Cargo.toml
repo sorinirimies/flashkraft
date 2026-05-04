@@ -21,8 +21,7 @@ futures       = { workspace = true }
 futures-timer = { workspace = true }
 tokio         = { workspace = true }
 
-# ── Storage / persistence ─────────────────────────────────────────────────────
-redb          = { workspace = true }
+# ── Config directory resolution ──────────────────────────────────────────────
 dirs          = { workspace = true }
 
 # ── Crypto ────────────────────────────────────────────────────────────────────

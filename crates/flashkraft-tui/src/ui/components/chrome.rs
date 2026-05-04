@@ -19,19 +19,22 @@ pub(in crate::ui) fn render_header(
         ])
         .split(area);
 
-    // Centre: brand title + subtitle
-    let title = Line::from(vec![
-        Span::styled(
-            "⚡ Flash",
-            Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            "Kraft",
-            Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("  "),
-        Span::styled(subtitle, Style::default().fg(pal.dim)),
-    ]);
+    // Centre: brand title + subtitle — preceded by a blank line for top padding
+    let title = vec![
+        Line::raw(""), // top padding
+        Line::from(vec![
+            Span::styled(
+                "⚡ Flash",
+                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Kraft",
+                Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(subtitle, Style::default().fg(pal.dim)),
+        ]),
+    ];
 
     // Outer block with the bottom border spans the full width
     let border_block = Block::default()
@@ -43,14 +46,18 @@ pub(in crate::ui) fn render_header(
     // Centre title (no border — sits inside the outer block's visual row)
     frame.render_widget(Paragraph::new(title).alignment(Alignment::Center), cols[1]);
 
-    // Right: theme badge — "🎨 <ThemeName>"
-    let badge = Paragraph::new(Line::from(vec![
-        Span::styled("🎨 ", Style::default()),
-        Span::styled(
-            theme_name,
-            Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
-        ),
-    ]))
+    // Right: theme badge — "🎨 <ThemeName>  " with matching top padding
+    let badge = Paragraph::new(vec![
+        Line::raw(""), // top padding
+        Line::from(vec![
+            Span::styled("🎨 ", Style::default()),
+            Span::styled(
+                theme_name,
+                Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "), // right padding
+        ]),
+    ])
     .alignment(Alignment::Right);
     frame.render_widget(badge, cols[2]);
 }
@@ -127,7 +134,7 @@ pub(in crate::ui) fn chrome_layout(area: Rect) -> [Rect; 4] {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
+            Constraint::Length(4), // header (1 padding + 1 title + 1 border)
             Constraint::Length(2),
             Constraint::Min(0),
             Constraint::Length(3),

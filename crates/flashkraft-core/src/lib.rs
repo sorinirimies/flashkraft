@@ -19,7 +19,7 @@
 //! no `ratatui`, no `crossterm`).  It may only depend on:
 //! - OS / system crates (`sysinfo`, `nix`, `sha2`, …)
 //! - Async utilities (`tokio`, `futures`, `futures-timer`)
-//! - Persistence (`redb`, `dirs`)
+//! - Config directory resolution (`dirs`)
 
 // Utility macros must be declared first so they are available to every
 // subsequent module via the implicit `#[macro_use]` on the crate root.
@@ -29,10 +29,12 @@ pub mod utils;
 pub mod commands;
 pub mod domain;
 pub mod flash_helper;
+pub mod theme;
 
 // ── Convenience re-exports ────────────────────────────────────────────────────
 
 pub use domain::{DriveInfo, ImageInfo};
+pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
 pub use utils::fmt_bytes;
 
 /// Re-export the flash pipeline event types so consumers only need to import
