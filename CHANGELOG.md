@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.2.2 - 2026-05-04
+### 📦 Other Changes
+- Switch doc builds to Rust stable and unify cargo doc step
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.2.1...v1.2.2
+## 1.2.1 - 2026-05-04
+### 🔧 Chores
+- chore: bump version to 1.2.1
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.2.0...v1.2.1
 ## 1.2.0 - 2026-05-04
 ### 📦 Other Changes
 - Switch TUI and GUI settings persistence from redb to JSON
