@@ -21,7 +21,7 @@ repository   = "https://github.com/sorinirimies/flashkraft"
 
 [workspace.dependencies]
 # Core / shared
-sysinfo      = "0.38"
+sysinfo      = "0.39"
 windows-sys  = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
@@ -51,7 +51,7 @@ rfd          = "0.17"
 # TUI (Ratatui)
 ratatui              = "0.30"
 crossterm            = "0.29"
-tui-file-explorer    = "1.0.6"
+tui-file-explorer    = "1.1.4"
 tui-slider   = "0.3.2"
 tui-piechart = "0.3.3"
 tui-checkbox = "0.4.4"
