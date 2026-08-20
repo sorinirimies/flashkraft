@@ -51,11 +51,11 @@ rfd          = "0.17"
 # TUI (Ratatui)
 ratatui              = "0.30"
 crossterm            = "0.29"
-tui-file-explorer    = "1.1.4"
-tui-slider   = "0.3.2"
-tui-piechart = "0.3.3"
-tui-checkbox = "0.4.4"
-tui-spinner  = "0.2.3"
+tui-file-explorer    = "2.0.0"
+tui-slider   = "0.3.3"
+tui-piechart = "1.0.2"
+tui-checkbox = "0.4.6"
+tui-spinner  = "0.4.7"
 
 # Internal crates
 flashkraft-core = { path = "crates/flashkraft-core", version = "1.2.2" }
