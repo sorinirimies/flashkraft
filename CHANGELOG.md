@@ -3,8 +3,12 @@
 All notable changes to this project will be documented in this file.
 
 ## 1.3.0 - 2026-09-08
+### ✨ Features
+- feat: harden flash safety and update dependencies
 ### ➕ Added
 - add codegraph gitignore
+### 🐛 Bug Fixes
+- fix: use configured Starscream remote
 ### 📦 Other Changes
 - justfile: add gitea-nexus-lab remote recipes (push/pull/sync/release)
 - justfile: rename gitea -> gitea-microlab; add full gitea-microlab/-starscream/-nexus-lab parity
@@ -14,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - chore(deps): nightly dependency upgrade 2026-05-11
 - chore(deps): nightly dependency upgrade 2026-08-20
 - chore(deps): nightly dependency upgrade 2026-08-21
+- chore: bump version to 1.3.0
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.2.2...v1.3.0
 ## 1.2.2 - 2026-05-04
 ### 📦 Other Changes
