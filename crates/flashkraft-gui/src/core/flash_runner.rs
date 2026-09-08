@@ -139,7 +139,7 @@ fn build_flash_stream(
         use futures::SinkExt as _;
 
         // ── Validate inputs ───────────────────────────────────────────────
-        let image_size = match image_path.metadata() {
+        let _image_size = match image_path.metadata() {
             Ok(m) if m.len() == 0 => {
                 let _ = output
                     .send(FlashProgress::Failed("Image file is empty".into()))
@@ -157,7 +157,7 @@ fn build_flash_stream(
             }
         };
 
-        flash_debug!("flash_progress: image={image_path:?} dev={device_path:?} size={image_size}");
+        flash_debug!("flash_progress: image={image_path:?} dev={device_path:?} size={_image_size}");
 
         // ── Channel setup ─────────────────────────────────────────────────
         //

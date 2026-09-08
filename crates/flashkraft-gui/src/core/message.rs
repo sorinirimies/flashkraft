@@ -43,11 +43,6 @@ pub enum Message {
     /// User clicked the "Flash" button
     FlashClicked,
 
-    /// User clicked Flash but the process is not privileged — attempt to
-    /// re-exec via pkexec / sudo so the user gets a password prompt, then
-    /// restart the app with the same selections intact.
-    EscalateAndFlash,
-
     /// User clicked the "Reset" button (start over)
     ResetClicked,
 

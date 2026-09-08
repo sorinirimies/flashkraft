@@ -157,11 +157,15 @@ impl FlashKraft {
         }
     }
 
-    /// Check if the application is ready to flash
+    /// Check if the application is ready to flash.
     ///
-    /// Returns true if both an image and target are selected
+    /// Selections are revalidated here because the image or removable-device
+    /// inventory may have changed after the target was originally chosen.
     pub fn is_ready_to_flash(&self) -> bool {
-        self.selected_image.is_some() && self.selected_target.is_some()
+        match (&self.selected_image, &self.selected_target) {
+            (Some(image), Some(target)) => crate::domain::is_drive_valid(target, Some(image)),
+            _ => false,
+        }
     }
 
     /// Check if a flash operation is currently in progress

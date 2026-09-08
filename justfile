@@ -43,9 +43,10 @@ INSTALL_BIN_TUI := "/usr/bin/flashkraft-tui"
 
 # Build a release binary and install it with the setuid-root bit.
 #
-# The setuid bit lets the flash pipeline call seteuid(0) for the single
-# instant needed to open a raw block device, then immediately drops back
-# to the real user — no pkexec, no polkit policy file required.
+# The setuid bit supplies a saved root identity. The process immediately drops
+# effective root before initializing either UI, then uses checked, narrowly
+# scoped privilege transitions for raw-device operations. The opened target
+# handle remains exclusive through write, sync, refresh, and verification.
 #
 # Usage:  just install          (installs GUI binary)
 
@@ -566,7 +567,7 @@ release-gitea-microlab version: (bump version)
 # Bump, commit, tag, then push to Gitea Starscream only.
 release-gitea-starscream version: (bump version)
     @echo "Pushing release v{{ version }} to Gitea Starscream…"
-    git push --follow-tags gitea-starscream main
+    git push --follow-tags http://192.168.1.44:3000/sorin/flashkraft.git main
     @echo "✅ Release v{{ version }} live on Gitea Starscream."
 
 # Bump, commit, tag, then push to Gitea (nexus-lab instance) only.

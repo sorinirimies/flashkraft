@@ -51,11 +51,13 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
         }
 
         Message::TargetDriveClicked(drive) => {
-            // Update selected target
-            state.selected_target = Some(drive);
-            state.error_message = None;
-            // Close the device selection view
-            state.device_selection_open = false;
+            if constraints::is_drive_valid(&drive, state.selected_image.as_ref()) {
+                state.selected_target = Some(drive);
+                state.error_message = None;
+                state.device_selection_open = false;
+            } else {
+                state.error_message = Some("The selected drive is not a safe flash target".into());
+            }
             Task::none()
         }
 
@@ -73,50 +75,14 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
         }
 
         Message::FlashClicked => {
-            // Validate we can flash
             if state.is_ready_to_flash() {
-                // If we are not already running as root, attempt a transparent
-                // re-exec via pkexec / sudo so the user gets a polkit password
-                // prompt now — before the flash subscription starts — rather
-                // than hitting a hard permission error mid-flash.
-                if !flashkraft_core::flash_helper::is_privileged() {
-                    return Task::perform(async { Message::EscalateAndFlash }, |m| m);
-                }
-
+                // The UI intentionally runs unprivileged. The core pipeline
+                // performs checked, narrowly scoped privilege transitions.
                 state.begin_flash_state();
-
-                Task::none()
             } else {
-                // Set error if trying to flash without selections
                 state.error_message =
-                    Some("Please select both an image file and a target drive".to_string());
-                Task::none()
+                    Some("Please select a compatible image and target drive".to_string());
             }
-        }
-
-        Message::EscalateAndFlash => {
-            // Called when FlashClicked detects we are not running as root.
-            //
-            // `reexec_as_root()` calls execvp, which replaces this process
-            // image entirely on success — the Iced runtime, all threads, and
-            // all open file descriptors are replaced by the new privileged
-            // process, which restarts from main() and finds geteuid() == 0.
-            //
-            // If this function returns it means:
-            //   • neither pkexec nor sudo was found on PATH, or
-            //   • the user dismissed the polkit dialog / Ctrl-C'd sudo.
-            //
-            // In that case we fall through and start the subscription anyway;
-            // the flash pipeline will hit EACCES when it tries to open the
-            // block device and show the clear error message with install
-            // instructions.
-            flashkraft_core::flash_helper::reexec_as_root();
-
-            // reexec returned → escalation unavailable or declined.
-            // Proceed with the flash attempt so the user sees the specific
-            // error (and the setuid install instructions) rather than nothing.
-            state.begin_flash_state();
-
             Task::none()
         }
 
@@ -153,24 +119,45 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
         // Async Result Messages
         // ====================================================================
         Message::ImageSelected(maybe_path) => {
-            // Update selected image
-            state.selected_image = maybe_path.map(ImageInfo::from_path);
+            // Cancelling the file dialog means "no change", not "remove the
+            // current image".
+            let Some(path) = maybe_path else {
+                return Task::none();
+            };
+
+            state.selected_image = Some(ImageInfo::from_path(path));
             state.error_message = None;
 
-            // Mark invalid drives based on the new image selection
             constraints::mark_invalid_drives(
                 &mut state.available_drives,
                 state.selected_image.as_ref(),
             );
 
+            if state.selected_target.as_ref().is_some_and(|target| {
+                !constraints::is_drive_valid(target, state.selected_image.as_ref())
+            }) {
+                state.selected_target = None;
+            }
+
             Task::none()
         }
 
         Message::DrivesRefreshed(mut drives) => {
-            // Mark invalid drives based on current image selection
             constraints::mark_invalid_drives(&mut drives, state.selected_image.as_ref());
 
-            // Update available drives list
+            // Keep a selection only when the refreshed entry proves it is the
+            // same physical USB device. `/dev/sdX` paths can be reused after a
+            // device is unplugged, so path equality alone is unsafe.
+            state.selected_target = state.selected_target.as_ref().and_then(|selected| {
+                drives
+                    .iter()
+                    .find(|drive| selected.has_same_physical_identity(drive))
+                    .filter(|drive| {
+                        constraints::is_drive_valid(drive, state.selected_image.as_ref())
+                    })
+                    .cloned()
+            });
+
             state.available_drives = drives;
             Task::none()
         }
@@ -206,7 +193,7 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::VerifyProgressUpdate(overall, phase, bytes_read, total_bytes, speed_mb_s) => {
+        Message::VerifyProgressUpdate(overall, phase, _bytes_read, _total_bytes, speed_mb_s) => {
             // Update verification progress fields.
             state.verify_progress = Some(overall);
             state.verify_speed_mb_s = speed_mb_s;
@@ -227,7 +214,7 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             }
 
             flash_debug!(
-                "verify phase={phase} overall={:.1}% ({bytes_read}/{total_bytes}) @ {speed_mb_s:.1} MB/s",
+                "verify phase={phase} overall={:.1}% ({_bytes_read}/{_total_bytes}) @ {speed_mb_s:.1} MB/s",
                 overall * 100.0
             );
 
@@ -376,6 +363,20 @@ mod tests {
     }
 
     #[test]
+    fn test_image_selected_none_preserves_current_image() {
+        let mut state = FlashKraft::new();
+        state.selected_image = Some(ImageInfo {
+            path: PathBuf::from("/tmp/current.img"),
+            name: "current.img".into(),
+            size_mb: 100.0,
+        });
+
+        let _ = update(&mut state, Message::ImageSelected(None));
+
+        assert_eq!(state.selected_image.as_ref().unwrap().name, "current.img");
+    }
+
+    #[test]
     fn test_flash_clicked_without_selections() {
         let mut state = FlashKraft::new();
 
@@ -383,31 +384,6 @@ mod tests {
 
         assert!(state.error_message.is_some());
         assert!(state.flash_progress.is_none());
-    }
-
-    #[test]
-    fn test_escalate_and_flash_starts_flashing() {
-        // When EscalateAndFlash fires (reexec_as_root already returned without
-        // exec-ing — i.e. escalation was unavailable), the subscription must
-        // still be activated so the user sees the permission error.
-        let mut state = FlashKraft::new();
-        state.selected_image = Some(crate::domain::ImageInfo {
-            path: std::path::PathBuf::from("/tmp/test.img"),
-            name: "test.img".to_string(),
-            size_mb: 100.0,
-        });
-        state.selected_target = Some(DriveInfo::new(
-            "USB".to_string(),
-            "/media/usb".to_string(),
-            32.0,
-            "/dev/sdb".to_string(),
-        ));
-
-        let _ = update(&mut state, Message::EscalateAndFlash);
-
-        assert!(state.flashing_active);
-        assert_eq!(state.flash_progress, Some(0.0));
-        assert!(state.error_message.is_none());
     }
 
     #[test]
@@ -501,11 +477,7 @@ mod tests {
         state.flash_cancel_token.store(true, Ordering::SeqCst);
         let old_token = state.flash_cancel_token.clone();
 
-        // When not running as root, FlashClicked dispatches EscalateAndFlash
-        // without modifying the token yet. EscalateAndFlash is the handler
-        // that actually resets the token and activates the flash subscription
-        // (after reexec_as_root() returns without exec-ing in test mode).
-        let _ = update(&mut state, Message::EscalateAndFlash);
+        let _ = update(&mut state, Message::FlashClicked);
 
         // Verify a new token was created (different Arc)
         assert!(!std::sync::Arc::ptr_eq(
@@ -694,6 +666,21 @@ mod tests {
         assert_eq!(state.available_drives.len(), 2);
         assert_eq!(state.available_drives[0].name, "USB-A");
         assert_eq!(state.available_drives[1].name, "USB-B");
+    }
+
+    #[test]
+    fn test_drives_refreshed_clears_stale_selection() {
+        let mut state = FlashKraft::new();
+        state.selected_target = Some(DriveInfo::new(
+            "Removed".into(),
+            "/media/removed".into(),
+            32.0,
+            "/dev/sdb".into(),
+        ));
+
+        let _ = update(&mut state, Message::DrivesRefreshed(vec![]));
+
+        assert!(state.selected_target.is_none());
     }
 
     #[test]

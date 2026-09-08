@@ -127,7 +127,10 @@ mod linux {
             if size_sectors == 0 {
                 continue;
             }
-            let size_gb = (size_sectors * 512) as f64 / (1024.0 * 1024.0 * 1024.0);
+            let Some(size_bytes) = size_sectors.checked_mul(512) else {
+                continue;
+            };
+            let size_gb = size_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
 
             // ── Flags ─────────────────────────────────────────────────────────
             let is_read_only = read_sysfs_u64(&block_sysfs.join("ro"))
@@ -148,7 +151,7 @@ mod linux {
                 mount_point,
                 size_gb,
                 device_path,
-                false, // USB drives are never the system drive
+                device_has_system_mount(&dev_name, &mounts),
                 is_read_only,
             )
             .with_usb_info(usb_info);
@@ -284,6 +287,25 @@ mod linux {
             }
         }
         map
+    }
+
+    /// Return whether the device or one of its partitions backs a critical
+    /// system mount. USB-attached system disks are valid configurations and
+    /// must never be offered as flash targets.
+    pub(super) fn device_has_system_mount(
+        dev_name: &str,
+        mounts: &HashMap<String, String>,
+    ) -> bool {
+        mounts.iter().any(|(mounted_dev, mount_point)| {
+            let belongs_to_device = mounted_dev == dev_name
+                || (mounted_dev.starts_with(dev_name)
+                    && mounted_dev.len() > dev_name.len()
+                    && (mounted_dev.as_bytes()[dev_name.len()].is_ascii_digit()
+                        || mounted_dev.as_bytes()[dev_name.len()] == b'p'));
+
+            belongs_to_device
+                && matches!(mount_point.as_str(), "/" | "/boot" | "/boot/efi" | "/usr")
+        })
     }
 
     /// Find the mount point for `dev_name` or any of its partitions.
@@ -1224,6 +1246,17 @@ mod tests {
         mounts.insert("sdb1".to_string(), "/media/part1".to_string());
         let result = linux::find_mount_point("sdb", &mounts);
         assert!(result.is_some());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_device_has_system_mount_on_partition() {
+        let mut mounts = HashMap::new();
+        mounts.insert("sdb1".to_string(), "/".to_string());
+        mounts.insert("sdc1".to_string(), "/media/usb".to_string());
+
+        assert!(linux::device_has_system_mount("sdb", &mounts));
+        assert!(!linux::device_has_system_mount("sdc", &mounts));
     }
 
     #[cfg(target_os = "linux")]

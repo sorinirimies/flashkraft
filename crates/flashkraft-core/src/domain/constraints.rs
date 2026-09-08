@@ -62,19 +62,18 @@ pub fn is_system_drive(drive: &DriveInfo) -> bool {
 /// A source drive is one that contains the image file being flashed.
 pub fn is_source_drive(drive: &DriveInfo, image: Option<&ImageInfo>) -> bool {
     if let Some(img) = image {
-        // Check if the image path is inside any of the drive's mount points
-        let image_path = img.path.to_string_lossy();
+        let image_path = img.path.as_path();
 
-        // Simple check: if mount point is in the image path
+        // `Path::starts_with` compares path components, avoiding lexical false
+        // positives such as `/media/usb2` matching `/media/usb`.
         if !drive.mount_point.is_empty()
             && drive.mount_point != drive.device_path
-            && image_path.starts_with(&drive.mount_point)
+            && image_path.starts_with(std::path::Path::new(&drive.mount_point))
         {
             return true;
         }
 
-        // Also check if the device path matches
-        if image_path.starts_with(&drive.device_path) {
+        if image_path.starts_with(std::path::Path::new(&drive.device_path)) {
             return true;
         }
     }
@@ -131,7 +130,11 @@ pub fn is_drive_size_large(drive: &DriveInfo) -> bool {
 /// A drive is valid if it's not disabled, large enough for the image,
 /// and doesn't contain the source image.
 pub fn is_drive_valid(drive: &DriveInfo, image: Option<&ImageInfo>) -> bool {
-    !drive.disabled && is_drive_large_enough(drive, image) && !is_source_drive(drive, image)
+    !drive.disabled
+        && !drive.is_system
+        && !drive.is_read_only
+        && is_drive_large_enough(drive, image)
+        && !is_source_drive(drive, image)
 }
 
 /// Get all compatibility statuses for a drive/image pair
@@ -167,10 +170,10 @@ pub fn get_drive_image_compatibility_statuses(
     } else {
         // Only check these if drive is large enough
 
-        // Check if it's a system drive (warning)
+        // System drives must never be selectable.
         if is_system_drive(drive) {
-            statuses.push(CompatibilityStatus::warning(
-                "This is a system drive. Flashing it may damage your operating system.".to_string(),
+            statuses.push(CompatibilityStatus::error(
+                "This is a system drive and cannot be flashed.".to_string(),
             ));
         } else if is_drive_size_large(drive) {
             // Check if drive is very large (warning)
@@ -283,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn test_system_drive_warning() {
+    fn test_system_drive_error() {
         let drive = create_test_drive(32.0, true, false);
         let image = create_test_image(4000.0); // 4GB
 
@@ -292,7 +295,26 @@ mod tests {
         assert!(!statuses.is_empty());
         assert!(statuses
             .iter()
-            .any(|s| s.status_type == CompatibilityStatusType::Warning));
+            .any(|s| s.status_type == CompatibilityStatusType::Error));
+        assert!(!is_drive_valid(&drive, Some(&image)));
+    }
+
+    #[test]
+    fn test_source_drive_uses_path_components() {
+        let drive = create_test_drive(32.0, false, false);
+        let on_drive = ImageInfo {
+            path: PathBuf::from("/media/test/images/os.img"),
+            name: "os.img".into(),
+            size_mb: 1.0,
+        };
+        let similar_prefix = ImageInfo {
+            path: PathBuf::from("/media/test-backup/os.img"),
+            name: "os.img".into(),
+            size_mb: 1.0,
+        };
+
+        assert!(is_source_drive(&drive, Some(&on_drive)));
+        assert!(!is_source_drive(&drive, Some(&similar_prefix)));
     }
 
     #[test]

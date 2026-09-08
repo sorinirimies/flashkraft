@@ -144,6 +144,30 @@ impl DriveInfo {
     pub fn is_usb(&self) -> bool {
         self.usb_info.is_some()
     }
+
+    /// Return whether two enumeration results identify the same physical USB
+    /// device. A device path alone is not stable across unplug/replug cycles,
+    /// so preserving a destructive selection requires matching USB IDs and a
+    /// non-empty serial number as well.
+    pub fn has_same_physical_identity(&self, other: &Self) -> bool {
+        if self.device_path != other.device_path {
+            return false;
+        }
+
+        match (&self.usb_info, &other.usb_info) {
+            (Some(left), Some(right)) => {
+                left.vendor_id == right.vendor_id
+                    && left.product_id == right.product_id
+                    && left.serial.as_deref().filter(|serial| !serial.is_empty())
+                        == right.serial.as_deref().filter(|serial| !serial.is_empty())
+                    && left
+                        .serial
+                        .as_deref()
+                        .is_some_and(|serial| !serial.is_empty())
+            }
+            _ => false,
+        }
+    }
 }
 
 impl PartialEq for DriveInfo {

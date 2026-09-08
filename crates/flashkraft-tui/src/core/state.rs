@@ -14,7 +14,7 @@ use std::{
 
 use tokio::sync::mpsc;
 
-use crate::domain::{DriveInfo, ImageInfo};
+use crate::domain::{constraints, CompatibilityStatusType, DriveInfo, ImageInfo};
 use tui_file_explorer::{FileExplorer, Theme};
 
 use super::storage::TuiStorage;
@@ -291,14 +291,29 @@ impl App {
             None => return,
         };
 
-        if let Ok(drives) = rx.try_recv() {
-            self.available_drives = drives;
-            self.drives_loading = false;
-            self.drive_cursor = 0;
-            // Don't put the receiver back — detection is one-shot.
-        } else {
-            // Not ready yet — put it back.
-            self.drives_rx = Some(rx);
+        match rx.try_recv() {
+            Ok(mut drives) => {
+                constraints::mark_invalid_drives(&mut drives, self.selected_image.as_ref());
+                self.selected_drive = self.selected_drive.as_ref().and_then(|selected| {
+                    drives
+                        .iter()
+                        .find(|drive| selected.has_same_physical_identity(drive))
+                        .filter(|drive| {
+                            constraints::is_drive_valid(drive, self.selected_image.as_ref())
+                        })
+                        .cloned()
+                });
+                self.available_drives = drives;
+                self.drives_loading = false;
+                self.drive_cursor = 0;
+                // Don't put the receiver back — detection is one-shot.
+            }
+            Err(mpsc::error::TryRecvError::Empty) => {
+                self.drives_rx = Some(rx);
+            }
+            Err(mpsc::error::TryRecvError::Disconnected) => {
+                self.drives_loading = false;
+            }
         }
     }
 
@@ -490,15 +505,7 @@ impl App {
             .cloned()
             .ok_or_else(|| "No drive selected.".to_string())?;
 
-        if drive.is_system {
-            return Err(format!(
-                "{} is a system drive and cannot be used as a flash target.",
-                drive.name
-            ));
-        }
-        if drive.is_read_only {
-            return Err(format!("{} is read-only.", drive.name));
-        }
+        validate_flash_target(&drive, self.selected_image.as_ref())?;
 
         self.selected_drive = Some(drive);
         self.screen = AppScreen::DriveInfo;
@@ -524,6 +531,10 @@ impl App {
             .as_ref()
             .ok_or("No drive selected.")?
             .clone();
+
+        // Validate again at the destructive transition; the image or removable
+        // device may have changed since the confirmation screen was shown.
+        validate_flash_target(&drive, Some(&image))?;
 
         // Reset flash state.
         self.flash_progress = 0.0;
@@ -858,6 +869,19 @@ impl Default for App {
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+fn validate_flash_target(drive: &DriveInfo, image: Option<&ImageInfo>) -> Result<(), String> {
+    if constraints::is_drive_valid(drive, image) {
+        return Ok(());
+    }
+
+    let message = constraints::get_drive_image_compatibility_statuses(drive, image)
+        .into_iter()
+        .find(|status| status.status_type == CompatibilityStatusType::Error)
+        .map(|status| status.message)
+        .unwrap_or_else(|| format!("{} is not a safe flash target.", drive.name));
+    Err(message)
+}
 
 /// Parse `/proc/mounts` (Linux) or `/etc/mtab` to find a mount point for the
 /// given block device or any of its partitions.
@@ -1330,6 +1354,19 @@ mod tests {
     }
 
     #[test]
+    fn test_confirm_drive_rejects_undersized_target() {
+        let mut app = App::new();
+        app.selected_image = Some(make_image(2048.0));
+        app.available_drives = vec![make_drive("tiny", "/dev/sdb", false, false)];
+        app.available_drives[0].size_gb = 1.0;
+
+        let result = app.confirm_drive();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("too small"));
+        assert!(app.selected_drive.is_none());
+    }
+
+    #[test]
     fn test_confirm_drive_empty_list_returns_err() {
         let mut app = App::new();
         app.screen = AppScreen::SelectDrive;
@@ -1582,6 +1619,20 @@ mod tests {
     }
 
     #[test]
+    fn test_poll_drives_disconnected_clears_loading() {
+        let (tx, rx) = mpsc::unbounded_channel::<Vec<DriveInfo>>();
+        drop(tx);
+        let mut app = App::new();
+        app.drives_loading = true;
+        app.drives_rx = Some(rx);
+
+        app.poll_drives();
+
+        assert!(!app.drives_loading);
+        assert!(app.drives_rx.is_none());
+    }
+
+    #[test]
     fn test_poll_drives_does_nothing_when_no_receiver() {
         let mut app = App::new();
         // drives_rx is None by default
@@ -1693,6 +1744,20 @@ mod tests {
             msg.contains("drive"),
             "error should mention missing drive: {msg}"
         );
+    }
+
+    #[test]
+    fn test_begin_flash_revalidates_target() {
+        let mut app = App::new();
+        app.selected_image = Some(make_image(2048.0));
+        let mut drive = make_drive("tiny", "/dev/sdb", false, false);
+        drive.size_gb = 1.0;
+        app.selected_drive = Some(drive);
+
+        let result = app.begin_flash();
+        assert!(result.is_err());
+        assert!(!matches!(app.screen, AppScreen::Flashing));
+        assert!(app.flash_rx.is_none());
     }
 
     #[test]

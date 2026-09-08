@@ -6,12 +6,14 @@
 //!
 //! The installed binary carries the **setuid-root** bit
 //! (`sudo chmod u+s /usr/bin/flashkraft`).  At process startup `main.rs`
-//! calls [`set_real_uid`] to record the unprivileged user's UID.
+//! calls [`initialize_privileges`] before starting the UI. The effective UID
+//! is immediately dropped to the invoking user while the saved root identity
+//! remains available for checked, narrowly scoped raw-device operations.
 //!
-//! When the pipeline needs to open a raw block device it temporarily
-//! escalates to root via `nix::unistd::seteuid(0)`, opens the file
-//! descriptor, then immediately drops back to the real UID.  Root is held
-//! for less than one millisecond.
+//! The target is opened once with exclusive read/write access and retained
+//! through capacity validation, writing, syncing, partition refresh, and
+//! verification. Privilege restoration is verified; failure aborts rather
+//! than returning control to an interactive process that may still be root.
 //!
 //! ## Progress reporting
 //!
@@ -32,7 +34,7 @@
 
 #[cfg(unix)]
 use nix::libc;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -107,165 +109,41 @@ pub fn set_real_uid(uid: u32) {
     let _ = REAL_UID.set(uid);
 }
 
-/// Return `true` when the process is currently running with effective root
-/// privileges (i.e. `geteuid() == 0`).
+/// Initialize Unix credentials before either UI starts.
 ///
-/// On non-Unix platforms this always returns `false` — callers should use
-/// the Windows Administrator check instead.
-pub fn is_privileged() -> bool {
+/// A setuid-root installation starts with the caller as the real user and root
+/// as the effective user. We retain the saved root identity for tightly scoped
+/// device operations, but immediately drop the effective UID back to the caller.
+/// Direct root execution is rejected because there is no trustworthy user UID
+/// to drop to.
+pub fn initialize_privileges() -> Result<(), String> {
     #[cfg(unix)]
     {
-        nix::unistd::geteuid().is_root()
-    }
-    #[cfg(not(unix))]
-    {
-        false
-    }
-}
+        use nix::unistd::{geteuid, getuid, seteuid};
 
-/// Attempt to re-exec the current binary with root privileges via `pkexec`
-/// or `sudo -E`, whichever is found first on `PATH`.
-///
-/// This is called **on demand** — e.g. when the user clicks Flash and we
-/// detect that `is_privileged()` is `false` — rather than unconditionally
-/// at startup.  Because `execvp` replaces the current process image on
-/// success, this function only returns when neither escalation helper is
-/// available or the user declined (cancelled the polkit dialog / Ctrl-C'd
-/// the sudo prompt).
-///
-/// `FLASHKRAFT_ESCALATED=1` is injected into the child environment so that
-/// the re-exec'd process skips this call and does not loop.
-///
-/// # Safety
-///
-/// Safe to call from any thread, but must be called before the Iced event
-/// loop has started spawning threads that hold OS resources (file
-/// descriptors, mutexes) that `execvp` would implicitly close/reset.
-/// Calling it from the `update` handler (on the Iced main thread, before
-/// the flash subscription starts) satisfies this requirement.
-#[cfg(unix)]
-pub fn reexec_as_root() {
-    // Never attempt privilege escalation during `cargo test` — sudo/pkexec
-    // would block the test runner waiting for a password prompt.
-    //
-    // IMPORTANT: `#[cfg(test)]` is only set on the *root* crate being tested.
-    // When `flashkraft-core` is compiled as a *dependency* of another crate's
-    // test binary (e.g. `flashkraft-gui`'s tests), it is compiled in normal
-    // (non-test) mode, so `#[cfg(test)]` does NOT fire here.
-    //
-    // We therefore use a runtime heuristic: cargo test binary paths contain
-    // a hash-suffixed name under `target/debug/deps/`, e.g.:
-    //   …/target/debug/deps/flashkraft_gui-a76f74e119b55607
-    // We also check for the FLASHKRAFT_NO_REEXEC env var as an explicit opt-out,
-    // and for NEXTEST_TEST_FILTER which nextest sets.
-    if is_running_under_test_harness() {
-        return;
-    }
-
-    // Compile-time guard for crate-local unit tests (when core IS the root
-    // test crate and #[cfg(test)] IS honoured).
-    #[cfg(test)]
-    return;
-
-    #[cfg(not(test))]
-    reexec_as_root_inner();
-}
-
-/// Returns `true` when the current process appears to be a `cargo test` (or
-/// nextest) test-runner binary, based on runtime evidence.
-///
-/// This is needed because `#[cfg(test)]` is **not** propagated to dependency
-/// crates — only the root crate being tested gets the flag.
-#[cfg(unix)]
-fn is_running_under_test_harness() -> bool {
-    // Explicit opt-out env var — tests can set this if needed.
-    if std::env::var("FLASHKRAFT_NO_REEXEC").is_ok() {
-        return true;
-    }
-
-    // nextest sets this in every test process.
-    if std::env::var("NEXTEST_TEST_FILTER").is_ok() {
-        return true;
-    }
-
-    // cargo test passes `--test-threads` (or related flags) on argv.
-    // More importantly, the test binary itself is passed the test filter as
-    // a positional argv — but the most reliable signal is the executable path:
-    // cargo always places test binaries under `target/debug/deps/<name>-<hash>`
-    // or `target/<profile>/deps/<name>-<hash>`.
-    //
-    // We look for `/deps/` in the executable path as a strong indicator.
-    if let Ok(exe) = std::env::current_exe() {
-        let path_str = exe.to_string_lossy();
-        // All cargo test binaries live under a `deps` directory.
-        if path_str.contains("/deps/") {
-            return true;
+        let real = getuid();
+        let effective = geteuid();
+        if real.is_root() {
+            return Err(
+                "Refusing to start the interactive application as root. Install the binary setuid-root and launch it as a normal user."
+                    .to_string(),
+            );
         }
-        // Also catch `target\deps\` on Windows.
-        if path_str.contains("\\deps\\") {
-            return true;
+
+        set_real_uid(real.as_raw());
+        if effective.is_root() {
+            seteuid(real).map_err(|e| format!("Failed to drop root privileges at startup: {e}"))?;
+            if geteuid() != real {
+                return Err("Failed to verify the startup privilege drop".to_string());
+            }
         }
     }
 
-    false
+    Ok(())
 }
-
-#[cfg(all(unix, not(test)))]
-fn reexec_as_root_inner() {
-    use std::ffi::CString;
-
-    // Guard: the re-exec'd copy sets this so we don't loop forever.
-    if std::env::var("FLASHKRAFT_ESCALATED").as_deref() == Ok("1") {
-        return;
-    }
-
-    let self_exe = match std::fs::read_link("/proc/self/exe").or_else(|_| std::env::current_exe()) {
-        Ok(p) => p,
-        Err(_) => return,
-    };
-    let self_exe_str = match self_exe.to_str() {
-        Some(s) => s.to_owned(),
-        None => return,
-    };
-
-    let extra_args: Vec<String> = std::env::args().skip(1).collect();
-
-    // Tell the child it was already escalated so it won't recurse.
-    std::env::set_var("FLASHKRAFT_ESCALATED", "1");
-
-    // ── Try pkexec first (graphical polkit dialog) ────────────────────
-    if which_exists("pkexec") {
-        let mut argv: Vec<CString> = Vec::new();
-        argv.push(unix_c_str("pkexec"));
-        argv.push(unix_c_str(&self_exe_str));
-        for a in &extra_args {
-            argv.push(unix_c_str(a));
-        }
-        let _ = nix::unistd::execvp(&unix_c_str("pkexec"), &argv);
-    }
-
-    // ── Try sudo -E (terminal fallback) ─────────────────────────────
-    if which_exists("sudo") {
-        let mut argv: Vec<CString> = Vec::new();
-        argv.push(unix_c_str("sudo"));
-        argv.push(unix_c_str("-E")); // preserve DISPLAY / WAYLAND_DISPLAY
-        argv.push(unix_c_str(&self_exe_str));
-        for a in &extra_args {
-            argv.push(unix_c_str(a));
-        }
-        let _ = nix::unistd::execvp(&unix_c_str("sudo"), &argv);
-    }
-
-    // Neither helper available — remove the guard and fall through unprivileged.
-    std::env::remove_var("FLASHKRAFT_ESCALATED");
-}
-
-/// Stub for non-Unix targets so call sites compile without `#[cfg]` guards.
-#[cfg(not(unix))]
-pub fn reexec_as_root() {}
 
 /// Return `true` if `name` is an executable file reachable via `PATH`.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn which_exists(name: &str) -> bool {
     use std::os::unix::fs::PermissionsExt;
     std::env::var("PATH")
@@ -279,13 +157,6 @@ fn which_exists(name: &str) -> bool {
         })
 }
 
-/// Build a `CString`, replacing embedded NUL bytes with `?`.
-#[cfg(all(unix, not(test)))]
-fn unix_c_str(s: &str) -> std::ffi::CString {
-    let sanitised: Vec<u8> = s.bytes().map(|b| if b == 0 { b'?' } else { b }).collect();
-    std::ffi::CString::new(sanitised).unwrap_or_else(|_| std::ffi::CString::new("?").unwrap())
-}
-
 /// Retrieve the stored real UID, falling back to the current effective UID.
 #[cfg(unix)]
 fn real_uid() -> nix::unistd::Uid {
@@ -294,6 +165,29 @@ fn real_uid() -> nix::unistd::Uid {
         .copied()
         .unwrap_or_else(|| nix::unistd::getuid().as_raw());
     nix::unistd::Uid::from_raw(raw)
+}
+
+#[cfg(unix)]
+fn with_effective_root<T>(operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    use nix::unistd::{geteuid, seteuid, Uid};
+
+    let caller = real_uid();
+    let already_root = geteuid().is_root();
+    if !already_root {
+        seteuid(Uid::from_raw(0)).map_err(|e| format!("Unable to acquire root privileges: {e}"))?;
+        if !geteuid().is_root() {
+            return Err("Unable to verify root privilege acquisition".to_string());
+        }
+    }
+
+    let result = operation();
+
+    if !already_root && (seteuid(caller).is_err() || geteuid() != caller) {
+        // Returning to a multithreaded UI while still privileged is unsafe.
+        std::process::abort();
+    }
+
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -585,7 +479,10 @@ fn flash_pipeline(
     #[cfg(target_os = "linux")]
     reject_partition_node(device_path)?;
 
-    let image_size = std::fs::metadata(image_path)
+    let mut image_file =
+        std::fs::File::open(image_path).map_err(|e| format!("Cannot open image: {e}"))?;
+    let image_size = image_file
+        .metadata()
         .map_err(|e| format!("Cannot stat image: {e}"))?
         .len();
 
@@ -597,13 +494,10 @@ fn flash_pipeline(
     send(tx, FlashEvent::Stage(FlashStage::Unmounting));
     unmount_device(device_path, tx);
 
-    // ── Check device is not already in use ───────────────────────────────────
-    // Open the device O_RDONLY | O_EXCL *after* unmounting. If a partition was
-    // merely mounted beforehand the unmount above will have cleared it. If
-    // this still returns EBUSY it means a genuinely foreign process (e.g. a
-    // second flashkraft instance) has the device open for writing.
-    #[cfg(target_os = "linux")]
-    check_device_not_busy(device_path)?;
+    // Open the target exactly once after unmounting. The retained handle is
+    // capacity-checked and used through write, sync, partition refresh, and
+    // verification so a reused path can never redirect later stages.
+    let mut target_file = prepare_target(device_path, image_size)?;
 
     // ── Step 2: Write ────────────────────────────────────────────────────────
     send(tx, FlashEvent::Stage(FlashStage::Writing));
@@ -613,23 +507,52 @@ fn flash_pipeline(
             "Writing {image_size} bytes from {image_path} → {device_path}"
         )),
     );
-    write_image(image_path, device_path, image_size, tx, &cancel)?;
+    write_image_files(
+        &mut image_file,
+        &mut target_file,
+        device_path,
+        image_size,
+        tx,
+        &cancel,
+    )?;
+
+    ensure_not_cancelled(&cancel)?;
 
     // ── Step 3: Sync ─────────────────────────────────────────────────────────
     send(tx, FlashEvent::Stage(FlashStage::Syncing));
-    sync_device(device_path, tx);
+    sync_device(&target_file, device_path, tx)?;
 
-    // ── Step 4: Re-read partition table ──────────────────────────────────────
+    ensure_not_cancelled(&cancel)?;
+
+    // ── Step 4: Re-read partition table ─────────────────────────────────────
     send(tx, FlashEvent::Stage(FlashStage::Rereading));
-    reread_partition_table(device_path, tx);
+    reread_partition_table(&target_file, device_path, tx);
+
+    ensure_not_cancelled(&cancel)?;
 
     // ── Step 5: Verify ───────────────────────────────────────────────────────
     send(tx, FlashEvent::Stage(FlashStage::Verifying));
-    verify(image_path, device_path, image_size, tx)?;
+    verify_files(
+        &mut image_file,
+        &mut target_file,
+        image_path,
+        device_path,
+        image_size,
+        tx,
+        &cancel,
+    )?;
 
     // ── Done ─────────────────────────────────────────────────────────────────
     send(tx, FlashEvent::Done);
     Ok(())
+}
+
+fn ensure_not_cancelled(cancel: &AtomicBool) -> Result<(), String> {
+    if cancel.load(Ordering::SeqCst) {
+        Err("Flash operation cancelled by user".to_string())
+    } else {
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -643,7 +566,7 @@ fn flash_pipeline(
 ///
 /// This function is separate so it can be unit-tested by injecting a synthetic
 /// `io::Error`.
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", test))]
 fn check_device_not_busy(device_path: &str) -> Result<(), String> {
     check_device_not_busy_with(device_path, |path| {
         use std::os::unix::fs::OpenOptionsExt;
@@ -657,7 +580,7 @@ fn check_device_not_busy(device_path: &str) -> Result<(), String> {
 
 /// Inner implementation — accepts an injectable opener so tests can supply a
 /// synthetic `EBUSY` without needing a real block device.
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", test))]
 fn check_device_not_busy_with<F>(device_path: &str, open_fn: F) -> Result<(), String>
 where
     F: FnOnce(&str) -> std::io::Result<()>,
@@ -733,86 +656,114 @@ fn reject_partition_node(device_path: &str) -> Result<(), String> {
 // Privilege helpers
 // ---------------------------------------------------------------------------
 
-/// Open `device_path` for raw writing, temporarily escalating to root if the
-/// binary is setuid-root, then immediately dropping back to the real UID.
-fn open_device_for_writing(device_path: &str) -> Result<std::fs::File, String> {
-    #[cfg(unix)]
-    {
-        use nix::unistd::seteuid;
+fn open_target_once(device_path: &str) -> Result<std::fs::File, String> {
+    let open = || {
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true).write(true);
 
-        // Attempt to escalate to root.
-        //
-        // This only succeeds when the binary carries the setuid-root bit
-        // (`chmod u+s`).  If escalation fails we still try to open the file —
-        // it may be a regular writable file (e.g. during tests) or the user
-        // may already have write permission on the device.
-        let escalated = seteuid(nix::unistd::Uid::from_raw(0)).is_ok();
-
-        let result = std::fs::OpenOptions::new()
-            .write(true)
-            .open(device_path)
-            .map_err(|e| {
-                let raw = e.raw_os_error().unwrap_or(0);
-                if raw == libc::EACCES || raw == libc::EPERM {
-                    if escalated {
-                        format!(
-                            "Permission denied opening '{device_path}'.\n\
-                             Even with setuid-root the device refused access — \
-                             check that the device exists and is not in use."
-                        )
-                    } else {
-                        format!(
-                            "Permission denied opening '{device_path}'.\n\
-                             FlashKraft needs root access to write to block devices.\n\
-                             Install setuid-root so it can escalate automatically:\n\
-                             sudo chown root:root /usr/bin/flashkraft\n\
-                             sudo chmod u+s /usr/bin/flashkraft"
-                        )
-                    }
-                } else if raw == libc::EBUSY {
-                    format!(
-                        "Device '{device_path}' is busy. \
-                         Ensure all partitions are unmounted before flashing."
-                    )
-                } else {
-                    format!("Cannot open device '{device_path}' for writing: {e}")
-                }
-            });
-
-        // Drop back to the real (unprivileged) user immediately.
-        if escalated {
-            let _ = seteuid(real_uid());
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_EXCL);
         }
 
-        result
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.share_mode(0);
+        }
+
+        options.open(device_path)
+    };
+
+    let result = match open() {
+        Ok(file) => Ok(file),
+        #[cfg(unix)]
+        Err(error) if matches!(error.raw_os_error(), Some(libc::EACCES) | Some(libc::EPERM)) => {
+            with_effective_root(|| open().map_err(|e| e.to_string()))
+        }
+        Err(error) => Err(error.to_string()),
+    };
+
+    result.map_err(|error| {
+        let busy = error.contains("Device or resource busy") || error.contains("sharing violation");
+        if busy {
+            format!("Device '{device_path}' is busy or mounted by another process")
+        } else {
+            format!(
+                "Cannot open target '{device_path}' for exclusive read/write access: {error}. \
+                 Raw devices require a setuid-root FlashKraft installation."
+            )
+        }
+    })
+}
+
+fn prepare_target(device_path: &str, _image_size: u64) -> Result<std::fs::File, String> {
+    let file = open_target_once(device_path)?;
+    let _metadata = file
+        .metadata()
+        .map_err(|e| format!("Cannot inspect opened target '{device_path}': {e}"))?;
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        let file_type = _metadata.file_type();
+        if file_type.is_block_device() {
+            let capacity = linux_block_capacity(&file, device_path)?;
+            validate_target_capacity(_image_size, capacity)?;
+        } else if !file_type.is_file() {
+            return Err(format!(
+                "Refusing target '{device_path}': it is neither a whole block device nor a regular test file"
+            ));
+        }
     }
 
-    #[cfg(not(unix))]
+    #[cfg(all(unix, not(target_os = "linux")))]
     {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .open(device_path)
-            .map_err(|e| {
-                let raw = e.raw_os_error().unwrap_or(0);
-                // ERROR_ACCESS_DENIED (5) or ERROR_PRIVILEGE_NOT_HELD (1314)
-                if raw == 5 || raw == 1314 {
-                    format!(
-                        "Access denied opening '{device_path}'.\n\
-                         FlashKraft must be run as Administrator on Windows.\n\
-                         Right-click the application and choose \
-                         'Run as administrator'."
-                    )
-                } else if raw == 32 {
-                    // ERROR_SHARING_VIOLATION
-                    format!(
-                        "Device '{device_path}' is in use by another process.\n\
-                         Close any applications using the drive and try again."
-                    )
-                } else {
-                    format!("Cannot open device '{device_path}' for writing: {e}")
-                }
-            })
+        use std::os::unix::fs::FileTypeExt;
+        let file_type = _metadata.file_type();
+        if !file_type.is_file() && !file_type.is_block_device() && !file_type.is_char_device() {
+            return Err(format!(
+                "Refusing target '{device_path}': unsupported device type"
+            ));
+        }
     }
+
+    #[cfg(target_os = "windows")]
+    if device_path
+        .to_ascii_lowercase()
+        .starts_with(r"\\.\physicaldrive")
+    {
+        let capacity = windows::disk_capacity(&file)?;
+        validate_target_capacity(_image_size, capacity)?;
+    }
+
+    Ok(file)
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
+fn validate_target_capacity(image_size: u64, capacity: u64) -> Result<(), String> {
+    if capacity == 0 {
+        return Err("Target device reports zero capacity".to_string());
+    }
+    if image_size > capacity {
+        return Err(format!(
+            "Image is too large for target: image is {image_size} bytes, target capacity is {capacity} bytes"
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn linux_block_capacity(file: &std::fs::File, device_path: &str) -> Result<u64, String> {
+    use nix::ioctl_read;
+    use std::os::unix::io::AsRawFd;
+
+    ioctl_read!(blkgetsize64, 0x12, 114, u64);
+    let mut capacity = 0u64;
+    unsafe { blkgetsize64(file.as_raw_fd(), &mut capacity) }
+        .map_err(|e| format!("Cannot determine exact capacity of '{device_path}': {e}"))?;
+    Ok(capacity)
 }
 
 // ---------------------------------------------------------------------------
@@ -899,7 +850,6 @@ fn is_partition_of(dev: &str, device_name: &str) -> bool {
 fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
     #[cfg(target_os = "linux")]
     {
-        use nix::unistd::seteuid;
         use std::ffi::CString;
 
         // ── Strategy 1: udisksctl ─────────────────────────────────────────────
@@ -952,37 +902,36 @@ fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
             }
         }
 
-        // ── Strategy 2: umount2 MNT_DETACH (fallback) ────────────────────────
-        // Lazy unmount: detaches the filesystem immediately even if busy.
-        // umount2 never blocks — MNT_DETACH returns right away.
-        let _ = seteuid(nix::unistd::Uid::from_raw(0));
-
-        if let Ok(c_path) = CString::new(partition) {
-            let ret = unsafe { libc::umount2(c_path.as_ptr(), libc::MNT_DETACH) };
-            if ret != 0 {
-                let raw = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
-                match raw {
-                    // EINVAL — not a mount point or already unmounted, harmless.
-                    libc::EINVAL => {}
-                    // ENOENT — path doesn't exist, also harmless.
-                    libc::ENOENT => {}
-                    // EPERM — not permitted (non-root); harmless when the
-                    // partition was never mounted in the first place.
-                    libc::EPERM => {}
-                    _ => {
-                        let err = std::io::Error::from_raw_os_error(raw);
-                        send(
-                            tx,
-                            FlashEvent::Log(format!(
-                                "Warning — could not unmount {partition}: {err}"
-                            )),
-                        );
-                    }
-                }
-            }
+        // A vanished mount point is already detached; avoid entering a
+        // privilege scope for it (and keep this race harmless).
+        if !Path::new(partition).exists() {
+            return;
         }
 
-        let _ = seteuid(real_uid());
+        // ── Strategy 2: umount2 MNT_DETACH (fallback) ────────────────────────
+        let result = CString::new(partition)
+            .map_err(|_| "mount point contains an embedded NUL".to_string())
+            .and_then(|c_path| {
+                with_effective_root(|| {
+                    let ret = unsafe { libc::umount2(c_path.as_ptr(), libc::MNT_DETACH) };
+                    if ret == 0 {
+                        return Ok(());
+                    }
+
+                    let error = std::io::Error::last_os_error();
+                    match error.raw_os_error() {
+                        Some(libc::EINVAL) | Some(libc::ENOENT) => Ok(()),
+                        _ => Err(error.to_string()),
+                    }
+                })
+            });
+
+        if let Err(error) = result {
+            send(
+                tx,
+                FlashEvent::Log(format!("Warning — could not unmount {partition}: {error}")),
+            );
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -1021,6 +970,7 @@ fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
 // Step 2 – Write image
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
 fn write_image(
     image_path: &str,
     device_path: &str,
@@ -1028,10 +978,33 @@ fn write_image(
     tx: &mpsc::Sender<FlashEvent>,
     cancel: &Arc<AtomicBool>,
 ) -> Result<(), String> {
-    let image_file =
+    let mut image_file =
         std::fs::File::open(image_path).map_err(|e| format!("Cannot open image: {e}"))?;
+    let mut device_file = prepare_target(device_path, image_size)?;
+    write_image_files(
+        &mut image_file,
+        &mut device_file,
+        device_path,
+        image_size,
+        tx,
+        cancel,
+    )
+}
 
-    let device_file = open_device_for_writing(device_path)?;
+fn write_image_files(
+    image_file: &mut std::fs::File,
+    device_file: &mut std::fs::File,
+    device_path: &str,
+    image_size: u64,
+    tx: &mpsc::Sender<FlashEvent>,
+    cancel: &AtomicBool,
+) -> Result<(), String> {
+    image_file
+        .seek(SeekFrom::Start(0))
+        .map_err(|e| format!("Cannot seek source image: {e}"))?;
+    device_file
+        .seek(SeekFrom::Start(0))
+        .map_err(|e| format!("Cannot seek target '{device_path}': {e}"))?;
 
     let mut reader = io::BufReader::with_capacity(BLOCK_SIZE, image_file);
     let mut writer = io::BufWriter::with_capacity(BLOCK_SIZE, device_file);
@@ -1041,18 +1014,22 @@ fn write_image(
     let start = Instant::now();
     let mut last_report = Instant::now();
 
-    loop {
+    while bytes_written < image_size {
         // Honour cancellation requests between blocks.
         if cancel.load(Ordering::SeqCst) {
             return Err("Flash operation cancelled by user".to_string());
         }
 
+        let remaining = image_size - bytes_written;
+        let to_read = remaining.min(buf.len() as u64) as usize;
         let n = reader
-            .read(&mut buf)
+            .read(&mut buf[..to_read])
             .map_err(|e| format!("Read error on image: {e}"))?;
 
         if n == 0 {
-            break; // EOF
+            return Err(format!(
+                "Image ended early: expected {image_size} bytes, read {bytes_written}"
+            ));
         }
 
         writer
@@ -1083,28 +1060,7 @@ fn write_image(
         .flush()
         .map_err(|e| format!("Buffer flush error: {e}"))?;
 
-    // Retrieve the underlying File for fsync.
-    #[cfg_attr(not(unix), allow(unused_variables))]
-    let device_file = writer
-        .into_inner()
-        .map_err(|e| format!("BufWriter error: {e}"))?;
-
-    // fsync: push all dirty pages to the physical medium.
-    // Treated as a hard error — a failed fsync means we cannot trust the
-    // data reached the device.
-    #[cfg(unix)]
-    {
-        use std::os::unix::io::AsRawFd;
-        let fd = device_file.as_raw_fd();
-        let ret = unsafe { libc::fsync(fd) };
-        if ret != 0 {
-            let err = std::io::Error::last_os_error();
-            return Err(format!(
-                "fsync failed on '{device_path}': {err} — \
-                 data may not have been fully written to the device"
-            ));
-        }
-    }
+    drop(writer);
 
     // Emit a final progress event at 100 %.
     let speed_mb_s = compute_speed_mb_s(bytes_written, start.elapsed());
@@ -1125,43 +1081,24 @@ fn write_image(
 // Step 3 – Sync
 // ---------------------------------------------------------------------------
 
-fn sync_device(device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
-    #[cfg(unix)]
-    if let Ok(f) = std::fs::OpenOptions::new().write(true).open(device_path) {
-        use std::os::unix::io::AsRawFd;
-        let fd = f.as_raw_fd();
-        #[cfg(target_os = "linux")]
-        unsafe {
-            libc::fdatasync(fd);
-        }
-        #[cfg(not(target_os = "linux"))]
-        unsafe {
-            libc::fsync(fd);
-        }
-        drop(f);
-    }
+fn sync_device(
+    target: &std::fs::File,
+    device_path: &str,
+    tx: &mpsc::Sender<FlashEvent>,
+) -> Result<(), String> {
+    target.sync_all().map_err(|e| {
+        format!(
+            "Failed to flush write-back caches for '{device_path}': {e}; data may not have reached the device"
+        )
+    })?;
 
     #[cfg(target_os = "linux")]
     unsafe {
         libc::sync();
     }
 
-    // Windows: open the physical drive and call FlushFileBuffers.
-    // This forces the OS to flush all dirty pages for the device to hardware.
-    #[cfg(target_os = "windows")]
-    {
-        match windows::flush_device_buffers(device_path) {
-            Ok(()) => {}
-            Err(e) => send(
-                tx,
-                FlashEvent::Log(format!(
-                    "Warning — FlushFileBuffers on '{device_path}' failed: {e}"
-                )),
-            ),
-        }
-    }
-
     send(tx, FlashEvent::Log("Write-back caches flushed".into()));
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -1169,43 +1106,50 @@ fn sync_device(device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]
-fn reread_partition_table(device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
+fn reread_partition_table(
+    target: &std::fs::File,
+    _device_path: &str,
+    tx: &mpsc::Sender<FlashEvent>,
+) {
     use nix::ioctl_none;
     use std::os::unix::io::AsRawFd;
 
-    ioctl_none!(blkrrpart, 0x12, 95);
+    if target
+        .metadata()
+        .is_ok_and(|metadata| metadata.file_type().is_file())
+    {
+        send(
+            tx,
+            FlashEvent::Log("Partition table refresh skipped for regular-file target".into()),
+        );
+        return;
+    }
 
-    // Brief pause so any pending I/O completes before we poke the kernel.
+    ioctl_none!(blkrrpart, 0x12, 95);
     std::thread::sleep(Duration::from_millis(500));
 
-    match std::fs::OpenOptions::new().write(true).open(device_path) {
-        Ok(f) => {
-            let result = unsafe { blkrrpart(f.as_raw_fd()) };
-            match result {
-                Ok(_) => send(
-                    tx,
-                    FlashEvent::Log("Kernel partition table refreshed".into()),
-                ),
-                Err(e) => send(
-                    tx,
-                    FlashEvent::Log(format!(
-                        "Warning — BLKRRPART ioctl failed \
-                         (device may not be partitioned): {e}"
-                    )),
-                ),
-            }
-        }
+    let result =
+        with_effective_root(|| unsafe { blkrrpart(target.as_raw_fd()) }.map_err(|e| e.to_string()));
+    match result {
+        Ok(_) => send(
+            tx,
+            FlashEvent::Log("Kernel partition table refreshed".into()),
+        ),
         Err(e) => send(
             tx,
             FlashEvent::Log(format!(
-                "Warning — could not open device for BLKRRPART: {e}"
+                "Warning — BLKRRPART ioctl failed (device may not be partitioned): {e}"
             )),
         ),
     }
 }
 
 #[cfg(target_os = "macos")]
-fn reread_partition_table(device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
+fn reread_partition_table(
+    _target: &std::fs::File,
+    device_path: &str,
+    tx: &mpsc::Sender<FlashEvent>,
+) {
     let _ = std::process::Command::new("diskutil")
         .args(["rereadPartitionTable", device_path])
         .output();
@@ -1218,11 +1162,15 @@ fn reread_partition_table(device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
 // Windows: IOCTL_DISK_UPDATE_PROPERTIES asks the partition manager to
 // re-enumerate the partition table from the on-disk data.
 #[cfg(target_os = "windows")]
-fn reread_partition_table(device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
+fn reread_partition_table(
+    target: &std::fs::File,
+    _device_path: &str,
+    tx: &mpsc::Sender<FlashEvent>,
+) {
     // Brief pause so the OS flushes before we poke the partition manager.
     std::thread::sleep(Duration::from_millis(500));
 
-    match windows::update_disk_properties(device_path) {
+    match windows::update_disk_properties(target) {
         Ok(()) => send(
             tx,
             FlashEvent::Log("Partition table refreshed (IOCTL_DISK_UPDATE_PROPERTIES)".into()),
@@ -1237,7 +1185,11 @@ fn reread_partition_table(device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-fn reread_partition_table(_device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
+fn reread_partition_table(
+    _target: &std::fs::File,
+    _device_path: &str,
+    tx: &mpsc::Sender<FlashEvent>,
+) {
     send(
         tx,
         FlashEvent::Log("Partition table refresh not supported on this platform".into()),
@@ -1248,17 +1200,51 @@ fn reread_partition_table(_device_path: &str, tx: &mpsc::Sender<FlashEvent>) {
 // Step 5 – Verify
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
 fn verify(
     image_path: &str,
     device_path: &str,
     image_size: u64,
     tx: &mpsc::Sender<FlashEvent>,
+    cancel: &AtomicBool,
 ) -> Result<(), String> {
+    let mut image = std::fs::File::open(image_path)
+        .map_err(|e| format!("Cannot open {image_path} for hashing: {e}"))?;
+    let mut device = std::fs::File::open(device_path)
+        .map_err(|e| format!("Cannot open {device_path} for hashing: {e}"))?;
+    verify_files(
+        &mut image,
+        &mut device,
+        image_path,
+        device_path,
+        image_size,
+        tx,
+        cancel,
+    )
+}
+
+fn verify_files(
+    image: &mut std::fs::File,
+    device: &mut std::fs::File,
+    image_path: &str,
+    device_path: &str,
+    image_size: u64,
+    tx: &mpsc::Sender<FlashEvent>,
+    cancel: &AtomicBool,
+) -> Result<(), String> {
+    image
+        .seek(SeekFrom::Start(0))
+        .map_err(|e| format!("Cannot rewind source image '{image_path}': {e}"))?;
+    device
+        .seek(SeekFrom::Start(0))
+        .map_err(|e| format!("Cannot rewind target '{device_path}': {e}"))?;
+
     send(
         tx,
         FlashEvent::Log("Computing SHA-256 of source image".into()),
     );
-    let image_hash = sha256_with_progress(image_path, image_size, "image", tx)?;
+    let image_hash =
+        sha256_reader_with_progress(image, image_path, image_size, "image", tx, Some(cancel))?;
 
     send(
         tx,
@@ -1266,7 +1252,8 @@ fn verify(
             "Reading back {image_size} bytes from device for verification"
         )),
     );
-    let device_hash = sha256_with_progress(device_path, image_size, "device", tx)?;
+    let device_hash =
+        sha256_reader_with_progress(device, device_path, image_size, "device", tx, Some(cancel))?;
 
     if image_hash != device_hash {
         return Err(format!(
@@ -1288,19 +1275,31 @@ fn verify(
 /// `phase` is forwarded verbatim into every `VerifyProgress` event so the
 /// UI can distinguish the image-hash pass (`"image"`) from the device
 /// read-back pass (`"device"`).
+#[cfg(test)]
 fn sha256_with_progress(
     path: &str,
     max_bytes: u64,
     phase: &'static str,
     tx: &mpsc::Sender<FlashEvent>,
+    cancel: Option<&AtomicBool>,
+) -> Result<String, String> {
+    let mut file =
+        std::fs::File::open(path).map_err(|e| format!("Cannot open {path} for hashing: {e}"))?;
+    sha256_reader_with_progress(&mut file, path, max_bytes, phase, tx, cancel)
+}
+
+fn sha256_reader_with_progress(
+    reader: &mut impl Read,
+    path: &str,
+    max_bytes: u64,
+    phase: &'static str,
+    tx: &mpsc::Sender<FlashEvent>,
+    cancel: Option<&AtomicBool>,
 ) -> Result<String, String> {
     use sha2::{Digest, Sha256};
 
-    let file =
-        std::fs::File::open(path).map_err(|e| format!("Cannot open {path} for hashing: {e}"))?;
-
     let mut hasher = Sha256::new();
-    let mut reader = io::BufReader::with_capacity(BLOCK_SIZE, file);
+    let mut reader = io::BufReader::with_capacity(BLOCK_SIZE, reader);
     let mut buf = vec![0u8; BLOCK_SIZE];
     let mut remaining = max_bytes;
     let mut bytes_read: u64 = 0;
@@ -1309,12 +1308,18 @@ fn sha256_with_progress(
     let mut last_report = Instant::now();
 
     while remaining > 0 {
+        if let Some(cancel) = cancel {
+            ensure_not_cancelled(cancel)?;
+        }
+
         let to_read = (remaining as usize).min(buf.len());
         let n = reader
             .read(&mut buf[..to_read])
             .map_err(|e| format!("Read error while hashing {path}: {e}"))?;
         if n == 0 {
-            break;
+            return Err(format!(
+                "Unexpected end of {path}: expected {max_bytes} bytes, read {bytes_read}"
+            ));
         }
         hasher.update(&buf[..n]);
         bytes_read += n as u64;
@@ -1368,11 +1373,13 @@ mod windows {
             CloseHandle, FALSE, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
         },
         Storage::FileSystem::{
-            CreateFileW, FlushFileBuffers, FILE_FLAG_WRITE_THROUGH, FILE_SHARE_READ,
-            FILE_SHARE_WRITE, OPEN_EXISTING,
+            CreateFileW, FILE_FLAG_WRITE_THROUGH, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
         },
         System::{
-            Ioctl::{FSCTL_DISMOUNT_VOLUME, FSCTL_LOCK_VOLUME, IOCTL_DISK_UPDATE_PROPERTIES},
+            Ioctl::{
+                FSCTL_DISMOUNT_VOLUME, FSCTL_LOCK_VOLUME, GET_LENGTH_INFORMATION,
+                IOCTL_DISK_GET_LENGTH_INFO, IOCTL_DISK_UPDATE_PROPERTIES,
+            },
             IO::DeviceIoControl,
         },
     };
@@ -1570,26 +1577,37 @@ mod windows {
         lock_result.and(dismount_result)
     }
 
-    /// Call `FlushFileBuffers` on the physical drive to force the OS to push
-    /// all dirty write-back pages to the device hardware.
-    pub fn flush_device_buffers(device_path: &str) -> Result<(), String> {
-        let handle = open_device_handle(device_path, GENERIC_WRITE)?;
-        let ok = unsafe { FlushFileBuffers(handle) };
-        unsafe { CloseHandle(handle) };
-        if ok == FALSE {
+    fn file_handle(file: &std::fs::File) -> HANDLE {
+        use std::os::windows::io::AsRawHandle;
+        file.as_raw_handle() as HANDLE
+    }
+
+    /// Query the exact byte length of the retained physical-drive handle.
+    pub fn disk_capacity(file: &std::fs::File) -> Result<u64, String> {
+        let mut length = GET_LENGTH_INFORMATION { Length: 0 };
+        let mut bytes_returned = 0u32;
+        let ok = unsafe {
+            DeviceIoControl(
+                file_handle(file),
+                IOCTL_DISK_GET_LENGTH_INFO,
+                std::ptr::null(),
+                0,
+                &mut length as *mut _ as *mut _,
+                std::mem::size_of::<GET_LENGTH_INFORMATION>() as u32,
+                &mut bytes_returned,
+                std::ptr::null_mut(),
+            )
+        };
+        if ok == FALSE || length.Length <= 0 {
             Err(format!("{}", std::io::Error::last_os_error()))
         } else {
-            Ok(())
+            Ok(length.Length as u64)
         }
     }
 
-    /// Send `IOCTL_DISK_UPDATE_PROPERTIES` to the physical drive, asking the
-    /// Windows partition manager to re-read the partition table from disk.
-    pub fn update_disk_properties(device_path: &str) -> Result<(), String> {
-        let handle = open_device_handle(device_path, GENERIC_READ | GENERIC_WRITE)?;
-        let result = device_ioctl(handle, IOCTL_DISK_UPDATE_PROPERTIES);
-        unsafe { CloseHandle(handle) };
-        result
+    /// Send `IOCTL_DISK_UPDATE_PROPERTIES` through the retained drive handle.
+    pub fn update_disk_properties(file: &std::fs::File) -> Result<(), String> {
+        device_ioctl(file_handle(file), IOCTL_DISK_UPDATE_PROPERTIES)
     }
 
     // ── Unit tests ────────────────────────────────────────────────────────────
@@ -1618,20 +1636,6 @@ mod windows {
         fn test_open_device_handle_bad_path_returns_error() {
             let result = open_device_handle(r"\\.\NonExistentDevice999", GENERIC_READ);
             assert!(result.is_err(), "expected error for nonexistent device");
-        }
-
-        /// `flush_device_buffers` on a nonexistent drive must return an error.
-        #[test]
-        fn test_flush_device_buffers_bad_path() {
-            let result = flush_device_buffers(r"\\.\PhysicalDrive999");
-            assert!(result.is_err());
-        }
-
-        /// `update_disk_properties` on a nonexistent drive must return an error.
-        #[test]
-        fn test_update_disk_properties_bad_path() {
-            let result = update_disk_properties(r"\\.\PhysicalDrive999");
-            assert!(result.is_err());
         }
 
         /// `lock_and_dismount_volume` on a nonexistent path must return an error.
@@ -1704,32 +1708,16 @@ mod tests {
     /// Legacy non-progress variant kept for unit tests that don't need a channel.
     fn sha256_first_n_bytes(path: &str, max_bytes: u64) -> Result<String, String> {
         let (tx, _rx) = mpsc::channel();
-        sha256_with_progress(path, max_bytes, "image", &tx)
+        sha256_with_progress(path, max_bytes, "image", &tx, None)
     }
 
     // ── set_real_uid ────────────────────────────────────────────────────────
 
     #[test]
-    fn test_is_privileged_returns_bool() {
-        // Just verify it doesn't panic and returns a consistent value.
-        let first = is_privileged();
-        let second = is_privileged();
-        assert_eq!(first, second, "is_privileged must be deterministic");
-    }
-
-    #[test]
-    fn test_reexec_as_root_does_not_panic_when_already_escalated() {
-        // With the guard env-var set, reexec_as_root must return immediately
-        // without panicking or actually exec-ing anything.
-        std::env::set_var("FLASHKRAFT_ESCALATED", "1");
-        reexec_as_root(); // must not exec — guard fires immediately
-        std::env::remove_var("FLASHKRAFT_ESCALATED");
-    }
-
-    #[test]
     fn test_set_real_uid_stores_value() {
-        // OnceLock only sets once; in tests the first call wins.
-        // Just verify it doesn't panic.
+        #[cfg(unix)]
+        set_real_uid(nix::unistd::getuid().as_raw());
+        #[cfg(not(unix))]
         set_real_uid(1000);
     }
 
@@ -1885,6 +1873,19 @@ mod tests {
     }
 
     #[test]
+    fn test_sha256_rejects_premature_eof() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("fk_sha256_short.bin");
+        std::fs::write(&path, b"short").unwrap();
+
+        let result = sha256_first_n_bytes(path.to_str().unwrap(), 6);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unexpected end"));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn test_sha256_nonexistent_returns_error() {
         let result = sha256_first_n_bytes("/nonexistent/path.bin", 1024);
         assert!(result.is_err());
@@ -1908,6 +1909,27 @@ mod tests {
         assert_eq!(result, expected);
 
         let _ = std::fs::remove_file(path);
+    }
+
+    // ── target capacity validation ───────────────────────────────────────────
+
+    #[test]
+    fn test_target_capacity_accepts_smaller_or_equal_image() {
+        assert!(validate_target_capacity(9, 10).is_ok());
+        assert!(validate_target_capacity(10, 10).is_ok());
+    }
+
+    #[test]
+    fn test_target_capacity_rejects_oversized_image() {
+        let error = validate_target_capacity(11, 10).unwrap_err();
+        assert!(error.contains("too large"));
+        assert!(error.contains("11"));
+        assert!(error.contains("10"));
+    }
+
+    #[test]
+    fn test_target_capacity_rejects_zero_capacity() {
+        assert!(validate_target_capacity(1, 0).is_err());
     }
 
     // ── write_image (via temp files) ─────────────────────────────────────────
@@ -1953,6 +1975,56 @@ mod tests {
             .iter()
             .any(|e| matches!(e, FlashEvent::Progress { .. }));
         assert!(has_progress, "must emit at least one Progress event");
+
+        let _ = std::fs::remove_file(img_path);
+        let _ = std::fs::remove_file(dev_path);
+    }
+
+    #[test]
+    fn test_write_image_stops_at_snapshotted_size() {
+        let dir = std::env::temp_dir();
+        let img_path = dir.join("fk_write_growing_img.bin");
+        let dev_path = dir.join("fk_write_growing_dev.bin");
+        std::fs::write(&img_path, b"expected-extra-data").unwrap();
+        std::fs::File::create(&dev_path).unwrap();
+
+        let (tx, _rx) = make_channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let result = write_image(
+            img_path.to_str().unwrap(),
+            dev_path.to_str().unwrap(),
+            8,
+            &tx,
+            &cancel,
+        );
+
+        assert!(result.is_ok(), "write_image failed: {result:?}");
+        assert_eq!(std::fs::read(&dev_path).unwrap(), b"expected");
+
+        let _ = std::fs::remove_file(img_path);
+        let _ = std::fs::remove_file(dev_path);
+    }
+
+    #[test]
+    fn test_write_image_rejects_premature_eof() {
+        let dir = std::env::temp_dir();
+        let img_path = dir.join("fk_write_short_img.bin");
+        let dev_path = dir.join("fk_write_short_dev.bin");
+        std::fs::write(&img_path, b"short").unwrap();
+        std::fs::File::create(&dev_path).unwrap();
+
+        let (tx, _rx) = make_channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let result = write_image(
+            img_path.to_str().unwrap(),
+            dev_path.to_str().unwrap(),
+            6,
+            &tx,
+            &cancel,
+        );
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("ended early"));
 
         let _ = std::fs::remove_file(img_path);
         let _ = std::fs::remove_file(dev_path);
@@ -2034,16 +2106,52 @@ mod tests {
         std::fs::write(&dev, &data).unwrap();
 
         let (tx, _rx) = make_channel();
+        let cancel = AtomicBool::new(false);
         let result = verify(
             img.to_str().unwrap(),
             dev.to_str().unwrap(),
             data.len() as u64,
             &tx,
+            &cancel,
         );
         assert!(result.is_ok());
 
         let _ = std::fs::remove_file(img);
         let _ = std::fs::remove_file(dev);
+    }
+
+    #[test]
+    fn test_verify_files_uses_retained_target_after_path_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let image_path = dir.path().join("image.bin");
+        let target_path = dir.path().join("target.bin");
+        let moved_path = dir.path().join("original-target.bin");
+        let data = vec![0xA5u8; 4096];
+        std::fs::write(&image_path, &data).unwrap();
+        std::fs::write(&target_path, &data).unwrap();
+
+        let mut image = std::fs::File::open(&image_path).unwrap();
+        let mut target = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&target_path)
+            .unwrap();
+        std::fs::rename(&target_path, &moved_path).unwrap();
+        std::fs::write(&target_path, vec![0xFFu8; data.len()]).unwrap();
+
+        let (tx, _rx) = make_channel();
+        let cancel = AtomicBool::new(false);
+        let result = verify_files(
+            &mut image,
+            &mut target,
+            image_path.to_str().unwrap(),
+            target_path.to_str().unwrap(),
+            data.len() as u64,
+            &tx,
+            &cancel,
+        );
+
+        assert!(result.is_ok(), "verification must use the retained handle");
     }
 
     #[test]
@@ -2055,7 +2163,14 @@ mod tests {
         std::fs::write(&dev, vec![0xFFu8; 64 * 1024]).unwrap();
 
         let (tx, _rx) = make_channel();
-        let result = verify(img.to_str().unwrap(), dev.to_str().unwrap(), 64 * 1024, &tx);
+        let cancel = AtomicBool::new(false);
+        let result = verify(
+            img.to_str().unwrap(),
+            dev.to_str().unwrap(),
+            64 * 1024,
+            &tx,
+            &cancel,
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Verification failed"));
 
@@ -2075,11 +2190,13 @@ mod tests {
         std::fs::write(&dev, &device_data).unwrap();
 
         let (tx, _rx) = make_channel();
+        let cancel = AtomicBool::new(false);
         let result = verify(
             img.to_str().unwrap(),
             dev.to_str().unwrap(),
             image_data.len() as u64,
             &tx,
+            &cancel,
         );
         assert!(
             result.is_ok(),
@@ -2390,7 +2507,12 @@ mod tests {
         std::fs::File::create(&dev).unwrap();
 
         let (tx, rx) = make_channel();
-        sync_device(dev.to_str().unwrap(), &tx);
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&dev)
+            .unwrap();
+        sync_device(&file, dev.to_str().unwrap(), &tx).unwrap();
 
         let events = drain(&rx);
         let has_flush_log = events.iter().any(|e| {
@@ -2420,7 +2542,12 @@ mod tests {
         std::fs::File::create(&dev).unwrap();
 
         let (tx, rx) = make_channel();
-        reread_partition_table(dev.to_str().unwrap(), &tx);
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&dev)
+            .unwrap();
+        reread_partition_table(&file, dev.to_str().unwrap(), &tx);
 
         let events = drain(&rx);
         let has_log = events.iter().any(|e| matches!(e, FlashEvent::Log(_)));
@@ -2598,7 +2725,12 @@ mod tests {
         std::fs::File::create(&dev).unwrap();
 
         let (tx, rx) = make_channel();
-        reread_partition_table(dev.to_str().unwrap(), &tx);
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&dev)
+            .unwrap();
+        reread_partition_table(&file, dev.to_str().unwrap(), &tx);
 
         let events = drain(&rx);
         let has_log = events.iter().any(|e| matches!(e, FlashEvent::Log(_)));
@@ -2632,35 +2764,6 @@ mod tests {
         let events = drain(&rx);
         let has_log = events.iter().any(|e| matches!(e, FlashEvent::Log(_)));
         assert!(has_log, "do_unmount on bad volume must emit a Log event");
-    }
-
-    /// On Windows, sync_device on a nonexistent physical drive path should
-    /// emit a warning log (FlushFileBuffers will fail) but not panic.
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn test_sync_device_windows_bad_path_no_panic() {
-        let (tx, rx) = make_channel();
-        sync_device(r"\\.\PhysicalDrive999", &tx);
-        let events = drain(&rx);
-        // Must emit at least one log event (either flush warning or the
-        // normal "caches flushed" message).
-        let has_log = events.iter().any(|e| matches!(e, FlashEvent::Log(_)));
-        assert!(has_log, "sync_device must emit a Log event on Windows");
-    }
-
-    /// On Windows, reread_partition_table on a nonexistent drive must emit
-    /// a warning log and not panic.
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn test_reread_partition_table_windows_bad_path_no_panic() {
-        let (tx, rx) = make_channel();
-        reread_partition_table(r"\\.\PhysicalDrive999", &tx);
-        let events = drain(&rx);
-        let has_log = events.iter().any(|e| matches!(e, FlashEvent::Log(_)));
-        assert!(
-            has_log,
-            "reread_partition_table must emit a Log event on Windows"
-        );
     }
 
     /// On Windows, open_device_for_writing on a nonexistent physical drive
