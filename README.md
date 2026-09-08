@@ -80,21 +80,22 @@ FlashKraft ships two front-ends from a single Rust workspace:
 
 ## How flashing works
 
-FlashKraft uses a **self-elevating pure-Rust helper** pattern. When you click/confirm Flash:
+On Unix, FlashKraft uses a checked **setuid privilege-drop** model. The installed binary immediately drops effective root before starting the GUI, TUI, or Tokio runtime. The core pipeline temporarily regains root only for operations that require it:
 
 ```
-Main process (GUI or TUI)
-  └─ pkexec /path/to/flashkraft[−tui] --flash-helper <image> <device>
-       └─ Runs as root, pure Rust, no shell
-            1. UNMOUNTING  — reads /proc/mounts, calls umount2(MNT_DETACH) per partition
-            2. WRITING     — streams image → block device in 4 MiB chunks, emits PROGRESS lines
-            3. SYNCING     — fsync(fd) + sync() to flush all kernel write-back caches
-            4. REREADING   — BLKRRPART ioctl so the kernel sees the new partition table
-            5. VERIFYING   — SHA-256(image) == SHA-256(device[0..image_size])
-            6. DONE        — UI shows success
+Unprivileged GUI or TUI
+  └─ in-process core pipeline on a dedicated worker thread
+       1. UNMOUNTING  — detaches target partitions
+       2. PREPARING   — opens the target once with exclusive read/write access
+                        and validates exact capacity on Linux and Windows
+       3. WRITING     — streams exactly the snapshotted image length in 4 MiB chunks
+       4. SYNCING     — fsyncs the retained target handle
+       5. REREADING   — refreshes the partition table through that same handle
+       6. VERIFYING   — seeks and verifies the same source and target handles
+       7. DONE        — releases exclusive ownership and reports success
 ```
 
-The same binary is re-executed with elevated privileges via `pkexec` — no separate helper binary needs to be installed. All output (progress, logs, errors) is written to stdout as structured lines that the UI reads in real time.
+The retained target handle prevents a removable-device path such as `/dev/sdb` from being resolved to a different device between writing and verification. Direct interactive execution as root is rejected; launch the installed setuid binary as a normal user.
 
 ### Why not `dd`?
 
@@ -210,7 +211,7 @@ SelectImage ──(Enter/confirm)──► SelectDrive ──(Enter)──► Dr
 ### Prerequisites
 
 - Rust 1.70 or later
-- `pkexec` (part of `polkit`, available on all major Linux distributions)
+- Unix installation: a root-owned setuid binary installed via `just install`
 - For GUI: a running display server (X11 or Wayland)
 - For TUI: any terminal emulator (works over SSH)
 
@@ -266,7 +267,7 @@ RUST_BACKTRACE=1 cargo run --bin flashkraft-tui
 
 1. **Select Image** — click the `+` button and choose an ISO, IMG, or DMG file
 2. **Select Drive** — pick the target USB or SD card from the detected drives list
-3. **Flash** — click **Flash!**; authenticate with `pkexec` when prompted
+3. **Flash** — click **Flash!**; the installed binary uses its saved privilege only for raw-device operations
 4. **Wait** — the progress bar shows live stage, bytes written, and MB/s
 5. **Done** — verification passes automatically; safely remove the drive
 

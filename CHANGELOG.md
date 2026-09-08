@@ -2,9 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.0 - 2026-09-08
+### ➕ Added
+- add codegraph gitignore
+### 📦 Other Changes
+- justfile: add gitea-nexus-lab remote recipes (push/pull/sync/release)
+- justfile: rename gitea -> gitea-microlab; add full gitea-microlab/-starscream/-nexus-lab parity
+- Add/complete nightly dependency-update automation (Gitea): update deps, quality-gate, bump patch version, tag, push to Gitea + GitHub
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-05-05
+- chore(deps): nightly dependency upgrade 2026-05-11
+- chore(deps): nightly dependency upgrade 2026-08-20
+- chore(deps): nightly dependency upgrade 2026-08-21
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.2.2...v1.3.0
 ## 1.2.2 - 2026-05-04
 ### 📦 Other Changes
 - Switch doc builds to Rust stable and unify cargo doc step
+### 🔧 Chores
+- chore: bump version to 1.2.2
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.2.1...v1.2.2
 ## 1.2.1 - 2026-05-04
 ### 🔧 Chores
