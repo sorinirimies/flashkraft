@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.2 - 2026-09-09
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-09
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.1...v1.3.2
+## 1.3.1 - 2026-09-08
+### 🔧 Chores
+- chore: bump version to 1.3.1
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.0...v1.3.1
 ## 1.3.0 - 2026-09-08
 ### ✨ Features
 - feat: harden flash safety and update dependencies
@@ -80,11 +88,8 @@ All notable changes to this project will be documented in this file.
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.8...v1.0.9
 ## 1.0.8 - 2026-04-26
 ### ♻️ Refactor
-- Refactor tests and UI helpers using macros for conciseness
-- Refactor macOS drive parsing with pattern guards
 - Refactor update-deps recipe to use POSIX shell and improve error
 ### ➕ Added
-- Add Gitea Starscream remote support to release workflows
 - Add push-all-force and sync-all recipes for multi-remote force push/sync
 ### 📈 Improvements
 - Improve test robustness by handling tempdir and file errors
@@ -95,11 +100,26 @@ All notable changes to this project will be documented in this file.
 ### 🔄 Updated
 - Update dependencies and migrate to iced_fonts 0.3
 ### 🔧 Chores
-- chore: bump version to 1.0.1
-- chore: bump version to 1.0.2
-- chore: bump version to 1.0.3
 - chore: bump version to 1.0.8
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.0...v1.0.8
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.3...v1.0.8
+## 1.0.3 - 2026-04-19
+### ♻️ Refactor
+- Refactor macOS drive parsing with pattern guards
+### 🔧 Chores
+- chore: bump version to 1.0.3
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.2...v1.0.3
+## 1.0.2 - 2026-04-19
+### 🔧 Chores
+- chore: bump version to 1.0.2
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.1...v1.0.2
+## 1.0.1 - 2026-04-19
+### ♻️ Refactor
+- Refactor tests and UI helpers using macros for conciseness
+### ➕ Added
+- Add Gitea Starscream remote support to release workflows
+### 🔧 Chores
+- chore: bump version to 1.0.1
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.0...v1.0.1
 ## 1.0.0 - 2026-04-12
 ### 📦 Other Changes
 - Replace sled with redb for theme persistence
