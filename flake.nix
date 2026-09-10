@@ -137,12 +137,12 @@
         };
 
         apps = {
-          # `nix run` executes the plain, non-setuid store binary. Thanks to the
-          # Linux transparent-escalation fallback in flashkraft-core, it still
-          # works for raw-device access: FlashKraft re-execs itself through
-          # sudo/pkexec on demand (prompting once per run) and drops back to
-          # your UID immediately after. For a permanent, no-prompt-per-run
-          # install use the NixOS module below or `just install-nix`.
+          # NOTE: `nix run` executes the plain, non-setuid store binary — it
+          # can select images and enumerate drives, but the flash pipeline
+          # will refuse to open raw block devices ("Raw devices require a
+          # setuid-root FlashKraft installation"). Use the NixOS module below
+          # (`programs.flashkraft.enable = true;`) or `just install-nix` for
+          # a working privileged install.
           default = flake-utils.lib.mkApp {
             drv = flashkraft-gui;
             name = "flashkraft";

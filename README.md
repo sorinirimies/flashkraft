@@ -95,14 +95,7 @@ Unprivileged GUI or TUI
        7. DONE        — releases exclusive ownership and reports success
 ```
 
-The retained target handle prevents a removable-device path such as `/dev/sdb` from being resolved to a different device between writing and verification.
-
-**Getting root access, in order of preference:**
-
-1. **setuid-root install (preferred)** — `just install` (or a manual `chown root:root` + `chmod u+s`) makes the binary carry the setuid bit. The saved root identity is retained for narrowly-scoped device operations; the effective UID is dropped back to the invoking user immediately at startup.
-2. **Transparent escalation (Linux fallback)** — if the binary is *not* setuid-root (e.g. installed via plain `cargo install`/`cargo build`), FlashKraft automatically re-execs itself once through `sudo -E` or `pkexec`, prompting for a password/polkit confirmation. It then immediately applies the exact same real=effective=caller, saved=root drop via `setresuid` — the interactive UI never keeps running at full root privilege the way a bare `sudo <app>` invocation would.
-
-Direct interactive root execution (typing `sudo flashkraft` yourself, or being logged in as root) only succeeds if the original unprivileged UID can be recovered from `SUDO_UID`/`PKEXEC_UID`; otherwise it's rejected, since there would be no trustworthy user identity to drop back to.
+The retained target handle prevents a removable-device path such as `/dev/sdb` from being resolved to a different device between writing and verification. Direct interactive execution as root is rejected; launch the installed setuid binary as a normal user.
 
 ### Why not `dd`?
 
@@ -224,18 +217,15 @@ SelectImage ──(Enter/confirm)──► SelectDrive ──(Enter)──► Dr
 
 ### Installing via Nix
 
-The flake builds plain, unprivileged binaries into `/nix/store` — `/nix/store` paths are immutable and typically mounted `nosuid`, so a store binary can never carry the setuid bit itself.
-
-Because the Linux transparent-escalation fallback lives in `flashkraft-core` (see "How flashing works" above), a plain `nix run .#flashkraft` still works out of the box: on first raw-device access it re-execs itself through `sudo`/`pkexec`, prompting once per run, then drops back to your unprivileged UID immediately. If neither `sudo` nor `pkexec` is available, or the prompt is declined, you'll see:
+The flake builds plain, unprivileged binaries into `/nix/store` — `nix run` alone is enough to browse images and enumerate drives, but the flash pipeline will refuse to open raw block devices with:
 
 ```
 Cannot open target '/dev/sda' for exclusive read/write access: Unable to acquire
-root privileges: EPERM: Operation not permitted. Raw devices require root
-privileges: install FlashKraft setuid-root (just install), or ensure
-sudo/pkexec is available so it can escalate automatically.
+root privileges: EPERM: Operation not permitted. Raw devices require a
+setuid-root FlashKraft installation.
 ```
 
-For a smoother, no-prompt-per-run experience, install with a permanent setuid wrapper instead:
+This is expected: `/nix/store` paths are immutable and typically mounted `nosuid`, so a store binary can never carry the setuid bit itself. Two supported ways to get a working privileged install:
 
 **NixOS** — use the flake's `nixosModules.default`, which wires up a proper `security.wrappers` entry (a setuid-root wrapper at `/run/wrappers/bin/flashkraft` that execs the real store binary):
 
