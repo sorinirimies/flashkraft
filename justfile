@@ -539,6 +539,18 @@ push-tags-all:
 #   just release 0.5.0            # bump + push to GitHub + dispatch workflow (requires gh CLI)
 #   just release-all 0.5.0        # bump + push to GitHub + Gitea → Release workflow fires
 #
+# ⚠️  Every `release*` recipe below unconditionally depends on `bump`, which
+# ALWAYS increments the version — even if the only thing you actually wanted
+# was to push an already-committed fix (e.g. a justfile/config change) to a
+# remote that was previously failing. Using `release-gitea-starscream 1.2.4`
+# just to retry a broken push will cut a real, empty patch release.
+#
+# If you just need to (re)push existing commits/tags with NO version change,
+# use one of the non-bumping recipes instead:
+#   just push-gitea-starscream    # push main only, no bump
+#   just push-release-all         # push branch + all reachable tags, no bump
+#   just push-all / pull-all      # sync branch only, no bump
+#
 # Version is shared across all three crates via version.workspace = true —
 # bumping [workspace.package] in Cargo.toml is the single change needed.
 #
