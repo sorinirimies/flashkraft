@@ -9,35 +9,43 @@ pub(in crate::ui) fn render_flashing(
 ) {
     let [hdr, _bc, body, ftr] = chrome_layout(area);
 
-    render_header(frame, hdr, "Flashing\u{2026}", theme_name, pal);
-    render_footer(frame, ftr, &[("C / Esc", "Cancel flash")], pal);
+    render_header(frame, hdr, "Flashing…", theme_name, pal);
+    let log_hint = if app.log_focused {
+        "↑/↓ j/k scroll • PgUp/PgDn page • Home/End jump • Tab unfocus"
+    } else {
+        "Tab focus Log to scroll"
+    };
+    render_footer(
+        frame,
+        ftr,
+        &[("C / Esc", "Cancel flash"), ("Tab", log_hint)],
+        pal,
+    );
 
     let is_verifying = app.verify_progress.is_some();
 
-    // When verifying we need an extra block for the verify panel.
+    // Layout grows the Statistics/Log row (`Min`) to absorb any extra
+    // vertical space when the terminal is resized taller, instead of that
+    // space becoming blank padding.
     let rows = if is_verifying {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(0),
                 Constraint::Length(1), // stage label
                 Constraint::Length(5), // overall progress slider
                 Constraint::Length(7), // verify panel (two sub-bars)
-                Constraint::Length(8), // stats + log
-                Constraint::Min(0),
+                Constraint::Min(8),    // stats + log (grows with the window)
             ])
             .split(body)
     } else {
-        // Pad with a dummy last segment so indexing stays consistent below.
+        // Pad with a dummy segment so indexing stays consistent below.
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(0),
                 Constraint::Length(1), // stage label
                 Constraint::Length(5), // overall progress slider
                 Constraint::Length(0), // (hidden verify panel)
-                Constraint::Length(8), // stats + log
-                Constraint::Min(0),
+                Constraint::Min(8),    // stats + log (grows with the window)
             ])
             .split(body)
     };
@@ -53,7 +61,7 @@ pub(in crate::ui) fn render_flashing(
             ),
         ]))
         .alignment(Alignment::Center),
-        rows[1],
+        rows[0],
     );
 
     // ── Overall progress slider ───────────────────────────────────────────────
@@ -64,8 +72,8 @@ pub(in crate::ui) fn render_flashing(
     let slider_outer = themed_block!(" \u{26a1}  Flashing ", pal.brand, pal.accent)
         .title_alignment(Alignment::Center);
 
-    let slider_inner = slider_outer.inner(rows[2]);
-    frame.render_widget(slider_outer, rows[2]);
+    let slider_inner = slider_outer.inner(rows[1]);
+    frame.render_widget(slider_outer, rows[1]);
 
     let slider = Slider::from_state(&slider_state)
         .orientation(SliderOrientation::Horizontal)
@@ -81,7 +89,7 @@ pub(in crate::ui) fn render_flashing(
     // ── Verification panel ────────────────────────────────────────────────────
     // Shown only while the verify stage is active. Contains two sub-bars:
     // one for the image-hash pass and one for the device read-back pass.
-    if is_verifying && rows[3].height > 0 {
+    if is_verifying && rows[2].height > 0 {
         let v_overall = app.verify_progress.unwrap_or(0.0);
 
         // image pass: overall 0.0–0.5 maps to 0–100 %
@@ -114,8 +122,8 @@ pub(in crate::ui) fn render_flashing(
         )
         .title_alignment(Alignment::Center);
 
-        let verify_inner = verify_outer.inner(rows[3]);
-        frame.render_widget(verify_outer, rows[3]);
+        let verify_inner = verify_outer.inner(rows[2]);
+        frame.render_widget(verify_outer, rows[2]);
 
         // Split inner area into two rows: image bar and device bar.
         let sub_rows = Layout::default()
@@ -168,7 +176,7 @@ pub(in crate::ui) fn render_flashing(
     let stats_log_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
-        .split(rows[4]);
+        .split(rows[3]);
 
     let fmt_bytes = |b: u64| -> String {
         if b >= 1_000_000_000 {
@@ -207,7 +215,17 @@ pub(in crate::ui) fn render_flashing(
     // Uses tui-spinner's LinearSpinner (vertical bounce) for the Zed/Copilot look.
 
     // The log block — rendered first so we can measure the inner height.
-    let log_block = themed_block!(" Log ", pal.accent, pal.dim).padding(Padding::horizontal(1));
+    // Border brightens to `pal.brand` while focused so it's obvious Tab/arrow
+    // keys are about to scroll this panel.
+    let log_border_color = if app.log_focused { pal.brand } else { pal.dim };
+    let log_title = match (app.log_focused, app.log_scroll) {
+        (true, 0) => " Log (focused) ".to_string(),
+        (true, n) => format!(" Log ↑{n} (focused) "),
+        (false, 0) => " Log ".to_string(),
+        (false, n) => format!(" Log ↑{n} "),
+    };
+    let log_block =
+        themed_block!(log_title, pal.accent, log_border_color).padding(Padding::horizontal(1));
 
     let log_inner = log_block.inner(stats_log_cols[1]);
 
@@ -219,13 +237,20 @@ pub(in crate::ui) fn render_flashing(
 
     let log_height = log_cols[0].height as usize;
 
+    // Remember the rendered viewport height (used by key handling for
+    // page-scroll sizing and clamping) and clamp any stale scroll offset
+    // left over from a resize or from the log being cleared.
+    app.log_view_height = log_height;
+    let max_scroll = app.flash_log.len().saturating_sub(log_height);
+    if app.log_scroll > max_scroll {
+        app.log_scroll = max_scroll;
+    }
+
     let log_lines: Vec<Line> = {
-        let mut lines: Vec<Line> = app
-            .flash_log
+        let end = app.flash_log.len().saturating_sub(app.log_scroll);
+        let start = end.saturating_sub(log_height);
+        let mut lines: Vec<Line> = app.flash_log[start..end]
             .iter()
-            .rev()
-            .take(log_height)
-            .rev()
             .map(|l| {
                 let style = if l.to_lowercase().contains("error") {
                     Style::default().fg(pal.err)

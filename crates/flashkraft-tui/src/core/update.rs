@@ -395,6 +395,39 @@ fn handle_flashing(app: &mut App, key: KeyEvent) -> bool {
             app.cancel_flash();
             true
         }
+
+        // Toggle keyboard focus on the Log panel.
+        KeyCode::Tab => {
+            app.toggle_log_focus();
+            true
+        }
+
+        // Scrolling only applies once the Log panel is focused.
+        KeyCode::Up | KeyCode::Char('k') if app.log_focused => {
+            app.log_scroll_up();
+            true
+        }
+        KeyCode::Down | KeyCode::Char('j') if app.log_focused => {
+            app.log_scroll_down();
+            true
+        }
+        KeyCode::PageUp if app.log_focused => {
+            app.log_scroll_page_up();
+            true
+        }
+        KeyCode::PageDown if app.log_focused => {
+            app.log_scroll_page_down();
+            true
+        }
+        KeyCode::Home | KeyCode::Char('g') if app.log_focused => {
+            app.log_scroll_home();
+            true
+        }
+        KeyCode::End | KeyCode::Char('G') if app.log_focused => {
+            app.log_scroll_end();
+            true
+        }
+
         _ => false,
     }
 }
@@ -926,7 +959,54 @@ mod tests {
         assert_eq!(app.screen, AppScreen::Flashing);
     }
 
-    // ── Complete screen ───────────────────────────────────────────────────────
+    #[test]
+    fn flashing_tab_toggles_log_focus() {
+        let mut app = app_on(AppScreen::Flashing);
+        assert!(!app.log_focused);
+        assert!(handle_key(&mut app, key(KeyCode::Tab)));
+        assert!(app.log_focused);
+        assert!(handle_key(&mut app, key(KeyCode::Tab)));
+        assert!(!app.log_focused);
+    }
+
+    #[test]
+    fn flashing_arrows_scroll_log_when_focused() {
+        let mut app = app_on(AppScreen::Flashing);
+        app.flash_log = (0..10).map(|i| format!("line {i}")).collect();
+        app.log_view_height = 4;
+        app.toggle_log_focus();
+
+        assert!(handle_key(&mut app, key(KeyCode::Up)));
+        assert_eq!(app.log_scroll, 1);
+        assert!(handle_key(&mut app, key(KeyCode::Down)));
+        assert_eq!(app.log_scroll, 0);
+    }
+
+    #[test]
+    fn flashing_arrows_not_consumed_when_log_unfocused() {
+        let mut app = app_on(AppScreen::Flashing);
+        app.flash_log = (0..10).map(|i| format!("line {i}")).collect();
+        app.log_view_height = 4;
+
+        let consumed = handle_key(&mut app, key(KeyCode::Up));
+        assert!(!consumed, "scroll keys must be ignored while unfocused");
+        assert_eq!(app.log_scroll, 0);
+    }
+
+    #[test]
+    fn flashing_home_end_jump_log_scroll_when_focused() {
+        let mut app = app_on(AppScreen::Flashing);
+        app.flash_log = (0..20).map(|i| format!("line {i}")).collect();
+        app.log_view_height = 5;
+        app.toggle_log_focus();
+
+        assert!(handle_key(&mut app, key(KeyCode::Home)));
+        assert_eq!(app.log_scroll, 15);
+        assert!(handle_key(&mut app, key(KeyCode::End)));
+        assert_eq!(app.log_scroll, 0);
+    }
+
+    // ── Complete screen ──────────────────────────────────────────────────────────
 
     #[test]
     fn complete_down_increments_scroll() {

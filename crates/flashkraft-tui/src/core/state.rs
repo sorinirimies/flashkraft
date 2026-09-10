@@ -72,6 +72,17 @@ pub struct App {
     pub flash_stage: String,
     /// Recent log lines from the flash helper.
     pub flash_log: Vec<String>,
+    /// Whether the Log panel currently has keyboard focus (toggled with Tab
+    /// while on the Flashing screen). When focused, Up/Down/PageUp/PageDown/
+    /// Home/End scroll the log instead of being ignored.
+    pub log_focused: bool,
+    /// Manual scroll offset from the bottom of the log, in lines. `0` means
+    /// "pinned to the latest line" (auto-follow); scrolling up increases
+    /// this and suspends auto-follow until the user scrolls back to `0`.
+    pub log_scroll: usize,
+    /// Height (in lines) of the log viewport as last rendered — used to
+    /// clamp scrolling and compute page-up/page-down jumps.
+    pub log_view_height: usize,
     /// Shared cancellation token.
     pub cancel_token: Arc<AtomicBool>,
     /// Channel receiving [`FlashEvent`]s from the background flash task.
@@ -189,6 +200,9 @@ impl App {
             flash_speed: 0.0,
             flash_stage: "Initialising\u{2026}".to_string(),
             flash_log: Vec::new(),
+            log_focused: false,
+            log_scroll: 0,
+            log_view_height: 0,
             cancel_token: Arc::new(AtomicBool::new(false)),
             flash_rx: None,
             verify_progress: None,
@@ -542,6 +556,7 @@ impl App {
         self.flash_speed = 0.0;
         self.flash_stage = "Starting…".to_string();
         self.flash_log.clear();
+        self.log_scroll = 0;
         self.cancel_token = Arc::new(AtomicBool::new(false));
         self.verify_progress = None;
         self.verify_speed = 0.0;
@@ -569,6 +584,52 @@ impl App {
         self.cancel_token.store(true, Ordering::SeqCst);
         self.error_message = "Flash operation cancelled by user.".to_string();
         self.screen = AppScreen::Error;
+    }
+
+    // ── Log panel focus + scrolling ───────────────────────────────────
+
+    /// Toggle keyboard focus on the Flashing screen's Log panel.
+    pub fn toggle_log_focus(&mut self) {
+        self.log_focused = !self.log_focused;
+    }
+
+    /// Largest valid `log_scroll` value: enough to scroll the oldest line to
+    /// the top of the viewport, and no further.
+    fn max_log_scroll(&self) -> usize {
+        self.flash_log.len().saturating_sub(self.log_view_height)
+    }
+
+    /// Scroll one line towards older entries (suspends auto-follow).
+    pub fn log_scroll_up(&mut self) {
+        self.log_scroll = (self.log_scroll + 1).min(self.max_log_scroll());
+    }
+
+    /// Scroll one line towards the newest entry. Reaching `0` resumes
+    /// auto-follow (new lines will keep the view pinned to the bottom).
+    pub fn log_scroll_down(&mut self) {
+        self.log_scroll = self.log_scroll.saturating_sub(1);
+    }
+
+    /// Scroll a full page (viewport height) towards older entries.
+    pub fn log_scroll_page_up(&mut self) {
+        let page = self.log_view_height.max(1);
+        self.log_scroll = (self.log_scroll + page).min(self.max_log_scroll());
+    }
+
+    /// Scroll a full page (viewport height) towards the newest entry.
+    pub fn log_scroll_page_down(&mut self) {
+        let page = self.log_view_height.max(1);
+        self.log_scroll = self.log_scroll.saturating_sub(page);
+    }
+
+    /// Jump to the oldest available log line.
+    pub fn log_scroll_home(&mut self) {
+        self.log_scroll = self.max_log_scroll();
+    }
+
+    /// Jump back to the newest log line and resume auto-follow.
+    pub fn log_scroll_end(&mut self) {
+        self.log_scroll = 0;
     }
 
     /// Full reset — go back to the first screen.
@@ -1806,6 +1867,90 @@ mod tests {
             app.error_message.to_lowercase().contains("cancel"),
             "error message should mention cancellation: {}",
             app.error_message
+        );
+    }
+
+    // ── log panel focus + scrolling ──────────────────────────────────
+
+    #[test]
+    fn test_toggle_log_focus_flips_flag() {
+        let mut app = App::new();
+        assert!(!app.log_focused);
+        app.toggle_log_focus();
+        assert!(app.log_focused);
+        app.toggle_log_focus();
+        assert!(!app.log_focused);
+    }
+
+    #[test]
+    fn test_log_scroll_up_increments_and_clamps() {
+        let mut app = App::new();
+        app.flash_log = (0..10).map(|i| format!("line {i}")).collect();
+        app.log_view_height = 4;
+
+        for _ in 0..3 {
+            app.log_scroll_up();
+        }
+        assert_eq!(app.log_scroll, 3);
+
+        // Further scrolling must clamp at len - view_height (10 - 4 = 6).
+        for _ in 0..10 {
+            app.log_scroll_up();
+        }
+        assert_eq!(app.log_scroll, 6);
+    }
+
+    #[test]
+    fn test_log_scroll_down_saturates_at_zero() {
+        let mut app = App::new();
+        app.flash_log = (0..10).map(|i| format!("line {i}")).collect();
+        app.log_view_height = 4;
+        app.log_scroll_down();
+        assert_eq!(app.log_scroll, 0, "must not underflow below 0");
+    }
+
+    #[test]
+    fn test_log_scroll_page_up_and_down() {
+        let mut app = App::new();
+        app.flash_log = (0..20).map(|i| format!("line {i}")).collect();
+        app.log_view_height = 5;
+
+        app.log_scroll_page_up();
+        assert_eq!(app.log_scroll, 5);
+        app.log_scroll_page_up();
+        assert_eq!(app.log_scroll, 10);
+
+        app.log_scroll_page_down();
+        assert_eq!(app.log_scroll, 5);
+        app.log_scroll_page_down();
+        assert_eq!(app.log_scroll, 0);
+        // Further page-down must saturate at 0, not underflow.
+        app.log_scroll_page_down();
+        assert_eq!(app.log_scroll, 0);
+    }
+
+    #[test]
+    fn test_log_scroll_home_and_end() {
+        let mut app = App::new();
+        app.flash_log = (0..20).map(|i| format!("line {i}")).collect();
+        app.log_view_height = 5;
+
+        app.log_scroll_home();
+        assert_eq!(app.log_scroll, 15);
+
+        app.log_scroll_end();
+        assert_eq!(app.log_scroll, 0);
+    }
+
+    #[test]
+    fn test_log_scroll_up_noop_when_log_shorter_than_view() {
+        let mut app = App::new();
+        app.flash_log = vec!["only one line".to_string()];
+        app.log_view_height = 20;
+        app.log_scroll_up();
+        assert_eq!(
+            app.log_scroll, 0,
+            "nothing to scroll to when log fits on screen"
         );
     }
 
