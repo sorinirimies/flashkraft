@@ -2,12 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.6 - 2026-09-10
+### 📦 Other Changes
+- revert: restore setuid-root-only privilege model (no automatic sudo/pkexec escalation)
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.5...v1.3.6
 ## 1.3.5 - 2026-09-10
 ### 🐛 Bug Fixes
 - fix: defer privilege escalation to flash-time so the GUI and its native file dialogs start unprivileged
 - fix: correct gitea-starscream remote name in push/release justfile recipes
 ### 📦 Other Changes
 - revert: restore gitea-microlab/gitea-starscream naming convention in justfile
+### 🔧 Chores
+- chore: bump version to 1.3.5
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.4...v1.3.5
 ## 1.3.4 - 2026-09-10
 ### ✨ Features
