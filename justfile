@@ -416,8 +416,8 @@ update-deps:
     set +e
     fail=0
     git push origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git push gitea main             || { echo "⚠️  gitea failed";             fail=1; }
+    git push gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Dependency updates pushed to all remotes.";
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -458,7 +458,7 @@ push:
 
 # Push the current branch to Gitea Microlab
 push-gitea-microlab:
-    git push gitea-microlab main
+    git push gitea main
 
 # Push the current branch to Gitea Starscream
 push-gitea-starscream:
@@ -473,8 +473,8 @@ push-all:
     #!/usr/bin/env sh
     fail=0
     git push origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git push gitea main             || { echo "⚠️  gitea failed";             fail=1; }
+    git push gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
     git push gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Pushed to GitHub, Gitea, Gitea Starscream, and Gitea (nexus-lab)!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
@@ -484,8 +484,8 @@ push-all-force:
     #!/usr/bin/env sh
     fail=0
     git push --force origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --force gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push --force gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git push --force gitea main             || { echo "⚠️  gitea failed";             fail=1; }
+    git push --force gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
     git push --force gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Force-pushed to GitHub, Gitea, Gitea Starscream, and Gitea (nexus-lab)!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
@@ -496,11 +496,11 @@ pull:
 
 # Pull the current branch from Gitea Microlab
 pull-gitea-microlab:
-    git pull gitea-microlab main
+    git pull gitea main
 
 # Pull the current branch from Gitea Starscream
 pull-gitea-starscream:
-    git pull gitea-starscream main
+    git pull gitea_starscream main
 
 # Pull the current branch from Gitea (nexus-lab instance)
 pull-gitea-nexus-lab:
@@ -511,8 +511,8 @@ pull-all:
     #!/usr/bin/env sh
     fail=0
     git pull origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git pull gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git pull gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git pull gitea main             || { echo "⚠️  gitea failed";             fail=1; }
+    git pull gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
     git pull gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Pulled from GitHub, Gitea, Gitea Starscream, and Gitea (nexus-lab)!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
@@ -526,8 +526,8 @@ push-tags-all:
     #!/usr/bin/env sh
     fail=0
     git push origin --tags            || { echo "⚠️  origin failed";            fail=1; }
-    git push gitea-microlab --tags             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push gitea-starscream --tags  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git push gitea --tags             || { echo "⚠️  gitea failed";             fail=1; }
+    git push gitea_starscream --tags  || { echo "⚠️  gitea_starscream failed";  fail=1; }
     git push gitea-nexus-lab --tags   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Tags pushed to all remotes!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
@@ -561,7 +561,7 @@ release version: (bump version)
 # Note: Gitea Actions must be enabled and the release.yml workflow must exist there.
 release-gitea-microlab version: (bump version)
     @echo "Pushing release v{{ version }} to Gitea Microlab…"
-    git push --follow-tags gitea-microlab main
+    git push --follow-tags gitea main
     @echo "✅ Release v{{ version }} live on Gitea Microlab."
 
 # Bump, commit, tag, then push to Gitea Starscream only.
@@ -582,8 +582,8 @@ release-all version: (bump version)
     echo "Pushing release v{{ version }} to all remotes…"
     fail=0
     git push --follow-tags origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --follow-tags gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push --follow-tags gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git push --follow-tags gitea main             || { echo "⚠️  gitea failed";             fail=1; }
+    git push --follow-tags gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
     git push --follow-tags gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Release v{{ version }} pushed to GitHub, Gitea, Gitea Starscream, and Gitea (nexus-lab)!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
@@ -598,8 +598,8 @@ push-release-all: check-all
     #!/usr/bin/env sh
     fail=0
     git push --follow-tags origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --follow-tags gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push --follow-tags gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git push --follow-tags gitea main             || { echo "⚠️  gitea failed";             fail=1; }
+    git push --follow-tags gitea_starscream main  || { echo "⚠️  gitea_starscream failed";  fail=1; }
     git push --follow-tags gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Latest commit + tags pushed to all remotes."; \
     else echo "⚠️  Some remotes failed — check output above."; fi
@@ -618,14 +618,14 @@ release-retrigger version:
 
 # Force-sync Gitea Microlab with GitHub
 sync-gitea-microlab:
-    git push gitea-microlab main --force
-    git push gitea-microlab --tags --force
+    git push gitea main --force
+    git push gitea --tags --force
     @echo "✅ Gitea Microlab force-synced with GitHub."
 
 # Force-sync Gitea Starscream with GitHub
 sync-gitea-starscream:
-    git push gitea-starscream main --force
-    git push gitea-starscream --tags --force
+    git push gitea_starscream main --force
+    git push gitea_starscream --tags --force
     @echo "✅ Gitea Starscream force-synced with GitHub."
 
 # Force-sync Gitea (nexus-lab instance) with GitHub
@@ -638,10 +638,10 @@ sync-gitea-nexus-lab:
 sync-all:
     #!/usr/bin/env sh
     fail=0
-    git push gitea-microlab main --force                  || { echo "⚠️  gitea-microlab main failed";              fail=1; }
-    git push gitea-microlab --tags --force                || { echo "⚠️  gitea-microlab tags failed";              fail=1; }
-    git push gitea-starscream main --force       || { echo "⚠️  gitea-starscream main failed";   fail=1; }
-    git push gitea-starscream --tags --force     || { echo "⚠️  gitea-starscream tags failed";   fail=1; }
+    git push gitea main --force                  || { echo "⚠️  gitea main failed";              fail=1; }
+    git push gitea --tags --force                || { echo "⚠️  gitea tags failed";              fail=1; }
+    git push gitea_starscream main --force       || { echo "⚠️  gitea_starscream main failed";   fail=1; }
+    git push gitea_starscream --tags --force     || { echo "⚠️  gitea_starscream tags failed";   fail=1; }
     git push gitea-nexus-lab main --force        || { echo "⚠️  gitea-nexus-lab main failed";    fail=1; }
     git push gitea-nexus-lab --tags --force      || { echo "⚠️  gitea-nexus-lab tags failed";    fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ All Gitea instances force-synced with GitHub."; \
