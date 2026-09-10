@@ -2,11 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.4 - 2026-09-10
+### ✨ Features
+- feat: restore automatic sudo/pkexec escalation on Linux
+### 🐛 Bug Fixes
+- fix(nix): support setuid-root installs for Nix users
+### 📚 Documentation
+- docs(justfile): warn that release-* recipes always bump version
+### 📦 Other Changes
+- merge: reconcile with Gitea Starscream nightly dep updates (v1.3.2, v1.3.3)
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.3...v1.3.4
 ## 1.3.3 - 2026-09-10
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-10
+- chore: bump version to 1.3.3
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.2...v1.3.3
 ## 1.3.2 - 2026-09-09
+### 🐛 Bug Fixes
+- fix(justfile): correct Gitea remote names (gitea, gitea_starscream)
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-09
 - chore: bump version to 1.3.2
