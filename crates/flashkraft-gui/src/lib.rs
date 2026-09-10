@@ -86,6 +86,41 @@ pub fn run_gui() -> iced::Result {
     .run()
 }
 
+/// Entry point used when this process was relaunched by
+/// `flashkraft_core::flash_helper::escalate_for_flash` (i.e. the user already
+/// picked an image and target drive in a prior, unprivileged instance of this
+/// same app, and this relaunch exists only to gain root for the raw write).
+///
+/// Skips the picker screens entirely and starts on the flashing screen with
+/// `image_path`/`device_path` already selected.
+pub fn run_gui_resume_flash(image_path: String, device_path: String) -> iced::Result {
+    use iced::{Settings, Task};
+
+    iced::application(
+        move || {
+            let initial_state =
+                FlashKraft::new_resuming_flash(image_path.clone(), device_path.clone());
+            (initial_state, Task::none())
+        },
+        FlashKraft::update,
+        FlashKraft::view,
+    )
+    .title("FlashKraft - OS Image Writer")
+    .subscription(FlashKraft::subscription)
+    .theme(|state: &FlashKraft| state.theme.clone())
+    .settings(Settings {
+        fonts: vec![iced_fonts::BOOTSTRAP_FONT_BYTES.into()],
+        ..Default::default()
+    })
+    .window(iced::window::Settings {
+        size: iced::Size::new(1300.0, 700.0),
+        resizable: false,
+        decorations: true,
+        ..Default::default()
+    })
+    .run()
+}
+
 // Re-export domain types from core so downstream code can do
 // `use flashkraft_gui::{DriveInfo, ImageInfo}` without knowing about
 // flashkraft-core directly.

@@ -4,7 +4,7 @@
 //!
 //! ## Privilege model
 //!
-//! Two supported paths, tried in order at startup by [`initialize_privileges`]
+//! Two supported paths, checked at startup by [`initialize_privileges`]
 //! before either UI starts:
 //!
 //! 1. **setuid-root install (preferred)** — the installed binary carries the
@@ -14,10 +14,18 @@
 //!    raw-device operations.
 //! 2. **Transparent escalation (Linux fallback)** — if the binary is not
 //!    setuid-root (e.g. installed via plain `cargo install`/`cargo build`),
-//!    the whole process re-execs itself through `sudo -E` or `pkexec` once,
-//!    then immediately applies the same real=effective=caller, saved=root
-//!    drop via `setresuid` — never leaving the interactive UI running at
-//!    full privilege the way a bare `sudo <app>` invocation would.
+//!    the UI starts and runs fully unprivileged (file dialogs, drive
+//!    detection, etc. all behave exactly like any other user process — this
+//!    matters because a root-owned process frequently cannot reach the
+//!    caller's D-Bus session bus, breaking native file-picker portals).
+//!    Escalation is deferred until the user actually presses "Flash": at
+//!    that point [`escalate_for_flash`] re-execs the whole process through
+//!    `sudo -E` or `pkexec`, passing the already-chosen image/device paths so
+//!    the relaunched process can resume straight into the flash screen. That
+//!    relaunch immediately applies the same real=effective=caller, saved=root
+//!    drop via `setresuid` as the setuid-root path — never leaving the
+//!    interactive UI running at full privilege the way a bare `sudo <app>`
+//!    invocation would.
 //!
 //! The target is opened once with exclusive read/write access and retained
 //! through capacity validation, writing, syncing, partition refresh, and
@@ -118,28 +126,46 @@ pub fn set_real_uid(uid: u32) {
     let _ = REAL_UID.set(uid);
 }
 
+/// Whether this process already has a saved-root identity available for
+/// [`with_effective_root`] — i.e. either a setuid-root install dropped its
+/// effective UID at startup, or the process just landed here via our own
+/// `sudo`/`pkexec` re-exec and dropped back down via `setresuid`.
+///
+/// When this is `false` (plain unprivileged process, never escalated),
+/// raw-device access will fail; the GUI/TUI should call
+/// [`escalate_for_flash`] first.
+static HAS_SAVED_ROOT: OnceLock<bool> = OnceLock::new();
+
+pub fn has_saved_root() -> bool {
+    *HAS_SAVED_ROOT.get().unwrap_or(&false)
+}
+
+#[cfg_attr(not(unix), allow(dead_code))]
+fn set_has_saved_root(value: bool) {
+    let _ = HAS_SAVED_ROOT.set(value);
+}
+
 /// Initialize Unix credentials before either UI starts.
 ///
-/// Two supported paths, tried in order:
+/// Two supported paths:
 ///
 /// 1. **setuid-root install (preferred)** — the caller is the real user and
 ///    root is the effective user (`chmod u+s`). The saved root identity is
 ///    retained for tightly scoped device operations, but the effective UID
-///    is dropped back to the caller immediately.
-/// 2. **Transparent escalation (Linux fallback)** — if the binary is *not*
-///    setuid-root, the whole process re-execs through `sudo -E` or `pkexec`
-///    so `cargo install`/plain builds work without a manual setuid step.
-///    Critically, once re-exec lands us at root, we do **not** keep running
-///    the interactive UI at full privilege the way a bare `sudo <app>`
-///    invocation would: the same real=effective=caller, saved=root pattern
-///    used by the setuid-root path is applied immediately via `setresuid`.
-///    From that point on both paths are indistinguishable — narrow, checked
-///    `seteuid(0)` windows are the only way back to root.
+///    is dropped back to the caller immediately, and [`has_saved_root`]
+///    becomes `true`.
+/// 2. **Plain unprivileged process (Linux fallback)** — if the binary is
+///    *not* setuid-root, this just records the real UID and returns; the
+///    process stays fully unprivileged (so the UI, including native file
+///    dialogs, behaves like any normal user process) and [`has_saved_root`]
+///    stays `false` until [`escalate_for_flash`] is called right before a
+///    flash actually starts.
 ///
 /// Direct interactive root execution (typing `sudo flashkraft` yourself, or
 /// being logged in as root) is only accepted if the original caller's UID can
-/// be identified via `SUDO_UID`/`PKEXEC_UID`; otherwise it is rejected, since
-/// there would be no trustworthy user UID to drop to.
+/// be identified via `SUDO_UID`/`PKEXEC_UID`/`FLASHKRAFT_DROP_UID` (the latter
+/// set by our own [`escalate_for_flash`] re-exec); otherwise it is rejected,
+/// since there would be no trustworthy user UID to drop to.
 pub fn initialize_privileges() -> Result<(), String> {
     #[cfg(unix)]
     {
@@ -155,14 +181,19 @@ pub fn initialize_privileges() -> Result<(), String> {
             if geteuid() != real {
                 return Err("Failed to verify the startup privilege drop".to_string());
             }
+            set_has_saved_root(true);
             return Ok(());
         }
 
         // ── already running fully as root ───────────────────────────────────
+        // This happens after our own `escalate_for_flash` re-exec (via
+        // sudo/pkexec), or if the user manually ran `sudo flashkraft`.
         if real.is_root() {
             #[cfg(target_os = "linux")]
             if let Some(drop_uid) = escalation_drop_uid() {
-                return drop_to_uid_keeping_saved_root(drop_uid);
+                drop_to_uid_keeping_saved_root(drop_uid)?;
+                set_has_saved_root(true);
+                return Ok(());
             }
 
             return Err(
@@ -173,14 +204,9 @@ pub fn initialize_privileges() -> Result<(), String> {
             );
         }
 
-        // ── plain unprivileged process: try transparent escalation (Linux) ──
-        #[cfg(all(target_os = "linux", not(test)))]
-        if std::env::var("FLASHKRAFT_ESCALATED").as_deref() != Ok("1") {
-            try_reexec_as_root(real.as_raw());
-            // Only reached if no escalation helper was available, or exec
-            // itself failed to start — fall through and continue unprivileged.
-        }
-
+        // ── plain unprivileged process ───────────────────────────────────────
+        // Stay unprivileged. Escalation (if ever needed) is deferred to
+        // `escalate_for_flash`, called right before a flash starts.
         set_real_uid(real.as_raw());
     }
 
@@ -190,7 +216,7 @@ pub fn initialize_privileges() -> Result<(), String> {
 /// Read the UID FlashKraft should drop back to after landing at root.
 ///
 /// Checked in order: our own re-exec marker (set right before `execvp` in
-/// [`try_reexec_as_root`]), then `SUDO_UID` (set by `sudo`), then
+/// [`reexec_as_root_with_args`]), then `SUDO_UID` (set by `sudo`), then
 /// `PKEXEC_UID` (set by `pkexec`) — covering both our own transparent
 /// escalation and a user manually running `sudo flashkraft`/`pkexec flashkraft`.
 #[cfg(target_os = "linux")]
@@ -231,20 +257,25 @@ fn drop_to_uid_keeping_saved_root(uid: u32) -> Result<(), String> {
 }
 
 /// Re-exec the current process through `sudo -E` or `pkexec`, replacing the
-/// process image on success (`execvp` never returns in that case).
+/// process image on success (`execvp` never returns in that case). `args`
+/// becomes the re-exec'd process's argv (after argv[0]) — callers pass
+/// whatever the relaunched process needs to resume where it left off.
 ///
 /// `sudo -E` is tried first because it preserves the full environment —
 /// `DISPLAY`/`WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` all survive, which the GUI
-/// needs to reach the display server. `pkexec` is the fallback: it provides a
-/// graphical polkit prompt but intentionally strips display-related env vars
-/// unless a matching polkit action configures `allow_gui`.
+/// needs to reach the display server. `pkexec` is the fallback: it
+/// intentionally strips display/session env vars unless a matching polkit
+/// action configures `allow_gui`, so they are forwarded explicitly here via
+/// `env` — without them, anything using the session D-Bus bus (e.g. a
+/// native file-picker portal) fails to reach it even though the plain
+/// display connection may still work.
 ///
 /// `FLASHKRAFT_DROP_UID` records the original unprivileged UID so
 /// [`escalation_drop_uid`] can restore it after the re-exec'd process lands
 /// at root; `FLASHKRAFT_ESCALATED` guards against a re-exec loop if the
 /// escalation tool is present but keeps failing.
 #[cfg(all(target_os = "linux", not(test)))]
-fn try_reexec_as_root(original_uid: u32) {
+fn reexec_as_root_with_args(original_uid: u32, args: &[String]) {
     use std::ffi::CString;
 
     let self_exe = match std::fs::read_link("/proc/self/exe").or_else(|_| std::env::current_exe()) {
@@ -256,20 +287,30 @@ fn try_reexec_as_root(original_uid: u32) {
         None => return,
     };
 
-    let extra_args: Vec<String> = std::env::args().skip(1).collect();
-
     std::env::set_var("FLASHKRAFT_ESCALATED", "1");
     std::env::set_var("FLASHKRAFT_DROP_UID", original_uid.to_string());
 
     if which_exists("sudo") {
         let mut argv: Vec<CString> = vec![c_str("sudo"), c_str("-E"), c_str(&self_exe_str)];
-        argv.extend(extra_args.iter().map(|a| c_str(a)));
+        argv.extend(args.iter().map(|a| c_str(a)));
         let _ = nix::unistd::execvp(&c_str("sudo"), &argv);
     }
 
     if which_exists("pkexec") {
-        let mut argv: Vec<CString> = vec![c_str("pkexec"), c_str(&self_exe_str)];
-        argv.extend(extra_args.iter().map(|a| c_str(a)));
+        let mut argv: Vec<CString> = vec![c_str("pkexec"), c_str("env")];
+        for var in [
+            "DISPLAY",
+            "WAYLAND_DISPLAY",
+            "XDG_RUNTIME_DIR",
+            "DBUS_SESSION_BUS_ADDRESS",
+            "XAUTHORITY",
+        ] {
+            if let Ok(value) = std::env::var(var) {
+                argv.push(c_str(&format!("{var}={value}")));
+            }
+        }
+        argv.push(c_str(&self_exe_str));
+        argv.extend(args.iter().map(|a| c_str(a)));
         let _ = nix::unistd::execvp(&c_str("pkexec"), &argv);
     }
 
@@ -277,6 +318,66 @@ fn try_reexec_as_root(original_uid: u32) {
     // so a later manual retry isn't mistaken for an already-attempted one.
     std::env::remove_var("FLASHKRAFT_ESCALATED");
     std::env::remove_var("FLASHKRAFT_DROP_UID");
+}
+
+/// Escalate to root right before a flash starts, if not already privileged.
+///
+/// If [`has_saved_root`] is already `true` (setuid-root install, or this
+/// process is itself the result of a previous `escalate_for_flash` re-exec),
+/// this is a no-op and returns `Ok(())` immediately — the caller should just
+/// proceed with the in-process flash pipeline.
+///
+/// Otherwise, on Linux, this re-execs the whole process through `sudo`/
+/// `pkexec`, passing `--internal-resume-flash <image_path> <device_path>` so
+/// the relaunched process can skip straight to the flash screen instead of
+/// restarting the picker flow. On success this never returns (the process
+/// image is replaced). If no escalation helper is available (or exec itself
+/// failed to start), an `Err` is returned so the caller can fall back to
+/// attempting the flash directly (surfacing the usual "install setuid-root"
+/// error).
+pub fn escalate_for_flash(image_path: &str, device_path: &str) -> Result<(), String> {
+    if has_saved_root() {
+        return Ok(());
+    }
+
+    #[cfg(all(target_os = "linux", not(test)))]
+    {
+        let original_uid = REAL_UID.get().copied().unwrap_or_else(|| {
+            #[cfg(unix)]
+            {
+                nix::unistd::getuid().as_raw()
+            }
+            #[cfg(not(unix))]
+            {
+                0
+            }
+        });
+
+        reexec_as_root_with_args(
+            original_uid,
+            &[
+                "--internal-resume-flash".to_string(),
+                image_path.to_string(),
+                device_path.to_string(),
+            ],
+        );
+
+        Err(
+            "Could not find sudo or pkexec to escalate privileges. Install FlashKraft \
+             setuid-root instead (just install)."
+                .to_string(),
+        )
+    }
+
+    #[cfg(not(all(target_os = "linux", not(test))))]
+    {
+        let _ = (image_path, device_path);
+        Err(
+            "Automatic privilege escalation is only supported on Linux. Install FlashKraft \
+             setuid-root instead."
+                .to_string(),
+        )
+    }
 }
 
 /// Build a `CString`, replacing interior NULs with `?` rather than panicking.

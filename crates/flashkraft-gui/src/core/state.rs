@@ -157,6 +157,40 @@ impl FlashKraft {
         }
     }
 
+    /// Create a `FlashKraft` instance already primed to resume a flash that
+    /// was interrupted by a privilege-escalation relaunch (see
+    /// `flashkraft_core::flash_helper::escalate_for_flash`).
+    ///
+    /// The image/target were already chosen (and validated) by the prior,
+    /// unprivileged instance of this app, so this skips the picker screens
+    /// entirely and starts directly on the flashing screen.
+    pub fn new_resuming_flash(image_path: String, device_path: String) -> Self {
+        let mut state = Self::new();
+
+        let path = std::path::PathBuf::from(&image_path);
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| image_path.clone());
+        let size_mb = std::fs::metadata(&path)
+            .map(|m| m.len() as f64 / (1024.0 * 1024.0))
+            .unwrap_or(0.0);
+
+        state.selected_image = Some(ImageInfo {
+            path,
+            name,
+            size_mb,
+        });
+        state.selected_target = Some(DriveInfo::new(
+            device_path.clone(),
+            device_path.clone(),
+            0.0,
+            device_path,
+        ));
+        state.begin_flash_state();
+        state
+    }
+
     /// Check if the application is ready to flash.
     ///
     /// Selections are revalidated here because the image or removable-device

@@ -13,6 +13,29 @@ use crate::core::message::Message;
 use crate::core::state::FlashKraft;
 use crate::domain::{constraints, ImageInfo};
 
+/// Escalate privileges right before a flash starts, if this process doesn't
+/// already have a saved-root identity available (setuid-root install, or a
+/// prior escalation earlier this run). On success this never returns — the
+/// process is replaced by a relaunched, privileged instance that resumes
+/// straight into flashing. On failure it just logs and returns, leaving the
+/// pipeline itself to report the usual "install setuid-root" error.
+///
+/// Compiled out under `cfg(test)` so the unit tests below never spawn a real
+/// `sudo`/`pkexec` process.
+#[cfg(not(test))]
+fn maybe_escalate_for_flash(image_path: &str, device_path: &str) {
+    if !flashkraft_core::flash_helper::has_saved_root() {
+        if let Err(error) =
+            flashkraft_core::flash_helper::escalate_for_flash(image_path, device_path)
+        {
+            flash_debug!("privilege escalation failed: {error}");
+        }
+    }
+}
+
+#[cfg(test)]
+fn maybe_escalate_for_flash(_image_path: &str, _device_path: &str) {}
+
 /// Update the application state based on a message
 ///
 /// This is the heart of The Elm Architecture. It's a pure function that:
@@ -76,8 +99,22 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
 
         Message::FlashClicked => {
             if state.is_ready_to_flash() {
-                // The UI intentionally runs unprivileged. The core pipeline
-                // performs checked, narrowly scoped privilege transitions.
+                // The UI intentionally runs unprivileged. Escalate now,
+                // right before the raw device write, only if this process
+                // doesn't already have a saved-root identity available
+                // (setuid-root install, or a prior escalation this run).
+                let image_path = state
+                    .selected_image
+                    .as_ref()
+                    .map(|i| i.path.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let device_path = state
+                    .selected_target
+                    .as_ref()
+                    .map(|t| t.device_path.clone())
+                    .unwrap_or_default();
+                maybe_escalate_for_flash(&image_path, &device_path);
+
                 state.begin_flash_state();
             } else {
                 state.error_message =
