@@ -499,7 +499,7 @@ push-gitea-microlab:
 
 # Push the current branch to Gitea Starscream
 push-gitea-starscream:
-    git push gitea_starscream main
+    git push gitea-starscream main
 
 # Push the current branch to Gitea (nexus-lab instance)
 push-gitea-nexus-lab:
@@ -616,7 +616,7 @@ release-gitea-microlab version: (bump version)
 # Bump, commit, tag, then push to Gitea Starscream only.
 release-gitea-starscream version: (bump version)
     @echo "Pushing release v{{ version }} to Gitea Starscream…"
-    git push --follow-tags gitea_starscream main
+    git push --follow-tags gitea-starscream main
     @echo "✅ Release v{{ version }} live on Gitea Starscream."
 
 # Bump, commit, tag, then push to Gitea (nexus-lab instance) only.
