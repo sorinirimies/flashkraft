@@ -51,7 +51,7 @@ rfd          = "0.17"
 # TUI (Ratatui)
 ratatui              = "0.30"
 crossterm            = "0.29"
-tui-file-explorer    = "2.0.2"
+tui-file-explorer    = "2.1.0"
 tui-slider   = "0.3.4"
 tui-piechart = "1.0.2"
 tui-checkbox = "0.4.6"
