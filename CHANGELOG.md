@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.5.0 - 2026-09-10
+### ✨ Features
+- feat(gui): flash raw devices without a setuid install
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.4.0...v1.5.0
 ## 1.4.0 - 2026-09-10
 ### ✨ Features
 - feat(tui): make the Flashing screen's Log panel focusable/scrollable, and make its layout responsive
+### 🔧 Chores
+- chore: bump version to 1.4.0
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.7...v1.4.0
 ## 1.3.7 - 2026-09-10
 ### ✨ Features
