@@ -323,6 +323,42 @@ fn real_uid() -> nix::unistd::Uid {
     nix::unistd::Uid::from_raw(raw)
 }
 
+/// Returns `true` if the calling process can regain root privileges for the
+/// duration of a single privileged operation (i.e. [`with_effective_root`]
+/// would succeed).
+///
+/// This is `true` for setuid-root installs (the saved-set-UID is `0`) and for
+/// processes already running as root (e.g. `sudo flashkraft`). It is `false`
+/// for a plain unprivileged build such as one started with `cargo run` — in
+/// that case the caller should fall back to spawning a short-lived privileged
+/// helper process (via `pkexec`/`sudo`) rather than attempting the raw-device
+/// operation in-process.
+#[cfg(unix)]
+pub fn can_escalate_in_process() -> bool {
+    use nix::unistd::{geteuid, seteuid, Uid};
+
+    if geteuid().is_root() {
+        return true;
+    }
+
+    let caller = geteuid();
+    if seteuid(Uid::from_raw(0)).is_ok() {
+        // This was only a probe — immediately drop back.
+        let _ = seteuid(caller);
+        true
+    } else {
+        false
+    }
+}
+
+/// Non-Unix platforms (Windows) use a completely different privilege model
+/// (UAC/administrator elevation via the executable's manifest), so the
+/// in-process path is always attempted there.
+#[cfg(not(unix))]
+pub fn can_escalate_in_process() -> bool {
+    true
+}
+
 #[cfg(unix)]
 fn with_effective_root<T>(operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
     use nix::unistd::{geteuid, seteuid, Uid};
@@ -1875,6 +1911,18 @@ mod tests {
         set_real_uid(nix::unistd::getuid().as_raw());
         #[cfg(not(unix))]
         set_real_uid(1000);
+    }
+
+    // ── can_escalate_in_process ──────────────────────────────────────────────
+
+    #[test]
+    fn test_can_escalate_in_process_does_not_panic() {
+        // Under a normal (non-root, non-setuid) test runner this should be
+        // `false`; under CI running as root it may be `true`. Either way it
+        // must never panic and must leave the effective UID unchanged.
+        let before = nix::unistd::geteuid();
+        let _ = can_escalate_in_process();
+        assert_eq!(nix::unistd::geteuid(), before);
     }
 
     // ── is_partition_of ─────────────────────────────────────────────────────

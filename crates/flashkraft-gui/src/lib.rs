@@ -21,6 +21,7 @@
 pub mod utils;
 
 pub mod core;
+pub mod privileged_helper;
 pub mod ui;
 
 // ── Core re-exports ───────────────────────────────────────────────────────────

@@ -47,7 +47,8 @@
 //! The pipeline checks it on every 4 MiB write block.
 
 use crate::flash_debug;
-use flashkraft_core::flash_helper::{run_pipeline, FlashEvent};
+use crate::privileged_helper;
+use flashkraft_core::flash_helper::{can_escalate_in_process, run_pipeline, FlashEvent};
 use flashkraft_core::FlashUpdate;
 use futures::channel::mpsc as futures_mpsc;
 use futures::StreamExt;
@@ -165,25 +166,85 @@ fn build_flash_stream(
         //                                                       ↓
         //                                              rx.next().await
         //                                              (yields to executor)
-        let (std_tx, std_rx) = std::sync::mpsc::channel::<FlashEvent>();
+        //
+        // Both the in-process pipeline path and the privileged-helper
+        // subprocess path converge on the same `FlashUpdate` channel type so
+        // the bridge thread and async event loop below are shared by both.
+        let (std_tx, std_rx) = std::sync::mpsc::channel::<FlashUpdate>();
 
         // futures::channel::mpsc is executor-agnostic — next() is a real
         // async future that yields between every message.
-        let (mut futures_tx, mut futures_rx) = futures_mpsc::channel::<FlashEvent>(64);
+        let (mut futures_tx, mut futures_rx) = futures_mpsc::channel::<FlashUpdate>(64);
 
-        // ── Pipeline thread ───────────────────────────────────────────────
-        let img_str = image_path.to_string_lossy().into_owned();
-        let dev_str = device_path.to_string_lossy().into_owned();
-        let cancel_pipeline = cancel_token.clone();
+        // ── Choose escalation strategy ───────────────────────────────────────
+        //
+        // setuid-root installs (and processes already running as root) can
+        // regain root in-process via `seteuid(0)` — the fast, prompt-free
+        // path used by production installs. A plain unprivileged build (e.g.
+        // `cargo run`) cannot, so it falls back to spawning a short-lived,
+        // headless privileged child process via `pkexec`/`sudo` instead.
+        if can_escalate_in_process() {
+            flash_debug!(
+                "flash thread: in-process escalation available, running pipeline directly"
+            );
 
-        std::thread::Builder::new()
-            .name("flashkraft-pipeline".into())
-            .spawn(move || {
-                flash_debug!("flash thread: starting pipeline");
-                run_pipeline(&img_str, &dev_str, std_tx, cancel_pipeline);
-                flash_debug!("flash thread: pipeline returned");
-            })
-            .expect("failed to spawn flash pipeline thread");
+            let img_str = image_path.to_string_lossy().into_owned();
+            let dev_str = device_path.to_string_lossy().into_owned();
+            let cancel_pipeline = cancel_token.clone();
+            let std_tx = std_tx.clone();
+
+            std::thread::Builder::new()
+                .name("flashkraft-pipeline".into())
+                .spawn(move || {
+                    flash_debug!("flash thread: starting pipeline");
+                    let (event_tx, event_rx) = std::sync::mpsc::channel::<FlashEvent>();
+
+                    let pipeline = std::thread::Builder::new()
+                        .name("flashkraft-pipeline-inner".into())
+                        .spawn(move || {
+                            run_pipeline(&img_str, &dev_str, event_tx, cancel_pipeline);
+                        })
+                        .expect("failed to spawn inner flash pipeline thread");
+
+                    for event in event_rx {
+                        let update = FlashUpdate::from(event);
+                        if std_tx.send(update).is_err() {
+                            break;
+                        }
+                    }
+
+                    let _ = pipeline.join();
+                    flash_debug!("flash thread: pipeline returned");
+                })
+                .expect("failed to spawn flash pipeline thread");
+        } else {
+            flash_debug!(
+                "flash thread: no in-process privilege available, spawning privileged helper"
+            );
+
+            match privileged_helper::spawn(&image_path, &device_path, cancel_token.clone()) {
+                Ok(helper_rx) => {
+                    let std_tx = std_tx.clone();
+                    std::thread::Builder::new()
+                        .name("flashkraft-helper-bridge".into())
+                        .spawn(move || {
+                            for update in helper_rx {
+                                if std_tx.send(update).is_err() {
+                                    break;
+                                }
+                            }
+                        })
+                        .expect("failed to spawn helper bridge thread");
+                }
+                Err(e) => {
+                    flash_debug!("flash thread: failed to spawn privileged helper: {e}");
+                    let _ = output.send(FlashProgress::Failed(e)).await;
+                    return std::future::pending().await;
+                }
+            }
+        }
+
+        drop(std_tx);
 
         // ── Bridge thread ─────────────────────────────────────────────────
         //
@@ -211,20 +272,19 @@ fn build_flash_stream(
         // (repaints, animation ticks, etc.) between every message.
         loop {
             match futures_rx.next().await {
-                Some(FlashEvent::Done) => {
+                Some(FlashUpdate::Completed) => {
                     flash_debug!("flash thread: Done");
                     let _ = output.send(FlashUpdate::Completed).await;
                     break;
                 }
 
-                Some(FlashEvent::Error(e)) => {
+                Some(FlashUpdate::Failed(e)) => {
                     flash_debug!("flash thread: Error: {e}");
                     let _ = output.send(FlashUpdate::Failed(e)).await;
                     break;
                 }
 
-                Some(core_event) => {
-                    let update = FlashUpdate::from(core_event);
+                Some(update) => {
                     flash_debug!("flash event: {update:?}");
                     let _ = output.send(update).await;
                 }
