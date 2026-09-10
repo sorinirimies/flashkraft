@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.7 - 2026-09-10
+### ✨ Features
+- feat: restore transparent sudo/pkexec escalation for the TUI only
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.6...v1.3.7
 ## 1.3.6 - 2026-09-10
 ### 📦 Other Changes
 - revert: restore setuid-root-only privilege model (no automatic sudo/pkexec escalation)
+### 🔧 Chores
+- chore: bump version to 1.3.6
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.5...v1.3.6
 ## 1.3.5 - 2026-09-10
 ### 🐛 Bug Fixes
