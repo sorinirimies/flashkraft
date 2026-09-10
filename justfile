@@ -78,6 +78,43 @@ install target="gui":
 
     echo "✅ Installed $BIN_DEST (setuid-root)"
 
+# Build with Nix and install with the setuid-root bit (non-NixOS Nix users).
+#
+# /nix/store binaries can never be setuid themselves (the store is immutable
+# and typically nosuid-mounted), so this copies the built binary out of the
+# store into a regular, suid-capable location before chown/chmod.
+#
+# NixOS users: prefer the flake's NixOS module instead (see flake.nix) —
+# it wires up a proper `security.wrappers` entry at /run/wrappers/bin.
+#
+# Usage:  just install-nix          (installs GUI binary)
+#         just install-nix tui      (installs TUI binary)
+install-nix target="gui":
+    #!/usr/bin/env sh
+    set -e
+
+    if [ "{{ target }}" = "tui" ]; then
+        FLAKE_ATTR=".#flashkraft-tui"
+        BIN_NAME="flashkraft-tui"
+        BIN_DEST="{{ INSTALL_BIN_TUI }}"
+    else
+        FLAKE_ATTR=".#flashkraft-gui"
+        BIN_NAME="flashkraft"
+        BIN_DEST="{{ INSTALL_BIN }}"
+    fi
+
+    echo "Building $FLAKE_ATTR with Nix…"
+    nix build "$FLAKE_ATTR"
+
+    echo "Installing result/bin/$BIN_NAME → $BIN_DEST (requires sudo)…"
+    sudo install -m 755 "result/bin/$BIN_NAME" "$BIN_DEST"
+
+    echo "Setting setuid-root bit on $BIN_DEST…"
+    sudo chown root:root "$BIN_DEST"
+    sudo chmod u+s       "$BIN_DEST"
+
+    echo "✅ Installed $BIN_DEST (setuid-root)"
+
 # Remove the installed binary (GUI and/or TUI).
 uninstall:
     #!/usr/bin/env sh

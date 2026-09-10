@@ -137,6 +137,12 @@
         };
 
         apps = {
+          # NOTE: `nix run` executes the plain, non-setuid store binary — it
+          # can select images and enumerate drives, but the flash pipeline
+          # will refuse to open raw block devices ("Raw devices require a
+          # setuid-root FlashKraft installation"). Use the NixOS module below
+          # (`programs.flashkraft.enable = true;`) or `just install-nix` for
+          # a working privileged install.
           default = flake-utils.lib.mkApp {
             drv = flashkraft-gui;
             name = "flashkraft";
@@ -157,5 +163,52 @@
           ];
         };
       }
-    );
+    )
+    // {
+      # ── NixOS module ───────────────────────────────────────────────────────
+      # FlashKraft's flash pipeline requires the installed binary to carry the
+      # setuid-root bit (see README.md "How flashing works"). Binaries built
+      # by Nix live in the immutable, typically nosuid-mounted /nix/store, so
+      # they can never be setuid themselves. NixOS solves this exact class of
+      # problem with `security.wrappers`: a small setuid-root wrapper is
+      # installed at /run/wrappers/bin (a regular, suid-capable filesystem)
+      # that execs the real, unprivileged store binary.
+      #
+      # Usage, in a NixOS configuration:
+      #
+      #   {
+      #     imports = [ flashkraft.nixosModules.default ];
+      #     programs.flashkraft.enable = true;
+      #   }
+      #
+      # Then launch the wrapper (first on PATH on NixOS), not `nix run`:
+      #   flashkraft
+      nixosModules.default =
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+        let
+          cfg = config.programs.flashkraft;
+          system = pkgs.stdenv.hostPlatform.system;
+          flashkraft-gui = self.packages.${system}.flashkraft-gui;
+        in
+        {
+          options.programs.flashkraft.enable =
+            lib.mkEnableOption "FlashKraft OS image writer (setuid-root wrapped)";
+
+          config = lib.mkIf cfg.enable {
+            environment.systemPackages = [ flashkraft-gui ];
+
+            security.wrappers.flashkraft = {
+              owner = "root";
+              group = "root";
+              setuid = true;
+              source = "${flashkraft-gui}/bin/flashkraft";
+            };
+          };
+        };
+    };
 }

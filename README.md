@@ -215,6 +215,40 @@ SelectImage ──(Enter/confirm)──► SelectDrive ──(Enter)──► Dr
 - For GUI: a running display server (X11 or Wayland)
 - For TUI: any terminal emulator (works over SSH)
 
+### Installing via Nix
+
+The flake builds plain, unprivileged binaries into `/nix/store` — `nix run` alone is enough to browse images and enumerate drives, but the flash pipeline will refuse to open raw block devices with:
+
+```
+Cannot open target '/dev/sda' for exclusive read/write access: Unable to acquire
+root privileges: EPERM: Operation not permitted. Raw devices require a
+setuid-root FlashKraft installation.
+```
+
+This is expected: `/nix/store` paths are immutable and typically mounted `nosuid`, so a store binary can never carry the setuid bit itself. Two supported ways to get a working privileged install:
+
+**NixOS** — use the flake's `nixosModules.default`, which wires up a proper `security.wrappers` entry (a setuid-root wrapper at `/run/wrappers/bin/flashkraft` that execs the real store binary):
+
+```nix
+{
+  imports = [ flashkraft.nixosModules.default ];
+  programs.flashkraft.enable = true;
+}
+```
+
+Then launch the wrapper (first on `PATH` on NixOS), not `nix run`:
+
+```bash
+flashkraft
+```
+
+**Non-NixOS Nix** — build with Nix, then install with the setuid bit the same way `just install` does for a Cargo build:
+
+```bash
+just install-nix        # GUI
+just install-nix tui    # TUI
+```
+
 ### Build
 
 ```bash
