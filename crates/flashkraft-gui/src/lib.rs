@@ -42,13 +42,17 @@ pub use core::{FlashKraft, Message};
 
 /// Entry point for the Iced desktop GUI.
 ///
-/// The binary must be installed **setuid-root** for the flash pipeline to be
-/// able to open block devices:
+/// For raw block-device access, the binary should ideally be installed
+/// **setuid-root**:
 ///
 /// ```text
 /// sudo chown root:root /usr/bin/flashkraft
 /// sudo chmod u+s       /usr/bin/flashkraft
 /// ```
+///
+/// On Linux, a non-setuid binary (e.g. from `cargo install`) instead
+/// transparently re-execs itself through `sudo`/`pkexec` on demand — see
+/// `flashkraft_core::flash_helper::initialize_privileges`.
 ///
 /// The real UID is captured in `main.rs` before this function is called.
 pub fn run_gui() -> iced::Result {
