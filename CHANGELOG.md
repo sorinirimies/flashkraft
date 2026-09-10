@@ -2,9 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.3.3 - 2026-09-10
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-10
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.2...v1.3.3
 ## 1.3.2 - 2026-09-09
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-09
+- chore: bump version to 1.3.2
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.1...v1.3.2
 ## 1.3.1 - 2026-09-08
 ### 🔧 Chores
