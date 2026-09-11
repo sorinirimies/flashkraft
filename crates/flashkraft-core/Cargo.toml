@@ -24,6 +24,9 @@ tokio         = { workspace = true }
 # ── Config directory resolution ──────────────────────────────────────────────
 dirs          = { workspace = true }
 
+# ── Serialization (flash history persisted by GUI/TUI settings) ─────────────
+serde         = { workspace = true }
+
 # ── Crypto ────────────────────────────────────────────────────────────────────
 sha2          = { workspace = true }
 

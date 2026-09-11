@@ -109,6 +109,11 @@ pub struct GuiSettings {
     /// reopens there next time instead of the OS default (e.g. home dir).
     #[serde(default)]
     pub last_image_dir: Option<PathBuf>,
+
+    /// Most recent successful flashes, newest first, capped at
+    /// [`flashkraft_core::MAX_HISTORY_ENTRIES`].
+    #[serde(default)]
+    pub flash_history: Vec<flashkraft_core::FlashHistoryEntry>,
 }
 
 fn default_theme_name() -> String {
@@ -120,6 +125,7 @@ impl Default for GuiSettings {
         Self {
             theme: default_theme_name(),
             last_image_dir: None,
+            flash_history: Vec::new(),
         }
     }
 }
@@ -166,6 +172,23 @@ impl Storage {
     /// OS default. Only the parent directory is stored — never the file name.
     pub fn save_last_image_dir(&mut self, dir: PathBuf) -> Result<(), String> {
         self.settings.last_image_dir = Some(dir);
+        self.flush()
+    }
+
+    // ── Flash history ─────────────────────────────────────────────────
+
+    /// Most recent successful flashes, newest first.
+    pub fn flash_history(&self) -> &[flashkraft_core::FlashHistoryEntry] {
+        &self.settings.flash_history
+    }
+
+    /// Record a completed flash, trimming to
+    /// [`flashkraft_core::MAX_HISTORY_ENTRIES`].
+    pub fn record_flash(
+        &mut self,
+        entry: flashkraft_core::FlashHistoryEntry,
+    ) -> Result<(), String> {
+        flashkraft_core::push_history_entry(&mut self.settings.flash_history, entry);
         self.flush()
     }
 
@@ -277,6 +300,20 @@ mod tests {
 
         let contents = std::fs::read_to_string(&storage.path).unwrap();
         assert!(contents.contains("last_image_dir"));
+    }
+
+    #[test]
+    fn test_record_and_load_flash_history() {
+        let (mut storage, _tmp) = temp_storage();
+        assert!(storage.flash_history().is_empty());
+
+        let entry = flashkraft_core::FlashHistoryEntry::new("/tmp/img.iso", "USB (8.0 GB)", 512.0);
+        storage.record_flash(entry.clone()).unwrap();
+
+        assert_eq!(storage.flash_history(), &[entry]);
+
+        let contents = std::fs::read_to_string(&storage.path).unwrap();
+        assert!(contents.contains("flash_history"));
     }
 
     #[test]

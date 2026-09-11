@@ -5,6 +5,7 @@
 
 pub mod constraints;
 pub mod drive_info;
+pub mod flash_history;
 pub mod image_info;
 
 // Re-export for convenience
@@ -13,4 +14,5 @@ pub use constraints::{
     mark_invalid_drives, CompatibilityStatus, CompatibilityStatusType, LARGE_DRIVE_SIZE,
 };
 pub use drive_info::DriveInfo;
+pub use flash_history::{push_entry as push_history_entry, FlashHistoryEntry, MAX_HISTORY_ENTRIES};
 pub use image_info::ImageInfo;

@@ -425,6 +425,18 @@ impl App {
                 self.flash_stage = "Complete!".to_string();
                 self.push_log("Flash operation completed successfully.".to_string());
                 self.scan_usb_contents();
+
+                if let (Some(image), Some(drive)) =
+                    (self.selected_image.as_ref(), self.selected_drive.as_ref())
+                {
+                    let entry = flashkraft_core::FlashHistoryEntry::new(
+                        image.path.display().to_string(),
+                        format!("{} ({:.1} GB)", drive.name, drive.size_gb),
+                        image.size_mb,
+                    );
+                    self.storage.record_flash(entry);
+                }
+
                 self.screen = AppScreen::Complete;
             }
             FlashEvent::Failed(err) => {

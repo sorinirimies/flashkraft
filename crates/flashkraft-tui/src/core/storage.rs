@@ -40,6 +40,11 @@ pub struct TuiSettings {
     /// reopens there next time instead of always starting in the home dir.
     #[serde(default)]
     pub last_image_dir: Option<PathBuf>,
+
+    /// Most recent successful flashes, newest first, capped at
+    /// [`flashkraft_core::MAX_HISTORY_ENTRIES`].
+    #[serde(default)]
+    pub flash_history: Vec<flashkraft_core::FlashHistoryEntry>,
 }
 
 fn default_theme_name() -> String {
@@ -51,6 +56,7 @@ impl Default for TuiSettings {
         Self {
             theme: default_theme_name(),
             last_image_dir: None,
+            flash_history: Vec::new(),
         }
     }
 }
@@ -115,6 +121,20 @@ impl TuiStorage {
         self.flush();
     }
 
+    // ── Flash history ─────────────────────────────────────────────────
+
+    /// Most recent successful flashes, newest first.
+    pub fn flash_history(&self) -> &[flashkraft_core::FlashHistoryEntry] {
+        &self.settings.flash_history
+    }
+
+    /// Record a completed flash, trimming to
+    /// [`flashkraft_core::MAX_HISTORY_ENTRIES`]. Silently ignores I/O errors.
+    pub fn record_flash(&mut self, entry: flashkraft_core::FlashHistoryEntry) {
+        flashkraft_core::push_history_entry(&mut self.settings.flash_history, entry);
+        self.flush();
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     fn settings_path() -> Option<PathBuf> {
@@ -158,6 +178,7 @@ mod tests {
             settings: TuiSettings {
                 theme: String::new(),
                 last_image_dir: None,
+                flash_history: Vec::new(),
             },
         };
         assert!(empty.load_theme().is_none());
@@ -198,6 +219,21 @@ mod tests {
         let path = s.path.as_ref().unwrap();
         let contents = std::fs::read_to_string(path).unwrap();
         assert!(contents.contains("last_image_dir"));
+    }
+
+    #[test]
+    fn record_and_load_flash_history_roundtrip() {
+        let (mut s, _tmp) = temp_storage();
+        assert!(s.flash_history().is_empty());
+
+        let entry = flashkraft_core::FlashHistoryEntry::new("/tmp/img.iso", "USB (8.0 GB)", 512.0);
+        s.record_flash(entry.clone());
+
+        assert_eq!(s.flash_history(), &[entry]);
+
+        let path = s.path.as_ref().unwrap();
+        let contents = std::fs::read_to_string(path).unwrap();
+        assert!(contents.contains("flash_history"));
     }
 
     #[test]

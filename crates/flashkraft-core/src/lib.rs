@@ -33,7 +33,8 @@ pub mod theme;
 
 // ── Convenience re-exports ────────────────────────────────────────────────────
 
-pub use domain::{DriveInfo, ImageInfo};
+pub use domain::push_history_entry;
+pub use domain::{DriveInfo, FlashHistoryEntry, ImageInfo, MAX_HISTORY_ENTRIES};
 pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
 pub use utils::fmt_bytes;
 

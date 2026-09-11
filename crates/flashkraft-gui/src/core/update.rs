@@ -297,6 +297,21 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
                     state.flash_stage = "Flash complete!".to_string();
                     state.flash_complete = true;
                     state.error_message = None;
+
+                    if let (Some(image), Some(target), Some(storage)) = (
+                        state.selected_image.as_ref(),
+                        state.selected_target.as_ref(),
+                        state.storage.as_mut(),
+                    ) {
+                        let entry = flashkraft_core::FlashHistoryEntry::new(
+                            image.path.display().to_string(),
+                            format!("{} ({:.1} GB)", target.name, target.size_gb),
+                            image.size_mb,
+                        );
+                        if let Err(e) = storage.record_flash(entry) {
+                            eprintln!("Failed to record flash history: {e}");
+                        }
+                    }
                 }
                 Err(error_message) => {
                     // Flash failed — clear progress so the error view is shown.
