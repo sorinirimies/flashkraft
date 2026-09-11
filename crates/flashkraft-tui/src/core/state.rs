@@ -170,14 +170,20 @@ impl App {
     // -----------------------------------------------------------------------
 
     pub fn new() -> Self {
-        // Start the file explorer in the user's home directory (or current
-        // working directory as a fallback), pre-filtered for image files.
-        let start_dir = dirs::home_dir()
+        // Open persistent storage once and resolve the saved theme index.
+        let storage = TuiStorage::open();
+
+        // Start the file explorer in the last directory an image was picked
+        // from (if any was persisted), falling back to the user's home
+        // directory or the current working directory, pre-filtered for
+        // image files.
+        let start_dir = storage
+            .last_image_dir()
+            .filter(|d| d.is_dir())
+            .or_else(dirs::home_dir)
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("/"));
 
-        // Open persistent storage once and resolve the saved theme index.
-        let storage = TuiStorage::open();
         let explorer_theme_idx = storage
             .load_theme()
             .and_then(|name| THEME_NAMES.iter().position(|n| *n == name))
@@ -500,9 +506,13 @@ impl App {
             return Err(format!("Not a file: {}", path.display()));
         }
 
-        let info = ImageInfo::from_path(path);
+        let info = ImageInfo::from_path(path.clone());
         if info.size_mb == 0.0 {
             return Err("Image file appears to be empty.".to_string());
+        }
+
+        if let Some(dir) = path.parent().map(|p| p.to_path_buf()) {
+            self.storage.save_last_image_dir(dir);
         }
 
         self.selected_image = Some(info);

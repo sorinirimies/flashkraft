@@ -35,6 +35,11 @@ pub struct TuiSettings {
     /// Name of the active TUI theme (must match a `tui_file_explorer::Theme::all_presets()` entry).
     #[serde(default = "default_theme_name")]
     pub theme: String,
+
+    /// Last directory the user picked an image from, so the file explorer
+    /// reopens there next time instead of always starting in the home dir.
+    #[serde(default)]
+    pub last_image_dir: Option<PathBuf>,
 }
 
 fn default_theme_name() -> String {
@@ -45,6 +50,7 @@ impl Default for TuiSettings {
     fn default() -> Self {
         Self {
             theme: default_theme_name(),
+            last_image_dir: None,
         }
     }
 }
@@ -95,6 +101,20 @@ impl TuiStorage {
         }
     }
 
+    // ── Last image directory ────────────────────────────────────────
+
+    /// Return the last directory an image was picked from, if any.
+    pub fn last_image_dir(&self) -> Option<PathBuf> {
+        self.settings.last_image_dir.clone()
+    }
+
+    /// Persist the directory containing the most recently selected image.
+    /// Silently ignores any I/O errors, like `save_theme`.
+    pub fn save_last_image_dir(&mut self, dir: PathBuf) {
+        self.settings.last_image_dir = Some(dir);
+        self.flush();
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     fn settings_path() -> Option<PathBuf> {
@@ -137,6 +157,7 @@ mod tests {
             path: None,
             settings: TuiSettings {
                 theme: String::new(),
+                last_image_dir: None,
             },
         };
         assert!(empty.load_theme().is_none());
@@ -164,6 +185,19 @@ mod tests {
             settings: TuiSettings::default(),
         };
         s.save_theme("Catppuccin Mocha"); // must not panic
+    }
+
+    #[test]
+    fn save_and_load_last_image_dir_roundtrip() {
+        let (mut s, tmp) = temp_storage();
+        assert!(s.last_image_dir().is_none());
+
+        s.save_last_image_dir(tmp.path().to_path_buf());
+        assert_eq!(s.last_image_dir(), Some(tmp.path().to_path_buf()));
+
+        let path = s.path.as_ref().unwrap();
+        let contents = std::fs::read_to_string(path).unwrap();
+        assert!(contents.contains("last_image_dir"));
     }
 
     #[test]
