@@ -324,8 +324,8 @@ fn real_uid() -> nix::unistd::Uid {
 }
 
 /// Returns `true` if the calling process can regain root privileges for the
-/// duration of a single privileged operation (i.e. [`with_effective_root`]
-/// would succeed).
+/// duration of a single privileged operation (i.e. the internal
+/// `with_effective_root` helper would succeed).
 ///
 /// This is `true` for setuid-root installs (the saved-set-UID is `0`) and for
 /// processes already running as root (e.g. `sudo flashkraft`). It is `false`

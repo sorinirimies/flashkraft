@@ -211,8 +211,8 @@ fmt-check:
 clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
 
-# Run all quality checks (fmt, clippy, test) — must pass before a release
-check-all: fmt-check clippy test
+# Run all quality checks (fmt, clippy, test, docs) — must pass before a release
+check-all: fmt-check clippy test doc-check
     @echo "✅ All checks passed!"
 
 # ── Examples ──────────────────────────────────────────────────────────────────
@@ -335,6 +335,12 @@ doc-tui:
 # Generate docs for the full workspace (no browser)
 doc:
     cargo doc --no-deps --workspace
+
+# Verify the workspace's rustdoc builds cleanly with warnings denied — the
+# same check the Release workflow's `cargo doc` job runs. Catches broken
+# intra-doc links (e.g. linking to a private item) before they fail CI.
+doc-check:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
 # ── Changelog ─────────────────────────────────────────────────────────────────
 
