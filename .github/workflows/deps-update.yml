@@ -86,10 +86,22 @@ jobs:
         run: cargo update
 
       # ── Check for changes ────────────────────────────────────────────────────
+      # `cargo update` can rewrite Cargo.lock (checksum/source reordering,
+      # registry-index metadata refresh) even when no package's resolved
+      # version actually changed. A raw `git diff --quiet` on Cargo.lock is
+      # therefore a false positive trigger. Instead, compare the set of
+      # `name`/`version` pairs before vs. after — that's the only thing that
+      # signals a real dependency upgrade — in addition to any real edits to
+      # the version constraints in Cargo.toml.
       - name: Check for changes
         id: check
         run: |
-          if git diff --quiet Cargo.toml Cargo.lock; then
+          extract() { grep -E '^(name|version) = ' | paste -d' ' - - | sort; }
+
+          OLD_LOCK=$(git show HEAD:Cargo.lock | extract)
+          NEW_LOCK=$(extract < Cargo.lock)
+
+          if [ "$OLD_LOCK" = "$NEW_LOCK" ] && git diff --quiet Cargo.toml; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
