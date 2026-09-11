@@ -34,8 +34,13 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
         // User Interaction Messages
         // ====================================================================
         Message::SelectImageClicked => {
-            // Spawn async file selection dialog
-            Task::perform(commands::select_image_file(), Message::ImageSelected)
+            // Spawn async file selection dialog, opening in the directory
+            // of the last image picked (if any was persisted).
+            let start_dir = state.storage.as_ref().and_then(|s| s.last_image_dir());
+            Task::perform(
+                commands::select_image_file(start_dir),
+                Message::ImageSelected,
+            )
         }
 
         Message::RefreshDrivesClicked => {
@@ -125,8 +130,14 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
                 return Task::none();
             };
 
-            state.selected_image = Some(ImageInfo::from_path(path));
+            state.selected_image = Some(ImageInfo::from_path(path.clone()));
             state.error_message = None;
+
+            if let Some(dir) = path.parent().map(|p| p.to_path_buf()) {
+                if let Some(storage) = state.storage.as_mut() {
+                    let _ = storage.save_last_image_dir(dir);
+                }
+            }
 
             constraints::mark_invalid_drives(
                 &mut state.available_drives,

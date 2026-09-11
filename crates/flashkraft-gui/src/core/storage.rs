@@ -104,6 +104,11 @@ pub struct GuiSettings {
     /// Name of the active Iced theme (e.g. `"TokyoNight"`).
     #[serde(default = "default_theme_name")]
     pub theme: String,
+
+    /// Last directory the user picked an image from, so the file dialog
+    /// reopens there next time instead of the OS default (e.g. home dir).
+    #[serde(default)]
+    pub last_image_dir: Option<PathBuf>,
 }
 
 fn default_theme_name() -> String {
@@ -114,6 +119,7 @@ impl Default for GuiSettings {
     fn default() -> Self {
         Self {
             theme: default_theme_name(),
+            last_image_dir: None,
         }
     }
 }
@@ -147,6 +153,19 @@ impl Storage {
     /// Returns `Err` only if the file cannot be written.
     pub fn save_theme(&mut self, theme: &Theme) -> Result<(), String> {
         self.settings.theme = theme_to_string(theme);
+        self.flush()
+    }
+
+    /// Return the last directory an image was picked from, if any.
+    pub fn last_image_dir(&self) -> Option<PathBuf> {
+        self.settings.last_image_dir.clone()
+    }
+
+    /// Persist the directory containing the most recently selected image,
+    /// so the next "Select Image" file dialog opens there instead of the
+    /// OS default. Only the parent directory is stored — never the file name.
+    pub fn save_last_image_dir(&mut self, dir: PathBuf) -> Result<(), String> {
+        self.settings.last_image_dir = Some(dir);
         self.flush()
     }
 
@@ -244,6 +263,20 @@ mod tests {
         storage.save_theme(&nord).unwrap();
         let contents = std::fs::read_to_string(&storage.path).unwrap();
         assert!(contents.contains("Nord"), "JSON should contain theme name");
+    }
+
+    #[test]
+    fn test_save_and_load_last_image_dir() {
+        let (mut storage, tmp) = temp_storage();
+        assert!(storage.last_image_dir().is_none());
+
+        storage
+            .save_last_image_dir(tmp.path().to_path_buf())
+            .unwrap();
+        assert_eq!(storage.last_image_dir(), Some(tmp.path().to_path_buf()));
+
+        let contents = std::fs::read_to_string(&storage.path).unwrap();
+        assert!(contents.contains("last_image_dir"));
     }
 
     #[test]

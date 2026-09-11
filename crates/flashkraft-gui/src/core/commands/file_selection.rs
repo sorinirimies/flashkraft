@@ -10,16 +10,28 @@ use std::path::PathBuf;
 /// This async function shows a native file picker dialog and waits
 /// for the user to select a file (or cancel).
 ///
+/// # Arguments
+///
+/// * `start_dir` — directory the dialog should open in (typically the
+///   directory of the last image the user picked, from persisted
+///   settings). Falls back to the OS default when `None` or invalid.
+///
 /// # Returns
 ///
 /// `Some(PathBuf)` if a file was selected, `None` if cancelled
-pub async fn select_image_file() -> Option<PathBuf> {
-    AsyncFileDialog::new()
+pub async fn select_image_file(start_dir: Option<PathBuf>) -> Option<PathBuf> {
+    let mut dialog = AsyncFileDialog::new()
         .set_title("Select Image File")
         .add_filter(
             "Image Files",
             &["img", "iso", "dmg", "zip", "gz", "xz", "raw"],
-        )
+        );
+
+    if let Some(dir) = start_dir.filter(|d| d.is_dir()) {
+        dialog = dialog.set_directory(dir);
+    }
+
+    dialog
         .add_filter("All Files", &["*"])
         .pick_file()
         .await
