@@ -107,7 +107,26 @@ pub struct FlashKraft {
 
     /// Animation time for progress line glow effects (0.0 to infinity)
     pub animation_time: f32,
+
+    /// Set once a background crates.io check finds a newer release than the
+    /// one currently running. `None` when no update is known/pending, or
+    /// after the user dismissed the banner / its auto-hide timer elapsed.
+    pub update_banner: Option<UpdateBanner>,
 }
+
+/// State backing the dismissible "a new version is available" banner.
+#[derive(Debug, Clone)]
+pub struct UpdateBanner {
+    /// Version string reported by crates.io (e.g. `"1.6.0"`).
+    pub latest_version: String,
+    /// When the banner was first shown — used to auto-hide it after
+    /// [`UPDATE_BANNER_DURATION`].
+    pub shown_at: std::time::Instant,
+}
+
+/// How long the "update available" banner stays visible before it
+/// auto-dismisses itself (the user can also dismiss it immediately).
+pub const UPDATE_BANNER_DURATION: std::time::Duration = std::time::Duration::from_secs(15);
 
 impl FlashKraft {
     /// Create a new FlashKraft instance with default values
@@ -154,7 +173,20 @@ impl FlashKraft {
             animated_progress,
             verify_animated_progress,
             animation_time: 0.0,
+            update_banner: None,
         }
+    }
+
+    /// `true` when enough time has passed since the last crates.io check to
+    /// perform another one (or none was ever recorded). Reads directly from
+    /// persisted settings so the check survives restarts.
+    pub fn should_check_for_update(&self) -> bool {
+        let last_checked = self
+            .storage
+            .as_ref()
+            .map(|s| s.last_update_check_unix())
+            .unwrap_or(0);
+        flashkraft_core::should_check(last_checked, flashkraft_core::now_unix())
     }
 
     /// Check if the application is ready to flash.
@@ -366,6 +398,7 @@ mod tests {
         assert!(state.selected_target.is_none());
         assert!(state.available_drives.is_empty());
         assert!(!state.is_ready_to_flash());
+        assert!(state.update_banner.is_none());
         assert!(!state.device_selection_open);
     }
 

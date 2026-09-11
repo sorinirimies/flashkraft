@@ -58,11 +58,18 @@ pub fn run_gui() -> iced::Result {
     iced::application(
         || {
             let initial_state = FlashKraft::new();
-            let initial_command = Task::perform(
+            let should_check_update = initial_state.should_check_for_update();
+            let mut tasks = vec![Task::perform(
                 flashkraft_core::commands::load_drives(),
                 Message::DrivesRefreshed,
-            );
-            (initial_state, initial_command)
+            )];
+            if should_check_update {
+                tasks.push(Task::perform(
+                    core::commands::check_for_update(env!("CARGO_PKG_VERSION")),
+                    Message::UpdateCheckCompleted,
+                ));
+            }
+            (initial_state, Task::batch(tasks))
         },
         FlashKraft::update,
         FlashKraft::view,

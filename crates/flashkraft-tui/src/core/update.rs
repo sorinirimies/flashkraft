@@ -73,6 +73,14 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 return true;
             }
         }
+        // Ctrl+U dismisses the "update available" banner immediately,
+        // instead of waiting out its auto-hide timer.
+        KeyCode::Char('u')
+            if key.modifiers.contains(KeyModifiers::CONTROL) && app.update_banner.is_some() =>
+        {
+            app.update_banner = None;
+            return true;
+        }
         _ => {}
     }
 
@@ -1389,6 +1397,34 @@ mod tests {
         assert_eq!(
             app.image_input, "t",
             "character must be inserted into input"
+        );
+    }
+
+    #[test]
+    fn ctrl_u_dismisses_update_banner() {
+        let mut app = App::new();
+        app.update_banner = Some(crate::core::state::UpdateBanner {
+            latest_version: "9.9.9".to_string(),
+            shown_at: std::time::Instant::now(),
+        });
+
+        let consumed = handle_key(&mut app, ctrl(KeyCode::Char('u')));
+
+        assert!(consumed, "Ctrl+U must be consumed when a banner is shown");
+        assert!(app.update_banner.is_none());
+    }
+
+    #[test]
+    fn ctrl_u_is_a_noop_without_a_banner() {
+        let mut app = App::new();
+        app.input_mode = InputMode::Normal;
+        assert!(app.update_banner.is_none());
+
+        let consumed = handle_key(&mut app, ctrl(KeyCode::Char('u')));
+
+        assert!(
+            !consumed,
+            "Ctrl+U should fall through when there's no banner"
         );
     }
 

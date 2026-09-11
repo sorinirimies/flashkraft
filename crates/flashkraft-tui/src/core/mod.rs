@@ -21,3 +21,4 @@ pub mod message;
 pub mod state;
 pub mod storage;
 pub mod update;
+pub mod update_check;

@@ -91,6 +91,18 @@ pub enum Message {
 
     /// User changed the application theme
     ThemeChanged(Theme),
+
+    // ========================================================================
+    // Update Checker
+    // ========================================================================
+    /// Background crates.io check finished. `Some(version)` if a newer
+    /// release than the running binary is available, `None` otherwise (or
+    /// if the check failed — failures are silent, never surfaced as errors).
+    UpdateCheckCompleted(Option<String>),
+
+    /// User dismissed the "update available" banner before its auto-hide
+    /// timer elapsed.
+    DismissUpdateBanner,
 }
 
 // ---------------------------------------------------------------------------

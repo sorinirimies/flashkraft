@@ -53,12 +53,19 @@ pub fn view(state: &FlashKraft) -> Element<'_, Message> {
         view_main(state)
     };
 
-    container(content)
+    let body = container(content)
         .width(Length::Fill)
         .height(Length::Fill)
         .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .into()
+        .center_y(Length::Fill);
+
+    match &state.update_banner {
+        Some(banner) => column![components::update_banner::view_update_banner(banner), body]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+        None => body.into(),
+    }
 }
 
 // ============================================================================

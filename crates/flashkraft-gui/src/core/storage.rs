@@ -114,6 +114,11 @@ pub struct GuiSettings {
     /// [`flashkraft_core::MAX_HISTORY_ENTRIES`].
     #[serde(default)]
     pub flash_history: Vec<flashkraft_core::FlashHistoryEntry>,
+
+    /// Unix timestamp (seconds) of the last crates.io update check, so we
+    /// don't hit the network on every single launch.
+    #[serde(default)]
+    pub last_update_check_unix: u64,
 }
 
 fn default_theme_name() -> String {
@@ -126,6 +131,7 @@ impl Default for GuiSettings {
             theme: default_theme_name(),
             last_image_dir: None,
             flash_history: Vec::new(),
+            last_update_check_unix: 0,
         }
     }
 }
@@ -189,6 +195,20 @@ impl Storage {
         entry: flashkraft_core::FlashHistoryEntry,
     ) -> Result<(), String> {
         flashkraft_core::push_history_entry(&mut self.settings.flash_history, entry);
+        self.flush()
+    }
+
+    // ── Update checker ──────────────────────────────────────────────
+
+    /// Unix timestamp of the last crates.io check, `0` if never checked.
+    pub fn last_update_check_unix(&self) -> u64 {
+        self.settings.last_update_check_unix
+    }
+
+    /// Record that a crates.io check just happened, so we throttle the next
+    /// one to [`flashkraft_core::CHECK_INTERVAL_SECS`].
+    pub fn record_update_check(&mut self) -> Result<(), String> {
+        self.settings.last_update_check_unix = flashkraft_core::now_unix();
         self.flush()
     }
 
@@ -314,6 +334,15 @@ mod tests {
 
         let contents = std::fs::read_to_string(&storage.path).unwrap();
         assert!(contents.contains("flash_history"));
+    }
+
+    #[test]
+    fn test_record_and_load_update_check_timestamp() {
+        let (mut storage, _tmp) = temp_storage();
+        assert_eq!(storage.last_update_check_unix(), 0);
+
+        storage.record_update_check().unwrap();
+        assert!(storage.last_update_check_unix() > 0);
     }
 
     #[test]

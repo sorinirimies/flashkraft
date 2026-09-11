@@ -40,6 +40,9 @@ serde      = { workspace = true }
 serde_json = { workspace = true }
 dirs       = { workspace = true }
 
+# ── Update checker (crates.io) ────────────────────────────────────────────────
+reqwest    = { workspace = true }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # Explicitly enable both Wayland and X11 backends so the app works on any
 # Linux display server without needing env vars pre-set at build time.

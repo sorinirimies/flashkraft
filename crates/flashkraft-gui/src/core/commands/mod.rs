@@ -16,10 +16,12 @@
 //!   the TUI frontend.
 
 pub mod file_selection;
+pub mod update_check;
 
 // ── Convenience re-exports ────────────────────────────────────────────────────
 
 pub use file_selection::select_image_file;
+pub use update_check::check_for_update;
 
 // Re-export the shared drive-detection command so GUI code can call
 // `commands::load_drives()` without importing from flashkraft_core directly.

@@ -30,6 +30,7 @@ pub mod commands;
 pub mod domain;
 pub mod flash_helper;
 pub mod theme;
+pub mod update_check;
 
 // ── Convenience re-exports ────────────────────────────────────────────────────
 
@@ -41,3 +42,7 @@ pub use utils::fmt_bytes;
 /// Re-export the flash pipeline event types so consumers only need to import
 /// from `flashkraft_core` rather than the sub-module path.
 pub use flash_helper::{verify_overall_progress, FlashEvent, FlashStage, FlashUpdate};
+
+/// Re-export the update-check comparison helpers at the crate root. The
+/// actual network fetch lives in each frontend crate (see module docs).
+pub use update_check::{is_newer, now_unix, should_check, CHECK_INTERVAL_SECS};

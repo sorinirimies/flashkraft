@@ -140,7 +140,29 @@ pub struct App {
     pub tick_count: u64,
     /// Set to true by the event loop when the user requests quit.
     pub should_quit: bool,
+
+    // ── Update checker ───────────────────────────────────────────────────────
+    /// Receives the result of a background crates.io check, spawned once at
+    /// startup by `run_app` when a check is due. Drained by `poll_update_check`.
+    pub update_check_rx: Option<mpsc::UnboundedReceiver<Option<String>>>,
+    /// Set once a background crates.io check finds a newer release than the
+    /// one currently running. `None` when no update is known/pending, or
+    /// after the auto-hide timer elapsed.
+    pub update_banner: Option<UpdateBanner>,
 }
+
+/// State backing the auto-hiding "a new version is available" banner.
+pub struct UpdateBanner {
+    /// Version string reported by crates.io (e.g. `"1.6.0"`).
+    pub latest_version: String,
+    /// When the banner was first shown — used to auto-hide it after
+    /// [`UPDATE_BANNER_DURATION`].
+    pub shown_at: std::time::Instant,
+}
+
+/// How long the "update available" banner stays visible before it
+/// auto-dismisses itself (the user can also dismiss it immediately).
+pub const UPDATE_BANNER_DURATION: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// Generate a pair of cursor-navigation methods that clamp at list bounds.
 macro_rules! cursor_nav {
@@ -235,7 +257,19 @@ impl App {
             error_message: String::new(),
             tick_count: 0,
             should_quit: false,
+            update_check_rx: None,
+            update_banner: None,
         }
+    }
+
+    /// `true` when enough time has passed since the last crates.io check to
+    /// perform another one (or none was ever recorded). Reads directly from
+    /// persisted settings so the check survives restarts.
+    pub fn should_check_for_update(&self) -> bool {
+        flashkraft_core::should_check(
+            self.storage.last_update_check_unix(),
+            flashkraft_core::now_unix(),
+        )
     }
 
     // -----------------------------------------------------------------------
@@ -333,6 +367,46 @@ impl App {
             }
             Err(mpsc::error::TryRecvError::Disconnected) => {
                 self.drives_loading = false;
+            }
+        }
+    }
+
+    /// Drain the update-check channel (if active) and apply results.
+    ///
+    /// One-shot, like `poll_drives`: the sender is dropped after a single
+    /// message, so once we've received it (or the channel disconnected) the
+    /// receiver is not put back.
+    pub fn poll_update_check(&mut self) {
+        let mut rx = match self.update_check_rx.take() {
+            Some(r) => r,
+            None => return,
+        };
+
+        match rx.try_recv() {
+            Ok(maybe_version) => {
+                self.storage.record_update_check();
+                if let Some(latest_version) = maybe_version {
+                    self.update_banner = Some(UpdateBanner {
+                        latest_version,
+                        shown_at: std::time::Instant::now(),
+                    });
+                }
+                // Don't put the receiver back — the check is one-shot.
+            }
+            Err(mpsc::error::TryRecvError::Empty) => {
+                self.update_check_rx = Some(rx);
+            }
+            Err(mpsc::error::TryRecvError::Disconnected) => {}
+        }
+    }
+
+    /// Auto-hide the "update available" banner once it has been visible
+    /// longer than [`UPDATE_BANNER_DURATION`]. Called every tick alongside
+    /// the other `poll_*` methods.
+    pub fn poll_update_banner_expiry(&mut self) {
+        if let Some(banner) = &self.update_banner {
+            if banner.shown_at.elapsed() >= UPDATE_BANNER_DURATION {
+                self.update_banner = None;
             }
         }
     }
@@ -1089,6 +1163,71 @@ fn explorer_fs_delete(path: &std::path::Path) -> std::io::Result<()> {
 mod tests {
     use super::*;
     use tokio::sync::mpsc;
+
+    // ── Update checker ───────────────────────────────────────────────────────
+
+    #[test]
+    fn should_check_for_update_true_when_never_checked() {
+        let app = App::new();
+        assert!(app.should_check_for_update());
+    }
+
+    #[test]
+    fn poll_update_check_sets_banner_when_update_available() {
+        let mut app = App::new();
+        let (tx, rx) = mpsc::unbounded_channel::<Option<String>>();
+        app.update_check_rx = Some(rx);
+        tx.send(Some("9.9.9".to_string())).unwrap();
+
+        app.poll_update_check();
+
+        let banner = app.update_banner.as_ref().expect("banner should be set");
+        assert_eq!(banner.latest_version, "9.9.9");
+        assert!(
+            app.update_check_rx.is_none(),
+            "one-shot check should not be re-armed"
+        );
+    }
+
+    #[test]
+    fn poll_update_check_leaves_banner_unset_when_up_to_date() {
+        let mut app = App::new();
+        let (tx, rx) = mpsc::unbounded_channel::<Option<String>>();
+        app.update_check_rx = Some(rx);
+        tx.send(None).unwrap();
+
+        app.poll_update_check();
+
+        assert!(app.update_banner.is_none());
+    }
+
+    #[test]
+    fn poll_update_banner_expiry_clears_stale_banner() {
+        let mut app = App::new();
+        app.update_banner = Some(UpdateBanner {
+            latest_version: "9.9.9".to_string(),
+            shown_at: std::time::Instant::now()
+                - UPDATE_BANNER_DURATION
+                - std::time::Duration::from_secs(1),
+        });
+
+        app.poll_update_banner_expiry();
+
+        assert!(app.update_banner.is_none());
+    }
+
+    #[test]
+    fn poll_update_banner_expiry_keeps_fresh_banner() {
+        let mut app = App::new();
+        app.update_banner = Some(UpdateBanner {
+            latest_version: "9.9.9".to_string(),
+            shown_at: std::time::Instant::now(),
+        });
+
+        app.poll_update_banner_expiry();
+
+        assert!(app.update_banner.is_some());
+    }
 
     // ── Test helpers ─────────────────────────────────────────────────────────
 

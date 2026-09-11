@@ -45,6 +45,11 @@ pub struct TuiSettings {
     /// [`flashkraft_core::MAX_HISTORY_ENTRIES`].
     #[serde(default)]
     pub flash_history: Vec<flashkraft_core::FlashHistoryEntry>,
+
+    /// Unix timestamp (seconds) of the last crates.io update check, so we
+    /// don't hit the network on every single launch.
+    #[serde(default)]
+    pub last_update_check_unix: u64,
 }
 
 fn default_theme_name() -> String {
@@ -57,6 +62,7 @@ impl Default for TuiSettings {
             theme: default_theme_name(),
             last_image_dir: None,
             flash_history: Vec::new(),
+            last_update_check_unix: 0,
         }
     }
 }
@@ -135,6 +141,21 @@ impl TuiStorage {
         self.flush();
     }
 
+    // ── Update checker ──────────────────────────────────────────────
+
+    /// Unix timestamp of the last crates.io check, `0` if never checked.
+    pub fn last_update_check_unix(&self) -> u64 {
+        self.settings.last_update_check_unix
+    }
+
+    /// Record that a crates.io check just happened, so we throttle the next
+    /// one to [`flashkraft_core::CHECK_INTERVAL_SECS`]. Silently ignores I/O
+    /// errors, like the other TUI storage methods.
+    pub fn record_update_check(&mut self) {
+        self.settings.last_update_check_unix = flashkraft_core::now_unix();
+        self.flush();
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     fn settings_path() -> Option<PathBuf> {
@@ -179,6 +200,7 @@ mod tests {
                 theme: String::new(),
                 last_image_dir: None,
                 flash_history: Vec::new(),
+                last_update_check_unix: 0,
             },
         };
         assert!(empty.load_theme().is_none());
@@ -234,6 +256,15 @@ mod tests {
         let path = s.path.as_ref().unwrap();
         let contents = std::fs::read_to_string(path).unwrap();
         assert!(contents.contains("flash_history"));
+    }
+
+    #[test]
+    fn record_and_load_update_check_timestamp() {
+        let (mut s, _tmp) = temp_storage();
+        assert_eq!(s.last_update_check_unix(), 0);
+
+        s.record_update_check();
+        assert!(s.last_update_check_unix() > 0);
     }
 
     #[test]

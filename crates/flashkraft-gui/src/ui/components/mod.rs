@@ -8,3 +8,4 @@ pub mod header;
 pub mod progress_line;
 pub mod step_indicators;
 pub mod theme_selector;
+pub mod update_banner;

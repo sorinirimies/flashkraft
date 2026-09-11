@@ -140,4 +140,49 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     if app.show_app_theme_panel {
         render_app_theme_panel(app, frame, area, &pal);
     }
+
+    // The "update available" banner floats above everything, top row.
+    if let Some(banner) = &app.update_banner {
+        render_update_banner(banner, frame, area, &pal);
+    }
+}
+
+/// Render the dismissible "a new version is available" banner as a single
+/// highlighted row across the very top of the terminal.
+///
+/// Auto-hides after `UPDATE_BANNER_DURATION` (checked every tick in
+/// `App::poll_update_banner_expiry`) or immediately on Ctrl+U.
+fn render_update_banner(
+    banner: &crate::core::state::UpdateBanner,
+    frame: &mut Frame,
+    area: Rect,
+    pal: &TuiPalette,
+) {
+    if area.height == 0 {
+        return;
+    }
+
+    let banner_area = Rect {
+        x: area.x,
+        y: area.y,
+        width: area.width,
+        height: 1,
+    };
+
+    let text = format!(
+        " \u{1F680} FlashKraft {} is available — you're on {}.  (Ctrl+U to dismiss) ",
+        banner.latest_version,
+        env!("CARGO_PKG_VERSION"),
+    );
+
+    frame.render_widget(Clear, banner_area);
+    frame.render_widget(
+        Paragraph::new(text).style(
+            Style::default()
+                .fg(pal.bg)
+                .bg(pal.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+        banner_area,
+    );
 }

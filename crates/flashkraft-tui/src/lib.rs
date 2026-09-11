@@ -143,6 +143,25 @@ where
         });
     }
 
+    // ── Update checker ────────────────────────────────────────────────────────
+    //
+    // At most once per CHECK_INTERVAL_SECS (persisted in tui-settings.json),
+    // ask crates.io whether a newer flashkraft release than the one currently
+    // running is available. One-shot: the sender is dropped after a single
+    // message and `poll_update_check` never puts the receiver back.
+    if app.should_check_for_update() {
+        use tokio::sync::mpsc;
+
+        let (tx, rx) = mpsc::unbounded_channel::<Option<String>>();
+        app.update_check_rx = Some(rx);
+
+        tokio::spawn(async move {
+            let result =
+                crate::core::update_check::check_for_update(env!("CARGO_PKG_VERSION")).await;
+            let _ = tx.send(result);
+        });
+    }
+
     loop {
         // ── Tick ─────────────────────────────────────────────────────────────
         app.tick_count = app.tick_count.wrapping_add(1);
@@ -151,6 +170,8 @@ where
         app.poll_hotplug();
         app.poll_drives();
         app.poll_flash();
+        app.poll_update_check();
+        app.poll_update_banner_expiry();
 
         // ── Render ────────────────────────────────────────────────────────────
         terminal.draw(|frame| render(&mut app, frame))?;

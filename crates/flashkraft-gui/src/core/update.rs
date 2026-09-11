@@ -201,6 +201,16 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             // Scale based on transfer speed for dynamic animations
             let speed_multiplier = (state.flash_speed_mb_s / 20.0).clamp(0.15, 1.2);
             state.animation_time += 0.016 * speed_multiplier; // ~60 FPS baseline, slowed down
+
+            // Auto-hide the "update available" banner once it has been
+            // visible long enough — piggy-backs on the existing per-frame
+            // tick rather than adding a dedicated subscription/timer.
+            if let Some(banner) = &state.update_banner {
+                if banner.shown_at.elapsed() >= crate::core::state::UPDATE_BANNER_DURATION {
+                    state.update_banner = None;
+                }
+            }
+
             Task::none()
         }
 
@@ -340,6 +350,28 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
 
             Task::none()
         }
+
+        Message::UpdateCheckCompleted(maybe_version) => {
+            if let Some(storage) = state.storage.as_mut() {
+                if let Err(e) = storage.record_update_check() {
+                    eprintln!("Failed to persist update-check timestamp: {e}");
+                }
+            }
+
+            if let Some(latest_version) = maybe_version {
+                state.update_banner = Some(crate::core::state::UpdateBanner {
+                    latest_version,
+                    shown_at: std::time::Instant::now(),
+                });
+            }
+
+            Task::none()
+        }
+
+        Message::DismissUpdateBanner => {
+            state.update_banner = None;
+            Task::none()
+        }
     }
 }
 
@@ -348,6 +380,59 @@ mod tests {
     use super::*;
     use crate::domain::DriveInfo;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_update_available_sets_banner() {
+        let mut state = FlashKraft::new();
+        assert!(state.update_banner.is_none());
+
+        let _ = update(
+            &mut state,
+            Message::UpdateCheckCompleted(Some("9.9.9".to_string())),
+        );
+
+        let banner = state.update_banner.as_ref().expect("banner should be set");
+        assert_eq!(banner.latest_version, "9.9.9");
+    }
+
+    #[test]
+    fn test_update_check_completed_none_leaves_banner_unset() {
+        let mut state = FlashKraft::new();
+
+        let _ = update(&mut state, Message::UpdateCheckCompleted(None));
+
+        assert!(state.update_banner.is_none());
+    }
+
+    #[test]
+    fn test_dismiss_update_banner_clears_it() {
+        let mut state = FlashKraft::new();
+        let _ = update(
+            &mut state,
+            Message::UpdateCheckCompleted(Some("9.9.9".to_string())),
+        );
+        assert!(state.update_banner.is_some());
+
+        let _ = update(&mut state, Message::DismissUpdateBanner);
+
+        assert!(state.update_banner.is_none());
+    }
+
+    #[test]
+    fn test_animation_tick_auto_dismisses_stale_banner() {
+        let mut state = FlashKraft::new();
+        state.update_banner = Some(crate::core::state::UpdateBanner {
+            latest_version: "9.9.9".to_string(),
+            // Already older than UPDATE_BANNER_DURATION — next tick should clear it.
+            shown_at: std::time::Instant::now()
+                - crate::core::state::UPDATE_BANNER_DURATION
+                - std::time::Duration::from_secs(1),
+        });
+
+        let _ = update(&mut state, Message::AnimationTick);
+
+        assert!(state.update_banner.is_none());
+    }
 
     #[test]
     fn test_cancel_clicked() {
