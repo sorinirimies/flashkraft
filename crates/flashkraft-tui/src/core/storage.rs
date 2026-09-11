@@ -84,14 +84,28 @@ impl TuiStorage {
     ///
     /// Returns a storage instance even if the file could not be read;
     /// in that case all reads return `None` and all writes are no-ops.
+    ///
+    /// Under `cfg(test)` this always returns an in-memory store (no path),
+    /// so unit tests never read or write the developer's real settings file
+    /// and never leak state between test runs.
     pub fn open() -> Self {
-        let path = Self::settings_path();
-        let settings = path
-            .as_deref()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
-        Self { path, settings }
+        #[cfg(test)]
+        {
+            Self {
+                path: None,
+                settings: TuiSettings::default(),
+            }
+        }
+        #[cfg(not(test))]
+        {
+            let path = Self::settings_path();
+            let settings = path
+                .as_deref()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default();
+            Self { path, settings }
+        }
     }
 
     // ── Theme ─────────────────────────────────────────────────────────────────
@@ -158,6 +172,7 @@ impl TuiStorage {
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
+    #[cfg_attr(test, allow(dead_code))]
     fn settings_path() -> Option<PathBuf> {
         let mut path = dirs::config_dir()?;
         path.push("flashkraft");
