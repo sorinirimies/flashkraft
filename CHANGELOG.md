@@ -2,9 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
-## 1.5.1 - 2026-09-10
+## 1.5.1 - 2026-09-11
+### ✨ Features
+- feat(gui): remember last used image directory
+- feat(tui): remember last used image directory
+- feat: record flash history in persisted settings
+- feat: check crates.io for newer flashkraft releases, banner in GUI + TUI
+### 🐛 Bug Fixes
+- fix(ci): only bump version in nightly deps workflow on real upgrades
+- fix(docs): remove private intra-doc link, add doc-check to release pipeline
+- fix(tui): isolate TuiStorage from real config dir under cfg(test)
 ### 📦 Other Changes
 - Bump tui-file-explorer to 2.1.0
+### 🔧 Chores
+- chore: bump version to 1.5.1
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.5.0...v1.5.1
 ## 1.5.0 - 2026-09-10
 ### ✨ Features
