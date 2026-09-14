@@ -10,6 +10,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+
 concurrency:
   group: deps-update
   cancel-in-progress: true
@@ -89,10 +92,15 @@ jobs:
       # `cargo update` can rewrite Cargo.lock (checksum/source reordering,
       # registry-index metadata refresh) even when no package's resolved
       # version actually changed. A raw `git diff --quiet` on Cargo.lock is
-      # therefore a false positive trigger. Instead, compare the set of
-      # `name`/`version` pairs before vs. after — that's the only thing that
-      # signals a real dependency upgrade — in addition to any real edits to
-      # the version constraints in Cargo.toml.
+      # therefore a false positive trigger. Compare the set of `name`/`version`
+      # pairs before vs. after instead — that's the only thing that signals a
+      # real dependency upgrade.
+      #
+      # Note: `cargo upgrade` (cargo-edit) also reserializes the whole
+      # Cargo.toml via toml_edit, reordering/reformatting keys even when no
+      # pin actually changed — so a raw `git diff --quiet Cargo.toml` check
+      # is equally unreliable and is deliberately NOT part of this gate.
+      # Cargo.lock's name/version pairs are the ground truth.
       - name: Check for changes
         id: check
         run: |
@@ -101,7 +109,7 @@ jobs:
           OLD_LOCK=$(git show HEAD:Cargo.lock | extract)
           NEW_LOCK=$(extract < Cargo.lock)
 
-          if [ "$OLD_LOCK" = "$NEW_LOCK" ] && git diff --quiet Cargo.toml; then
+          if [ "$OLD_LOCK" = "$NEW_LOCK" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
@@ -148,44 +156,11 @@ jobs:
 
           echo "✅ Dependency updates pushed to main."
 
-      # ── Bump patch version, tag, and push to Gitea + GitHub ─────────────────
-      # A fresh tag push triggers release.yml (on: push: tags: v*) on both.
-      - name: Install Nushell (bump_version.nu needs it)
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo install nu --locked
-
-      - name: Install git-cliff (bump_version.nu uses it for CHANGELOG.md)
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo install git-cliff --locked
-
-      - name: Compute next patch version
-        if: steps.check.outputs.has_changes == 'true'
-        id: version
-        run: |
-          current=$(grep -m1 '^version' Cargo.toml | sed -E 's/version[[:space:]]*=[[:space:]]*"(.*)"/\1/')
-          IFS='.' read -r major minor patch <<< "$current"
-          next="$major.$minor.$((patch + 1))"
-          echo "current=$current" >> "$GITHUB_OUTPUT"
-          echo "next=$next" >> "$GITHUB_OUTPUT"
-
-      - name: Bump version, changelog, commit and tag
-        if: steps.check.outputs.has_changes == 'true'
-        run: nu scripts/bump_version.nu --yes ${{ steps.version.outputs.next }}
-
-      - name: Push release commit and tag to Gitea
-        if: steps.check.outputs.has_changes == 'true'
-        run: |
-          git push origin HEAD:${{ github.ref_name }}
-          git push origin "v${{ steps.version.outputs.next }}"
-
-      - name: Push release commit and tag to GitHub mirror
-        if: steps.check.outputs.has_changes == 'true' && env.GITHUB_REMOTE_URL != ''
-        env:
-          GITHUB_REMOTE_URL: ${{ secrets.GITHUB_REMOTE_URL }}
-        run: |
-          git remote add github-ci "$GITHUB_REMOTE_URL"
-          git push github-ci HEAD:${{ github.ref_name }}
-          git push github-ci "v${{ steps.version.outputs.next }}"
+      # By convention (matching the GitHub mirror and sibling projects),
+      # deps-update only ever commits a plain dependency bump to main — it
+      # never auto-tags or auto-triggers a release. Cutting a release stays a
+      # deliberate, separate step (`just release <version>` or manually
+      # pushing a tag).
 
       - name: Nothing to update
         if: steps.check.outputs.has_changes == 'false'
