@@ -10,6 +10,8 @@ Pure Rust from the UI down to the block device: no Electron, no `dd`, no shell s
 [![docs.rs](https://docs.rs/flashkraft-core/badge.svg)](https://docs.rs/flashkraft-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/sorinirimies/flashkraft/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/flashkraft/actions/workflows/ci.yml)
+[![Audit](https://github.com/sorinirimies/flashkraft/actions/workflows/security.yml/badge.svg)](https://github.com/sorinirimies/flashkraft/actions/workflows/security.yml)
+[![Fuzz](https://github.com/sorinirimies/flashkraft/actions/workflows/fuzz.yml/badge.svg)](https://github.com/sorinirimies/flashkraft/actions/workflows/fuzz.yml)
 
 [![TUI installs](https://img.shields.io/crates/d/flashkraft-tui?label=flashkraft-tui%20installs&logo=rust&color=orange)](https://crates.io/crates/flashkraft-tui)
 [![GUI installs](https://img.shields.io/crates/d/flashkraft?label=flashkraft%20installs&logo=rust&color=orange)](https://crates.io/crates/flashkraft)
