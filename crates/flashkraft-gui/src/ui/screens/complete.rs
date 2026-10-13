@@ -17,11 +17,17 @@ pub fn view_complete(state: &FlashKraft) -> Element<'_, Message> {
         icons::icon(bootstrap::check_circle_fill(), 80.0),
         text("Flash Complete!").size(32),
         Space::new().height(20),
-        text("Your device is ready to use").size(16),
+        text(match &state.batch {
+            Some(b) if b.targets.len() > 1 =>
+                format!("All {} devices are ready to use", b.targets.len()),
+            _ => "Your device is ready to use".to_string(),
+        })
+        .size(16),
         Space::new().height(20),
         button(text("Flash Another").size(14))
             .on_press(Message::ResetClicked)
-            .padding(10),
+            .padding([10, 20])
+            .style(crate::ui::theme::primary_button),
     ]
     .spacing(10)
     .align_x(Alignment::Center)

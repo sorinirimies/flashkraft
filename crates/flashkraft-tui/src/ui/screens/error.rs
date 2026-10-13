@@ -63,7 +63,7 @@ pub(in crate::ui) fn render_error(
                 ))
                 .title_alignment(Alignment::Center)
                 .borders(Borders::ALL)
-                .border_type(BorderType::Double)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(pal.err)),
         )
         .wrap(Wrap { trim: true });

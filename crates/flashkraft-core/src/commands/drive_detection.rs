@@ -42,6 +42,10 @@ pub async fn load_drives() -> Vec<DriveInfo> {
 /// Exposed as `pub` so unit tests and the TUI can call it without a Tokio
 /// runtime.
 pub fn load_drives_sync() -> Vec<DriveInfo> {
+    if super::demo::is_demo() {
+        return super::demo::demo_drives();
+    }
+
     #[cfg(target_os = "linux")]
     let mut drives = linux::enumerate();
 

@@ -14,26 +14,32 @@ use iced_fonts::bootstrap;
 
 /// Build a step-indicator column: icon + label, centred in 220px.
 macro_rules! step_indicator {
-    ($icon_widget:expr, $label:expr) => {
+    ($icon_widget:expr, $label:expr, $active:expr) => {
         container(
-            column![icons::icon($icon_widget, 32.0), text($label).size(13)]
+            column![icons::icon($icon_widget, 28.0), text($label).size(13)]
                 .spacing(8)
                 .align_x(Alignment::Center),
         )
         .width(220)
+        .padding([10, 0])
         .center_x(220)
+        .style(move |theme: &iced::Theme| crate::ui::theme::card(theme, $active))
     };
 }
 
-/// Step indicators with connecting lines (Balena Etcher style)
+/// Step indicators with connecting lines (cards light up as each step completes)
 pub fn view_step_indicators(state: &FlashKraft) -> Element<'_, Message> {
     let has_image = state.selected_image.is_some();
     let has_target = state.selected_target.is_some();
 
     // Create step indicators - width matches button content width (220px)
-    let step1 = step_indicator!(bootstrap::image(), "Select Image");
-    let step2 = step_indicator!(bootstrap::device_hdd(), "Select Target");
-    let step3 = step_indicator!(bootstrap::lightning_fill(), "Flash!");
+    let step1 = step_indicator!(bootstrap::image(), "1 · Select Image", has_image);
+    let step2 = step_indicator!(bootstrap::device_hdd(), "2 · Select Target", has_target);
+    let step3 = step_indicator!(
+        bootstrap::lightning_fill(),
+        "3 · Flash!",
+        has_image && has_target
+    );
 
     // Create connecting lines - animated with theme colors
     let line1 =

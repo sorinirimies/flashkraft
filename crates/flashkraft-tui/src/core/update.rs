@@ -332,6 +332,12 @@ fn handle_select_drive(app: &mut App, key: KeyEvent) -> bool {
             true
         }
 
+        // Mark / unmark for a multi-device flash.
+        KeyCode::Char('m') => {
+            try_or_error_screen!(app, app.toggle_mark());
+            true
+        }
+
         // Refresh drive list.
         KeyCode::Char('r') | KeyCode::F(5) => {
             app.start_drive_detection();

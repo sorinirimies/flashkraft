@@ -17,6 +17,7 @@ pub(in crate::ui) fn render_select_drive(
         &[
             ("\u{2191}/\u{2193}", "Navigate"),
             ("Enter / Space", "Select"),
+            ("M", "Mark several"),
             ("Ctrl+T", "Cycle theme"),
             ("Shift+T", "Theme panel"),
             ("R / F5", "Refresh"),
@@ -55,7 +56,8 @@ pub(in crate::ui) fn render_select_drive(
             .enumerate()
             .map(|(i, d)| {
                 let selected = i == app.drive_cursor;
-                let is_selected_drive = app.selected_drive.as_ref() == Some(d);
+                let is_selected_drive = app.selected_drive.as_ref() == Some(d)
+                    || app.marked_drives.contains(&d.device_path);
 
                 // tui-checkbox: checked if this is the actively selected drive,
                 // styled differently if it is the highlighted cursor row.
@@ -103,7 +105,18 @@ pub(in crate::ui) fn render_select_drive(
             })
             .collect();
 
-        (format!(" \u{1f4be}  USB Drives ({}) ", drives.len()), items)
+        (
+            if app.marked_drives.is_empty() {
+                format!(" \u{1f4be}  USB Drives ({}) ", drives.len())
+            } else {
+                format!(
+                    " \u{1f4be}  USB Drives ({}) \u{2014} {} marked ",
+                    drives.len(),
+                    app.marked_drives.len()
+                )
+            },
+            items,
+        )
     };
 
     let mut list_state = ListState::default();

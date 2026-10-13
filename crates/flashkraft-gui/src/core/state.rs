@@ -84,6 +84,12 @@ pub struct FlashKraft {
     /// screen without killing the subscription prematurely.
     pub flash_complete: bool,
 
+    /// Drives marked for a multi-device flash (empty = single target flow).
+    pub marked_targets: Vec<DriveInfo>,
+
+    /// Live per-device state of a running multi-device flash.
+    pub batch: Option<flashkraft_core::MultiState>,
+
     /// Cancellation token for flash operation
     pub flash_cancel_token: Arc<AtomicBool>,
 
@@ -151,7 +157,7 @@ impl FlashKraft {
         let verify_animated_progress =
             AnimatedProgress::new_with_color(Color::from_rgb(0.18, 0.78, 0.45));
 
-        Self {
+        let mut this = Self {
             selected_image: None,
             selected_target: None,
             available_drives: Vec::new(),
@@ -166,6 +172,8 @@ impl FlashKraft {
             device_selection_open: false,
             flashing_active: false,
             flash_complete: false,
+            marked_targets: Vec::new(),
+            batch: None,
             flash_cancel_token: Arc::new(AtomicBool::new(false)),
             flash_run_id: 0,
             theme,
@@ -174,6 +182,66 @@ impl FlashKraft {
             verify_animated_progress,
             animation_time: 0.0,
             update_banner: None,
+        };
+        if flashkraft_core::commands::demo::is_demo() {
+            this.apply_demo_scene(std::env::var("FLASHKRAFT_SCENE").ok().as_deref());
+        }
+        this
+    }
+
+    /// Put the window into a canned state for screenshots (demo mode only).
+    ///
+    /// `FLASHKRAFT_SCENE` = `ready` (image + one drive), `drives` (the drive
+    /// picker with the image chosen), `batch` (picker with three marked
+    /// drives), `flashing` (three drives being flashed — simulated) or
+    /// `complete`. Anything else leaves the start screen.
+    pub fn apply_demo_scene(&mut self, scene: Option<&str>) {
+        let Some(scene) = scene else { return };
+        let image_path = std::env::var("FLASHKRAFT_DEMO_IMAGE")
+            .unwrap_or_else(|_| "/tmp/fk/debian-12.iso".into());
+        let image = ImageInfo::from_path(image_path.into());
+        let mut drives = flashkraft_core::commands::demo::demo_drives();
+        crate::domain::mark_invalid_drives(&mut drives, Some(&image));
+        let usb: Vec<DriveInfo> = drives
+            .iter()
+            .filter(|d| d.usb_info.is_some() && !d.disabled)
+            .cloned()
+            .collect();
+        if !matches!(
+            scene,
+            "ready" | "drives" | "batch" | "flashing" | "complete"
+        ) {
+            return;
+        }
+        self.selected_image = Some(image);
+        self.available_drives = drives;
+        match scene {
+            "ready" => self.selected_target = usb.first().cloned(),
+            "drives" => self.device_selection_open = true,
+            "batch" => {
+                self.device_selection_open = true;
+                self.marked_targets = usb;
+            }
+            _ => {
+                self.marked_targets = usb;
+                if scene == "flashing" {
+                    self.begin_flash_state();
+                } else {
+                    let names: Vec<String> =
+                        self.marked_targets.iter().map(|d| d.name.clone()).collect();
+                    let mut b = flashkraft_core::MultiState::new(&names);
+                    for i in 0..names.len() {
+                        b.apply(&flashkraft_core::MultiUpdate::Target {
+                            index: i,
+                            device: String::new(),
+                            update: flashkraft_core::FlashUpdate::Completed,
+                        });
+                    }
+                    self.batch = Some(b);
+                    self.flash_progress = Some(1.0);
+                    self.flash_complete = true;
+                }
+            }
         }
     }
 
@@ -194,10 +262,41 @@ impl FlashKraft {
     /// Selections are revalidated here because the image or removable-device
     /// inventory may have changed after the target was originally chosen.
     pub fn is_ready_to_flash(&self) -> bool {
-        match (&self.selected_image, &self.selected_target) {
-            (Some(image), Some(target)) => crate::domain::is_drive_valid(target, Some(image)),
-            _ => false,
+        let Some(image) = &self.selected_image else {
+            return false;
+        };
+        if !self.marked_targets.is_empty() {
+            return self
+                .marked_targets
+                .iter()
+                .all(|t| crate::domain::is_drive_valid(t, Some(image)));
         }
+        match &self.selected_target {
+            Some(target) => crate::domain::is_drive_valid(target, Some(image)),
+            None => false,
+        }
+    }
+
+    /// Mark / unmark `drive` for a multi-device flash. Unsafe drives are refused.
+    pub fn toggle_mark(&mut self, drive: DriveInfo) -> Result<(), String> {
+        if let Some(pos) = self
+            .marked_targets
+            .iter()
+            .position(|d| d.device_path == drive.device_path)
+        {
+            self.marked_targets.remove(pos);
+            return Ok(());
+        }
+        if !crate::domain::is_drive_valid(&drive, self.selected_image.as_ref()) {
+            return Err("The selected drive is not a safe flash target".into());
+        }
+        self.marked_targets.push(drive);
+        Ok(())
+    }
+
+    /// `true` when the next flash writes more than one drive.
+    pub fn is_batch(&self) -> bool {
+        self.marked_targets.len() > 1
     }
 
     /// Check if a flash operation is currently in progress
@@ -219,6 +318,8 @@ impl FlashKraft {
     pub fn reset(&mut self) {
         self.selected_image = None;
         self.selected_target = None;
+        self.marked_targets.clear();
+        self.batch = None;
         self.flash_progress = None;
         self.flash_bytes_written = 0;
         self.flash_speed_mb_s = 0.0;
@@ -245,6 +346,10 @@ impl FlashKraft {
         self.flash_cancel_token = Arc::new(AtomicBool::new(false));
         self.flash_run_id = self.flash_run_id.wrapping_add(1);
         self.flash_progress = Some(0.0);
+        self.batch = self.is_batch().then(|| {
+            let names: Vec<String> = self.marked_targets.iter().map(|d| d.name.clone()).collect();
+            flashkraft_core::MultiState::new(&names)
+        });
         self.error_message = None;
         self.flashing_active = true;
         self.flash_complete = false;
@@ -321,7 +426,24 @@ impl FlashKraft {
         subscriptions.push(hotplug_sub);
 
         // ── Flash progress ────────────────────────────────────────────────────
-        if self.flashing_active {
+        if self.flashing_active && self.batch.is_some() {
+            if let Some(image) = &self.selected_image {
+                let devices = self
+                    .marked_targets
+                    .iter()
+                    .map(|d| d.device_path.clone().into())
+                    .collect();
+                subscriptions.push(
+                    crate::core::flash_runner::multi_flash_progress(
+                        image.path.clone(),
+                        devices,
+                        self.flash_cancel_token.clone(),
+                        self.flash_run_id,
+                    )
+                    .map(Message::BatchUpdate),
+                );
+            }
+        } else if self.flashing_active {
             if let (Some(image), Some(target)) = (&self.selected_image, &self.selected_target) {
                 let flash_sub = crate::core::flash_runner::flash_progress(
                     image.path.clone(),
@@ -450,5 +572,38 @@ mod tests {
         assert!(state.flash_progress.is_none());
         assert!(state.error_message.is_none());
         assert!(!state.device_selection_open);
+    }
+}
+
+#[cfg(test)]
+mod scene_tests {
+    use super::*;
+
+    fn scene(name: &str) -> FlashKraft {
+        let mut s = FlashKraft::new();
+        s.apply_demo_scene(Some(name));
+        s
+    }
+
+    #[test]
+    fn unknown_or_missing_scene_changes_nothing() {
+        let mut s = FlashKraft::new();
+        s.apply_demo_scene(None);
+        s.apply_demo_scene(Some("nonsense"));
+        assert!(s.selected_image.is_none() && s.marked_targets.is_empty());
+    }
+
+    #[test]
+    fn scenes_set_up_the_expected_state() {
+        assert!(scene("drives").device_selection_open);
+        let ready = scene("ready");
+        assert!(ready.selected_target.is_some() && ready.selected_image.is_some());
+        let batch = scene("batch");
+        assert!(batch.device_selection_open && batch.marked_targets.len() >= 2);
+        let flashing = scene("flashing");
+        assert!(flashing.flashing_active && flashing.batch.is_some());
+        let done = scene("complete");
+        assert!(done.is_flash_complete());
+        assert_eq!(done.batch.unwrap().done(), done.marked_targets.len());
     }
 }

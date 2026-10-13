@@ -253,66 +253,43 @@ example-constraints:
 example-flash-writer:
     cargo run -p flashkraft-core --example flash_writer_demo
 
-# ── VHS Demo GIFs ─────────────────────────────────────────────────────────────
+# ── Demo media (docs/media) ───────────────────────────────────────────────────
+# Everything runs in demo mode (FLASHKRAFT_DEMO=1): fake drives, simulated
+# writes, throw-away HOME — your real drives and settings are never touched.
 
-GUI_VHS := "crates/flashkraft-gui/examples/vhs"
-TUI_VHS := "crates/flashkraft-tui/examples/vhs"
-GUI_VHS_GENERATED := "crates/flashkraft-gui/examples/vhs/generated"
-TUI_VHS_GENERATED := "crates/flashkraft-tui/examples/vhs/generated"
+# Build the web dashboard (dev)
+build-web:
+    cargo build -p flashkraft-web
 
-# Generate all VHS demo GIFs (GUI + TUI)
-vhs-all: vhs-gui vhs-tui
+# Bundle the Topcoat browser runtime (needs `cargo install topcoat-cli --locked`)
+bundle-web:
+    topcoat asset bundle --package flashkraft-web --out target/debug/assets
 
-# Generate only the GUI demo GIFs (crates/flashkraft-gui/examples/vhs/generated/)
-vhs-gui: _check-vhs
-    @mkdir -p {{ GUI_VHS_GENERATED }}
-    @echo "╔════════════════════════════════════════════╗"
-    @echo "║   GUI Tapes (Iced desktop)                ║"
-    @echo "╚════════════════════════════════════════════╝"
-    @for tape in {{ GUI_VHS }}/*.tape; do \
-        echo "▶  $tape"; \
-        vhs "$tape" || echo "❌ Failed: $tape"; \
-    done
-    @echo "✅ GUI demos done → {{ GUI_VHS_GENERATED }}/"
+# Serve the live web dashboard on http://127.0.0.1:3000
+run-web: bundle-web
+    cargo run -p flashkraft-web
 
-# Generate only the TUI demo GIFs (crates/flashkraft-tui/examples/vhs/generated/)
+# Same, with fake drives
+demo-web: bundle-web
+    cargo run -p flashkraft-web -- --demo
+
+# Record the terminal GIFs + screenshots (needs vhs)
 vhs-tui: _check-vhs
-    @mkdir -p {{ TUI_VHS_GENERATED }}
-    @echo "╔════════════════════════════════════════════╗"
-    @echo "║   TUI Tapes (Ratatui terminal)            ║"
-    @echo "╚════════════════════════════════════════════╝"
-    @for tape in {{ TUI_VHS }}/*.tape; do \
-        echo "▶  $tape"; \
-        vhs "$tape" || echo "❌ Failed: $tape"; \
-    done
-    @echo "✅ TUI demos done → {{ TUI_VHS_GENERATED }}/"
+    cargo build -p flashkraft-tui
+    @mkdir -p docs/media
+    @for tape in examples/vhs/*.tape; do echo "▶  $tape"; vhs "$tape" >/dev/null || echo "❌ Failed: $tape"; done
 
-# Render a single tape by name, e.g.: just vhs-tape tui-demo-workflow
-vhs-tape name: _check-vhs
-    @if [ -f "{{ GUI_VHS }}/{{ name }}.tape" ]; then \
-        echo "▶  {{ GUI_VHS }}/{{ name }}.tape"; \
-        vhs "{{ GUI_VHS }}/{{ name }}.tape" && echo "✅ Done."; \
-    elif [ -f "{{ TUI_VHS }}/{{ name }}.tape" ]; then \
-        echo "▶  {{ TUI_VHS }}/{{ name }}.tape"; \
-        vhs "{{ TUI_VHS }}/{{ name }}.tape" && echo "✅ Done."; \
-    else \
-        echo "❌ Tape not found: {{ name }}.tape"; \
-        echo ""; \
-        just vhs-list; \
-        exit 1; \
-    fi
+# GUI screenshots (macOS only — the window must be frontmost)
+screenshots-gui theme="Tokyo Night":
+    cargo build -p flashkraft
+    bash examples/capture/gui.sh docs/media "{{ theme }}" home ready drives batch flashing complete
 
-# List all available VHS tapes and any already-generated GIFs
-vhs-list:
-    @echo "GUI tapes  →  {{ GUI_VHS }}/"
-    @ls {{ GUI_VHS }}/*.tape | sed 's|.*/||; s|\.tape||' | sed 's/^/  /'
-    @echo "GUI generated  →  {{ GUI_VHS_GENERATED }}/"
-    @ls {{ GUI_VHS_GENERATED }}/*.gif 2>/dev/null | sed 's|.*/||' | sed 's/^/  /' || echo "  (none yet)"
-    @echo ""
-    @echo "TUI tapes  →  {{ TUI_VHS }}/"
-    @ls {{ TUI_VHS }}/*.tape | sed 's|.*/||; s|\.tape||' | sed 's/^/  /'
-    @echo "TUI generated  →  {{ TUI_VHS_GENERATED }}/"
-    @ls {{ TUI_VHS_GENERATED }}/*.gif 2>/dev/null | sed 's|.*/||' | sed 's/^/  /' || echo "  (none yet)"
+# Web screenshots (needs a Chromium-based browser)
+screenshots-web theme="Tokyo Night": build-web bundle-web
+    bash examples/capture/web.sh docs/media "{{ theme }}"
+
+# Every GIF and screenshot
+media: vhs-tui screenshots-gui screenshots-web
 
 # Pull GIF files from Git LFS (run once after a fresh clone)
 lfs-pull:

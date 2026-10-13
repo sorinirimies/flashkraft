@@ -13,6 +13,7 @@
 //! - File-picker dialogs (`rfd`) — those are GUI-only and live in
 //!   `flashkraft-gui::core::commands::file_selection`.
 
+pub mod demo;
 pub mod drive_detection;
 pub mod hotplug;
 

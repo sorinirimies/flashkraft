@@ -34,6 +34,12 @@ pub enum Message {
     /// User clicked on a specific target drive
     TargetDriveClicked(DriveInfo),
 
+    /// User marked / unmarked a drive for a multi-device flash
+    ToggleMarkTarget(DriveInfo),
+
+    /// Progress of a multi-device flash
+    BatchUpdate(flashkraft_core::MultiUpdate),
+
     /// User clicked to open the device selection view
     OpenDeviceSelection,
 

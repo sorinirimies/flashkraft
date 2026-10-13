@@ -51,6 +51,12 @@ pub struct App {
     pub drive_cursor: usize,
     /// The drive the user confirmed for flashing.
     pub selected_drive: Option<DriveInfo>,
+    /// Device paths marked with `m` for a multi-device flash (empty = single flash).
+    pub marked_drives: Vec<String>,
+    /// Live per-device state while a multi-device flash runs.
+    pub batch: Option<flashkraft_core::MultiState>,
+    /// Channel receiving [`flashkraft_core::MultiUpdate`]s from the batch flash.
+    pub batch_rx: Option<mpsc::UnboundedReceiver<flashkraft_core::MultiUpdate>>,
     /// True while the background drive-detection task is running.
     pub drives_loading: bool,
     /// Channel receiving the result of the async drive-detection task.
@@ -220,6 +226,9 @@ impl App {
             available_drives: Vec::new(),
             drive_cursor: 0,
             selected_drive: None,
+            marked_drives: Vec::new(),
+            batch: None,
+            batch_rx: None,
             drives_loading: false,
             drives_rx: None,
             hotplug_rx: None,
@@ -609,17 +618,159 @@ impl App {
 
     /// Confirm the highlighted drive and advance to the drive-info screen.
     pub fn confirm_drive(&mut self) -> Result<(), String> {
-        let drive = self
-            .available_drives
-            .get(self.drive_cursor)
-            .cloned()
-            .ok_or_else(|| "No drive selected.".to_string())?;
+        // With marked drives the batch decides; show the first one's details.
+        let drive = match self.batch_targets().into_iter().next() {
+            Some(first) if !self.marked_drives.is_empty() => first,
+            _ => self
+                .available_drives
+                .get(self.drive_cursor)
+                .cloned()
+                .ok_or_else(|| "No drive selected.".to_string())?,
+        };
 
         validate_flash_target(&drive, self.selected_image.as_ref())?;
 
         self.selected_drive = Some(drive);
         self.screen = AppScreen::DriveInfo;
         Ok(())
+    }
+
+    /// Mark / unmark the highlighted drive for a multi-device flash.
+    pub fn toggle_mark(&mut self) -> Result<(), String> {
+        let drive = self
+            .available_drives
+            .get(self.drive_cursor)
+            .ok_or_else(|| "No drive selected.".to_string())?
+            .clone();
+        if let Some(pos) = self
+            .marked_drives
+            .iter()
+            .position(|d| *d == drive.device_path)
+        {
+            self.marked_drives.remove(pos);
+            return Ok(());
+        }
+        validate_flash_target(&drive, self.selected_image.as_ref())?;
+        self.marked_drives.push(drive.device_path);
+        Ok(())
+    }
+
+    /// Drives the next flash will write: the marked ones (in list order), or
+    /// just the selected drive when nothing is marked.
+    pub fn batch_targets(&self) -> Vec<DriveInfo> {
+        if self.marked_drives.is_empty() {
+            return self.selected_drive.iter().cloned().collect();
+        }
+        self.available_drives
+            .iter()
+            .filter(|d| self.marked_drives.contains(&d.device_path))
+            .cloned()
+            .collect()
+    }
+
+    /// `true` when more than one drive will be flashed.
+    pub fn is_batch(&self) -> bool {
+        self.batch_targets().len() > 1
+    }
+
+    /// Start a multi-device flash of `image` to `targets`.
+    fn begin_batch(&mut self, image: ImageInfo, targets: Vec<DriveInfo>) -> Result<(), String> {
+        for d in &targets {
+            validate_flash_target(d, Some(&image))?;
+        }
+        self.flash_progress = 0.0;
+        self.flash_stage = format!("Flashing {} drives…", targets.len());
+        self.flash_log.clear();
+        self.log_scroll = 0;
+        self.cancel_token = Arc::new(AtomicBool::new(false));
+        self.verify_progress = None;
+
+        let names: Vec<String> = targets.iter().map(|d| d.name.clone()).collect();
+        self.batch = Some(flashkraft_core::MultiState::new(&names));
+
+        let devices: Vec<PathBuf> = targets
+            .iter()
+            .map(|d| PathBuf::from(&d.device_path))
+            .collect();
+        let std_rx = flashkraft_core::spawn_multi_flash(
+            &image.path,
+            &devices,
+            flashkraft_core::multi_flash::DEFAULT_MAX_PARALLEL,
+            self.cancel_token.clone(),
+        );
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.batch_rx = Some(rx);
+        std::thread::spawn(move || {
+            for update in std_rx {
+                if tx.send(update).is_err() {
+                    break;
+                }
+            }
+        });
+        self.screen = AppScreen::Flashing;
+        Ok(())
+    }
+
+    /// Drain the batch channel and apply results; finish the flash when done.
+    pub fn poll_batch(&mut self) {
+        let Some(mut rx) = self.batch_rx.take() else {
+            return;
+        };
+        loop {
+            match rx.try_recv() {
+                Ok(update) => {
+                    if let Some(b) = self.batch.as_mut() {
+                        b.apply(&update);
+                    }
+                    if let flashkraft_core::MultiUpdate::Finished(summary) = update {
+                        self.finish_batch(summary);
+                        return;
+                    }
+                }
+                Err(mpsc::error::TryRecvError::Empty) => {
+                    self.batch_rx = Some(rx);
+                    return;
+                }
+                Err(mpsc::error::TryRecvError::Disconnected) => return,
+            }
+        }
+    }
+
+    fn finish_batch(&mut self, summary: flashkraft_core::MultiSummary) {
+        if let Some(image) = self.selected_image.clone() {
+            for ok in &summary.succeeded {
+                let label = self
+                    .available_drives
+                    .iter()
+                    .find(|d| &d.device_path == ok)
+                    .map(|d| format!("{} ({:.1} GB)", d.name, d.size_gb))
+                    .unwrap_or_else(|| ok.clone());
+                self.storage
+                    .record_flash(flashkraft_core::FlashHistoryEntry::new(
+                        image.path.display().to_string(),
+                        label,
+                        image.size_mb,
+                    ));
+            }
+        }
+        if summary.all_ok() {
+            self.flash_progress = 1.0;
+            self.flash_stage = format!("Flashed {} drives", summary.succeeded.len());
+            self.screen = AppScreen::Complete;
+        } else {
+            let failed: Vec<String> = summary
+                .failed
+                .iter()
+                .map(|(d, e)| format!("{d}: {e}"))
+                .collect();
+            self.error_message = format!(
+                "{} of {} drives flashed. Failed — {}",
+                summary.succeeded.len(),
+                summary.total(),
+                failed.join("; ")
+            );
+            self.screen = AppScreen::Error;
+        }
     }
 
     /// Advance from drive-info to the confirmation screen.
@@ -645,6 +796,12 @@ impl App {
         // Validate again at the destructive transition; the image or removable
         // device may have changed since the confirmation screen was shown.
         validate_flash_target(&drive, Some(&image))?;
+
+        let targets = self.batch_targets();
+        if targets.len() > 1 {
+            return self.begin_batch(image, targets);
+        }
+        self.batch = None;
 
         // Reset flash state.
         self.flash_progress = 0.0;
@@ -678,6 +835,8 @@ impl App {
     /// Cancel an in-progress flash operation.
     pub fn cancel_flash(&mut self) {
         self.cancel_token.store(true, Ordering::SeqCst);
+        self.batch = None;
+        self.batch_rx = None;
         self.error_message = "Flash operation cancelled by user.".to_string();
         self.screen = AppScreen::Error;
     }
@@ -2428,5 +2587,121 @@ mod tests {
         app.input_mode = InputMode::Normal;
         app.go_back();
         assert_eq!(app.input_mode, InputMode::Editing);
+    }
+
+    // ── Multi-device flash ───────────────────────────────────────────────────
+
+    fn app_with_drives() -> App {
+        let mut app = App::new();
+        app.available_drives = vec![
+            make_drive("a", "/dev/sda", false, false),
+            make_drive("b", "/dev/sdb", false, false),
+            make_drive("sys", "/dev/sdc", true, false),
+        ];
+        app.selected_image = Some(make_image(10.0));
+        app
+    }
+
+    #[test]
+    fn toggle_mark_adds_removes_and_rejects_unsafe_drives() {
+        let mut app = app_with_drives();
+        app.drive_cursor = 0;
+        app.toggle_mark().unwrap();
+        app.drive_cursor = 1;
+        app.toggle_mark().unwrap();
+        assert_eq!(app.marked_drives, ["/dev/sda", "/dev/sdb"]);
+        app.toggle_mark().unwrap();
+        assert_eq!(app.marked_drives, ["/dev/sda"]);
+        app.drive_cursor = 2; // system drive
+        assert!(app.toggle_mark().is_err());
+        assert_eq!(app.marked_drives, ["/dev/sda"]);
+    }
+
+    #[test]
+    fn batch_targets_follow_marks_in_list_order() {
+        let mut app = app_with_drives();
+        assert!(app.batch_targets().is_empty());
+        app.selected_drive = Some(app.available_drives[1].clone());
+        assert_eq!(app.batch_targets().len(), 1);
+        assert!(!app.is_batch());
+        app.marked_drives = vec!["/dev/sdb".into(), "/dev/sda".into()];
+        let t: Vec<_> = app
+            .batch_targets()
+            .into_iter()
+            .map(|d| d.device_path)
+            .collect();
+        assert_eq!(t, ["/dev/sda", "/dev/sdb"]);
+        assert!(app.is_batch());
+    }
+
+    #[test]
+    fn confirm_drive_with_marks_selects_the_first_marked() {
+        let mut app = app_with_drives();
+        app.marked_drives = vec!["/dev/sdb".into()];
+        app.drive_cursor = 0;
+        app.confirm_drive().unwrap();
+        assert_eq!(app.selected_drive.unwrap().device_path, "/dev/sdb");
+    }
+
+    #[test]
+    fn batch_flash_runs_every_target_and_finishes() {
+        let dir = tempfile::tempdir().unwrap();
+        let img = dir.path().join("a.img");
+        std::fs::write(&img, vec![5u8; 300 * 1024]).unwrap();
+        let devs: Vec<_> = (0..2)
+            .map(|i| {
+                let p = dir.path().join(format!("d{i}"));
+                std::fs::File::create(&p).unwrap();
+                p
+            })
+            .collect();
+
+        let mut app = App::new();
+        app.available_drives = devs
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                DriveInfo::new(
+                    format!("d{i}"),
+                    "/nowhere".into(),
+                    16.0,
+                    p.display().to_string(),
+                )
+            })
+            .collect();
+        app.selected_image = Some(ImageInfo {
+            path: img.clone(),
+            name: "a.img".into(),
+            size_mb: 0.3,
+        });
+        app.marked_drives = app
+            .available_drives
+            .iter()
+            .map(|d| d.device_path.clone())
+            .collect();
+        app.selected_drive = app.available_drives.first().cloned();
+
+        app.begin_flash().unwrap();
+        assert_eq!(app.screen, AppScreen::Flashing);
+        assert_eq!(app.batch.as_ref().unwrap().targets.len(), 2);
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while app.screen == AppScreen::Flashing && std::time::Instant::now() < deadline {
+            app.poll_batch();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(app.batch.as_ref().unwrap().is_finished());
+        // Plain files can fail only at the partition-table step; either way
+        // the screen must have left Flashing with a verdict.
+        assert!(matches!(app.screen, AppScreen::Complete | AppScreen::Error));
+    }
+
+    #[test]
+    fn cancelling_a_batch_drops_its_state() {
+        let mut app = app_with_drives();
+        app.batch = Some(flashkraft_core::MultiState::new(&["x".into()]));
+        app.cancel_flash();
+        assert!(app.batch.is_none() && app.batch_rx.is_none());
+        assert_eq!(app.screen, AppScreen::Error);
     }
 }

@@ -48,7 +48,8 @@
 
 use crate::flash_debug;
 use crate::privileged_helper;
-use flashkraft_core::flash_helper::{can_escalate_in_process, run_pipeline, FlashEvent};
+use flashkraft_core::flash_helper::can_escalate_in_process;
+use flashkraft_core::flash_worker::spawn_flash_worker;
 use flashkraft_core::FlashUpdate;
 use futures::channel::mpsc as futures_mpsc;
 use futures::StreamExt;
@@ -183,40 +184,26 @@ fn build_flash_stream(
         // path used by production installs. A plain unprivileged build (e.g.
         // `cargo run`) cannot, so it falls back to spawning a short-lived,
         // headless privileged child process via `pkexec`/`sudo` instead.
-        if can_escalate_in_process() {
+        if can_escalate_in_process() || flashkraft_core::commands::demo::is_demo() {
             flash_debug!(
                 "flash thread: in-process escalation available, running pipeline directly"
             );
 
-            let img_str = image_path.to_string_lossy().into_owned();
-            let dev_str = device_path.to_string_lossy().into_owned();
-            let cancel_pipeline = cancel_token.clone();
+            // The shared worker owns the pipeline thread, converts events,
+            // turns a panic into `Failed`, and always ends with exactly one
+            // terminal update.
+            let worker_rx = spawn_flash_worker(&image_path, &device_path, cancel_token.clone());
             let std_tx = std_tx.clone();
-
             std::thread::Builder::new()
-                .name("flashkraft-pipeline".into())
+                .name("flashkraft-worker-bridge".into())
                 .spawn(move || {
-                    flash_debug!("flash thread: starting pipeline");
-                    let (event_tx, event_rx) = std::sync::mpsc::channel::<FlashEvent>();
-
-                    let pipeline = std::thread::Builder::new()
-                        .name("flashkraft-pipeline-inner".into())
-                        .spawn(move || {
-                            run_pipeline(&img_str, &dev_str, event_tx, cancel_pipeline);
-                        })
-                        .expect("failed to spawn inner flash pipeline thread");
-
-                    for event in event_rx {
-                        let update = FlashUpdate::from(event);
+                    for update in worker_rx {
                         if std_tx.send(update).is_err() {
                             break;
                         }
                     }
-
-                    let _ = pipeline.join();
-                    flash_debug!("flash thread: pipeline returned");
                 })
-                .expect("failed to spawn flash pipeline thread");
+                .expect("failed to spawn flash worker bridge thread");
         } else {
             flash_debug!(
                 "flash thread: no in-process privilege available, spawning privileged helper"
@@ -256,9 +243,11 @@ fn build_flash_stream(
             .name("flashkraft-bridge".into())
             .spawn(move || {
                 while let Ok(event) = std_rx.recv() {
-                    // try_send returns Err if the receiver was
-                    // dropped (subscription cancelled) — exit cleanly.
-                    if futures_tx.try_send(event).is_err() {
+                    // `send` applies back-pressure when the 64-slot channel is
+                    // full (a bare `try_send` would fail on a *full* channel and
+                    // silently kill the bridge mid-flash). It errors only when
+                    // the receiver was dropped (subscription cancelled).
+                    if futures::executor::block_on(futures_tx.send(event)).is_err() {
                         break;
                     }
                 }
@@ -316,12 +305,89 @@ fn build_flash_stream(
 }
 
 // ---------------------------------------------------------------------------
+// Multi-device flash
+// ---------------------------------------------------------------------------
+
+/// Identity of a multi-device flash subscription (cancel token excluded, like
+/// [`FlashSubData`]).
+#[derive(Clone)]
+struct MultiSubData {
+    image_path: PathBuf,
+    devices: Vec<PathBuf>,
+    cancel_token: Arc<AtomicBool>,
+    run_id: u64,
+}
+
+impl Hash for MultiSubData {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.image_path.hash(state);
+        self.devices.hash(state);
+        self.run_id.hash(state);
+    }
+}
+
+/// Stream [`flashkraft_core::MultiUpdate`]s while one image is flashed to
+/// several devices at once (see [`flashkraft_core::spawn_multi_flash`]).
+pub fn multi_flash_progress(
+    image_path: PathBuf,
+    devices: Vec<PathBuf>,
+    cancel_token: Arc<AtomicBool>,
+    run_id: u64,
+) -> Subscription<flashkraft_core::MultiUpdate> {
+    Subscription::run_with(
+        MultiSubData {
+            image_path,
+            devices,
+            cancel_token,
+            run_id,
+        },
+        build_multi_stream,
+    )
+}
+
+fn build_multi_stream(
+    data: &MultiSubData,
+) -> impl futures::Stream<Item = flashkraft_core::MultiUpdate> + Send + 'static {
+    let data = data.clone();
+    stream::channel(64, async move |mut output| {
+        use futures::SinkExt as _;
+        let rx = flashkraft_core::spawn_multi_flash(
+            &data.image_path,
+            &data.devices,
+            flashkraft_core::multi_flash::DEFAULT_MAX_PARALLEL,
+            data.cancel_token.clone(),
+        );
+        let (mut tx, mut frx) = futures_mpsc::channel::<flashkraft_core::MultiUpdate>(64);
+        std::thread::Builder::new()
+            .name("flashkraft-multi-bridge".into())
+            .spawn(move || {
+                for update in rx {
+                    if futures::executor::block_on(tx.send(update)).is_err() {
+                        break;
+                    }
+                }
+            })
+            .expect("failed to spawn multi flash bridge thread");
+
+        while let Some(update) = frx.next().await {
+            let done = matches!(update, flashkraft_core::MultiUpdate::Finished(_));
+            let _ = output.send(update).await;
+            if done {
+                break;
+            }
+        }
+        std::future::pending().await
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flashkraft_core::flash_helper::FlashEvent;
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
 

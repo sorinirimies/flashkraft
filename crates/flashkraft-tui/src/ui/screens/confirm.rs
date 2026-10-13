@@ -35,11 +35,19 @@ pub(in crate::ui) fn render_confirm_flash(
         .as_ref()
         .map(|i| i.name.as_str())
         .unwrap_or("\u{2014}");
-    let drive_desc = app
-        .selected_drive
-        .as_ref()
-        .map(|d| format!("{} ({})", d.name, d.device_path))
-        .unwrap_or_else(|| "\u{2014}".to_string());
+    let targets = app.batch_targets();
+    let drive_desc = match targets.len() {
+        0 => "\u{2014}".to_string(),
+        1 => format!("{} ({})", targets[0].name, targets[0].device_path),
+        n => format!(
+            "{n} drives: {}",
+            targets
+                .iter()
+                .map(|d| d.device_path.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
     let image_size = app
         .selected_image
         .as_ref()

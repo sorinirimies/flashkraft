@@ -6,23 +6,15 @@
 //!
 //! ## Architecture
 //!
-//! The flash pipeline runs entirely in-process on a dedicated blocking
-//! `std::thread`.  No child process, no pkexec, no polkit policy file.
-//!
 //! ```text
-//!   Tokio async task               blocking OS thread
-//!   ─────────────────              ──────────────────
-//!   run_flash()                    std::thread::spawn
-//!        │                                │
-//!        │   std::sync::mpsc::channel     │
-//!        │ ◄────────────────────── run_pipeline(tx, …)
-//!        │                                │
-//!   FlashEvent (core)               writes image
-//!        │
-//!   → FlashEvent (core::message)
-//!        │
-//!   TUI UI update
+//!   Tokio task            spawn_blocking          flashkraft-core worker
+//!   ──────────            ──────────────          ──────────────────────
+//!   run_flash()  ───────► for update in rx  ◄──── spawn_flash_worker()
+//!        ▲                      │                  (pipeline thread inside)
+//!        └── FlashEvent (= FlashUpdate) over tokio unbounded channel
 //! ```
+//!
+//! The pipeline runs entirely in-process; no child process, no pkexec.
 //!
 //! ## Privilege model
 //!
@@ -34,129 +26,47 @@
 
 use std::{
     path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use tokio::sync::mpsc;
 
 use super::message::FlashEvent;
-use flashkraft_core::flash_helper::{run_pipeline, FlashEvent as CoreFlashEvent};
-use flashkraft_core::FlashUpdate;
+use flashkraft_core::flash_worker::{is_terminal, spawn_flash_worker};
 
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
-/// Spawn a flash operation and forward structured [`FlashEvent`]s over `tx`.
+/// Run a flash operation and forward structured [`FlashEvent`]s over `tx`.
 ///
-/// This function is `async` so it can be handed directly to `tokio::spawn`.
-/// The blocking pipeline runs on a dedicated OS thread; results are forwarded
-/// to the async Tokio task via a `std::sync::mpsc` channel bridged with
-/// `tokio::task::spawn_blocking`.
+/// `async` so it can be handed directly to `tokio::spawn`. The heavy lifting
+/// lives in [`flashkraft_core::flash_worker`], shared with the GUI: it
+/// guarantees exactly one terminal event (`Completed` / `Failed`) as the last
+/// item, converts a panicking pipeline into `Failed`, and only reports a
+/// cancel once the device has really stopped being written.
+///
+/// Updates are forwarded as they are produced (blocking `recv` on a Tokio
+/// blocking thread) — there is no polling interval.
 pub async fn run_flash(
     image_path: PathBuf,
     device_path: PathBuf,
     cancel_token: Arc<AtomicBool>,
     tx: mpsc::UnboundedSender<FlashEvent>,
 ) {
-    match run_flash_inner(image_path, device_path, cancel_token, tx.clone()).await {
-        Ok(()) => {
-            // Completed event is sent inside run_flash_inner on CoreFlashEvent::Done.
-        }
-        Err(e) => {
-            let _ = tx.send(FlashEvent::Failed(e));
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Inner implementation
-// ---------------------------------------------------------------------------
-
-async fn run_flash_inner(
-    image_path: PathBuf,
-    device_path: PathBuf,
-    cancel_token: Arc<AtomicBool>,
-    tx: mpsc::UnboundedSender<FlashEvent>,
-) -> Result<(), String> {
-    // ── Validate inputs ──────────────────────────────────────────────────────
-    let image_size = image_path
-        .metadata()
-        .map_err(|e| format!("Cannot read image file: {e}"))?
-        .len();
-
-    if image_size == 0 {
-        return Err("Image file is empty.".to_string());
-    }
-
-    let img_str = image_path
-        .to_str()
-        .ok_or("Image path contains invalid UTF-8")?
-        .to_owned();
-    let dev_str = device_path
-        .to_str()
-        .ok_or("Device path contains invalid UTF-8")?
-        .to_owned();
-
-    // ── Bridge: blocking thread → async Tokio task ───────────────────────────
-    // `std::sync::mpsc` is used on the blocking side; we poll with
-    // `try_recv` + Tokio sleep on the async side to avoid blocking the executor.
-    let (core_tx, core_rx) = std::sync::mpsc::channel::<CoreFlashEvent>();
-
-    let cancel_thread = cancel_token.clone();
-    std::thread::spawn(move || {
-        run_pipeline(&img_str, &dev_str, core_tx, cancel_thread);
-    });
-
-    // ── Forward CoreFlashEvents → TUI FlashEvents ────────────────────────────
-    //
-    // Each raw CoreFlashEvent is converted to a FlashUpdate (defined in core)
-    // via From<FlashEvent>, which handles the bytes→fraction normalisation and
-    // the Stage/Log → Message collapse.  The TUI's FlashEvent is a type alias
-    // for FlashUpdate so the converted value is sent directly.
-    loop {
-        // Check cancellation.
-        if cancel_token.load(Ordering::SeqCst) {
-            return Err("Flash operation cancelled by user.".to_string());
-        }
-
-        // Drain all currently available events (non-blocking).
-        loop {
-            match core_rx.try_recv() {
-                Ok(CoreFlashEvent::Done) => {
-                    let _ = tx.send(FlashUpdate::Completed);
-                    return Ok(());
-                }
-
-                Ok(CoreFlashEvent::Error(e)) => {
-                    return Err(e);
-                }
-
-                Ok(core_event) => {
-                    let _ = tx.send(FlashUpdate::from(core_event));
-                }
-
-                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    // No more events right now — break inner loop and yield.
-                    break;
-                }
-
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    // Sender dropped: thread panicked or returned without
-                    // sending Done/Error.
-                    if cancel_token.load(Ordering::SeqCst) {
-                        return Err("Flash operation cancelled by user.".to_string());
-                    }
-                    return Err("Flash thread terminated unexpectedly.".to_string());
-                }
+    let rx = spawn_flash_worker(&image_path, &device_path, cancel_token);
+    let forward_tx = tx.clone();
+    let forwarded = tokio::task::spawn_blocking(move || {
+        for update in rx {
+            let last = is_terminal(&update);
+            if forward_tx.send(update).is_err() || last {
+                break;
             }
         }
-
-        // Yield for ~100 ms to avoid a busy-wait loop.
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    })
+    .await;
+    if forwarded.is_err() {
+        let _ = tx.send(FlashEvent::Failed("Flash forwarder crashed".into()));
     }
 }
 
@@ -167,6 +77,7 @@ async fn run_flash_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flashkraft_core::FlashUpdate;
     use tokio::sync::mpsc;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -284,28 +195,75 @@ mod tests {
         assert!(matches!(update, FlashUpdate::Failed(m) if m == msg));
     }
 
-    // ── Cancellation ─────────────────────────────────────────────────────────
+    // ── Cancellation & end-to-end ─────────────────────────────────────────────
+
+    fn only_terminal_is_last(events: &[FlashEvent]) {
+        let terminals = events.iter().filter(|e| is_terminal(e)).count();
+        assert_eq!(terminals, 1, "exactly one terminal event: {events:?}");
+        assert!(is_terminal(events.last().unwrap()), "terminal comes last");
+    }
 
     #[tokio::test]
-    async fn run_flash_cancelled_before_start_sends_failed() {
+    async fn run_flash_cancelled_before_start_reports_cancelled() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        // Write some non-empty content so validation passes.
-        std::fs::write(tmp.path(), b"dummy image data").unwrap();
+        std::fs::write(tmp.path(), vec![1u8; 1024 * 1024]).unwrap();
+        let dev = tempfile::NamedTempFile::new().unwrap();
 
-        let cancel = Arc::new(AtomicBool::new(true)); // already cancelled
         let (tx, mut rx) = make_channel();
-
         run_flash(
             tmp.path().to_path_buf(),
-            PathBuf::from("/dev/null"),
-            cancel,
+            dev.path().to_path_buf(),
+            Arc::new(AtomicBool::new(true)),
             tx,
         )
         .await;
 
         let events = drain(&mut rx);
-        // Either Failed or Completed is acceptable — the pipeline on /dev/null
-        // may succeed quickly or detect cancellation.  We just verify no panic.
-        let _ = events;
+        only_terminal_is_last(&events);
+        assert!(
+            matches!(events.last(), Some(FlashEvent::Failed(m)) if m.contains("cancelled")),
+            "{events:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn run_flash_end_to_end_streams_progress_then_one_terminal() {
+        let dir = tempfile::tempdir().unwrap();
+        let img = dir.path().join("a.img");
+        let dev = dir.path().join("dev.bin");
+        let data: Vec<u8> = (0..=255u8).cycle().take(768 * 1024).collect();
+        std::fs::write(&img, &data).unwrap();
+        std::fs::File::create(&dev).unwrap();
+
+        let (tx, mut rx) = make_channel();
+        run_flash(img, dev.clone(), Arc::new(AtomicBool::new(false)), tx).await;
+
+        let events = drain(&mut rx);
+        only_terminal_is_last(&events);
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, FlashEvent::Progress { .. })));
+        if matches!(events.last(), Some(FlashEvent::Completed)) {
+            assert_eq!(std::fs::read(&dev).unwrap(), data);
+        }
+    }
+
+    #[tokio::test]
+    async fn run_flash_stops_when_receiver_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        let img = dir.path().join("a.img");
+        let dev = dir.path().join("dev.bin");
+        std::fs::write(&img, vec![3u8; 512 * 1024]).unwrap();
+        std::fs::File::create(&dev).unwrap();
+
+        let (tx, rx) = make_channel();
+        drop(rx);
+        // Must return rather than hang or panic.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            run_flash(img, dev, Arc::new(AtomicBool::new(false)), tx),
+        )
+        .await
+        .expect("run_flash returns when nobody listens");
     }
 }

@@ -3,6 +3,7 @@ members = [
     "crates/flashkraft-core",
     "crates/flashkraft-gui",
     "crates/flashkraft-tui",
+    "crates/flashkraft-web",
 ]
 resolver = "2"
 
@@ -57,6 +58,12 @@ tui-slider   = "0.3.4"
 tui-piechart = "1.0.2"
 tui-checkbox = "0.4.6"
 tui-spinner  = "0.4.19"
+
+# CLI (clap) — web binary
+clap         = { version = "4", features = ["derive", "env"] }
+
+# Web (Topcoat)
+topcoat      = "0.10"
 
 # Internal crates
 flashkraft-core = { path = "crates/flashkraft-core", version = "1.5.2" }

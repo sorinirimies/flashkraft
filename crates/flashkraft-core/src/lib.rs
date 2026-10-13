@@ -29,6 +29,9 @@ pub mod utils;
 pub mod commands;
 pub mod domain;
 pub mod flash_helper;
+pub mod flash_worker;
+pub mod multi_flash;
+pub mod settings;
 pub mod theme;
 pub mod update_check;
 
@@ -45,4 +48,7 @@ pub use flash_helper::{verify_overall_progress, FlashEvent, FlashStage, FlashUpd
 
 /// Re-export the update-check comparison helpers at the crate root. The
 /// actual network fetch lives in each frontend crate (see module docs).
+pub use flash_worker::{forward_events, spawn_flash_worker};
+pub use multi_flash::{spawn_multi_flash, MultiState, MultiSummary, MultiUpdate};
+
 pub use update_check::{is_newer, now_unix, should_check, CHECK_INTERVAL_SECS};

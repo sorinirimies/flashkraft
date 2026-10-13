@@ -26,6 +26,7 @@ dirs          = { workspace = true }
 
 # ── Serialization (flash history persisted by GUI/TUI settings) ─────────────
 serde         = { workspace = true }
+serde_json    = { workspace = true }
 
 # ── Crypto ────────────────────────────────────────────────────────────────────
 sha2          = { workspace = true }

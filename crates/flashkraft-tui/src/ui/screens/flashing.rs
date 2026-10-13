@@ -22,6 +22,11 @@ pub(in crate::ui) fn render_flashing(
         pal,
     );
 
+    if app.batch.is_some() {
+        render_batch_body(app, frame, body, pal);
+        return;
+    }
+
     let is_verifying = app.verify_progress.is_some();
 
     // Layout grows the Statistics/Log row (`Min`) to absorb any extra
@@ -288,4 +293,168 @@ pub(in crate::ui) fn render_flashing(
     frame.render_widget(log_block, stats_log_cols[1]);
     frame.render_widget(Paragraph::new(log_lines), log_cols[0]);
     frame.render_widget(spinner, log_cols[1]);
+}
+
+/// Multi-device flash: one gauge per target plus a summary line.
+fn render_batch_body(app: &App, frame: &mut Frame, body: Rect, pal: &TuiPalette) {
+    use flashkraft_core::multi_flash::TargetStatus;
+    let Some(batch) = app.batch.as_ref() else {
+        return;
+    };
+
+    let [head, list] = Layout::vertical([Constraint::Length(3), Constraint::Min(3)]).areas(body);
+
+    let overall = batch.overall();
+    let summary = Line::from(vec![
+        Span::styled(
+            format!(" {:>3.0}% ", overall * 100.0),
+            Style::default()
+                .fg(pal.bg)
+                .bg(pal.brand)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(
+                "  {} running · {} done · {} failed · {:.1} MB/s total",
+                batch.running(),
+                batch.done(),
+                batch.failed(),
+                batch.total_speed_mb_s()
+            ),
+            Style::default().fg(pal.fg),
+        ),
+    ]);
+    frame.render_widget(
+        Paragraph::new(summary).block(themed_block!(
+            format!(" \u{26a1}  Flashing {} drives ", batch.targets.len()),
+            pal.brand,
+            pal.accent
+        )),
+        head,
+    );
+
+    let block = themed_block!(" Drives ", pal.brand, pal.accent);
+    let inner = block.inner(list);
+    frame.render_widget(block, list);
+
+    let rows = batch.targets.len().min(inner.height as usize / 3);
+    for (i, t) in batch.targets.iter().take(rows).enumerate() {
+        let row = Rect {
+            x: inner.x,
+            y: inner.y + (i as u16) * 3 + 1,
+            width: inner.width,
+            height: 2,
+        };
+        let (icon, colour, note) = match &t.status {
+            TargetStatus::Queued => ("\u{23f3}", pal.dim, "queued".to_string()),
+            TargetStatus::Running => (
+                "\u{26a1}",
+                pal.brand,
+                format!("{:.1} MB/s  {}", t.speed_mb_s, t.message),
+            ),
+            TargetStatus::Done => ("\u{2713}", pal.success, "verified".to_string()),
+            TargetStatus::Failed(e) => ("\u{2717}", pal.err, e.clone()),
+        };
+        let [label, bar] =
+            Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(row);
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(format!(" {icon} "), Style::default().fg(colour)),
+                Span::styled(
+                    t.device.clone(),
+                    Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!("  {note}"), Style::default().fg(pal.dim)),
+            ])),
+            label,
+        );
+        let width = bar.width.saturating_sub(10) as usize;
+        let filled = (t.overall() * width as f32).round() as usize;
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::raw("   "),
+                Span::styled("\u{2501}".repeat(filled), Style::default().fg(colour)),
+                Span::styled(
+                    "\u{2501}".repeat(width.saturating_sub(filled)),
+                    Style::default().fg(pal.sel_bg),
+                ),
+                Span::styled(
+                    format!(" {:>3.0}%", t.overall() * 100.0),
+                    Style::default().fg(pal.dim),
+                ),
+            ])),
+            bar,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::core::message::AppScreen;
+    use crate::core::state::App;
+    use flashkraft_core::{FlashUpdate, MultiState, MultiUpdate};
+    use ratatui::{backend::TestBackend, Terminal};
+
+    fn screen_text(app: &mut App, w: u16, h: u16) -> String {
+        let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();
+        term.draw(|f| crate::ui::render(app, f)).unwrap();
+        let buf = term.backend().buffer().clone();
+        (0..h)
+            .map(|y| {
+                (0..w)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn up(i: usize, u: FlashUpdate) -> MultiUpdate {
+        MultiUpdate::Target {
+            index: i,
+            device: String::new(),
+            update: u,
+        }
+    }
+
+    #[test]
+    fn batch_flashing_lists_every_target_with_status() {
+        let mut app = App::new();
+        app.screen = AppScreen::Flashing;
+        let mut b = MultiState::new(&["Stick A".into(), "Stick B".into(), "Stick C".into()]);
+        b.apply(&up(
+            0,
+            FlashUpdate::Progress {
+                progress: 0.5,
+                bytes_written: 1,
+                speed_mb_s: 42.0,
+            },
+        ));
+        b.apply(&up(1, FlashUpdate::Completed));
+        b.apply(&up(2, FlashUpdate::Failed("write error".into())));
+        app.batch = Some(b);
+
+        let out = screen_text(&mut app, 110, 30);
+        for needle in [
+            "Flashing 3 drives",
+            "Stick A",
+            "Stick B",
+            "Stick C",
+            "verified",
+            "write error",
+            "1 running · 1 done · 1 failed",
+        ] {
+            assert!(out.contains(needle), "missing {needle:?}\n{out}");
+        }
+    }
+
+    #[test]
+    fn batch_with_more_targets_than_rows_does_not_panic() {
+        let mut app = App::new();
+        app.screen = AppScreen::Flashing;
+        let names: Vec<String> = (0..40).map(|i| format!("d{i}")).collect();
+        app.batch = Some(MultiState::new(&names));
+        let out = screen_text(&mut app, 80, 14);
+        assert!(out.contains("Flashing 40 drives"));
+    }
 }

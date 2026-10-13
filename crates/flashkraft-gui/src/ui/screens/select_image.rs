@@ -10,6 +10,7 @@ use iced::{Alignment, Element, Length};
 
 use crate::core::message::Message;
 use crate::domain::{DriveInfo, ImageInfo};
+use crate::ui::theme as style;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
 
@@ -17,10 +18,11 @@ use iced_fonts::bootstrap;
 pub fn view_buttons<'a>(
     selected_image: &'a Option<ImageInfo>,
     selected_target: &'a Option<DriveInfo>,
+    marked: &'a [DriveInfo],
     is_ready_to_flash: bool,
 ) -> Element<'a, Message> {
     let image_button = view_image_section(selected_image);
-    let target_button = view_target_section(selected_target);
+    let target_button = view_target_section(selected_target, marked);
     let flash_button = view_flash_section(is_ready_to_flash);
 
     let buttons_row = row![image_button, target_button, flash_button]
@@ -34,7 +36,8 @@ pub fn view_buttons<'a>(
         content = content.push(
             button(text("Cancel").size(14))
                 .on_press(Message::CancelClicked)
-                .padding(10),
+                .padding(10)
+                .style(style::ghost_button),
         );
     }
 
@@ -48,6 +51,7 @@ pub fn view_buttons<'a>(
 
 /// Image selection panel
 fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
+    let active = image.is_some();
     let content = if let Some(img) = image {
         column![
             icons::icon(bootstrap::check_circle(), 50.0),
@@ -71,12 +75,25 @@ fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
     )
     .on_press(Message::SelectImageClicked)
     .padding(10)
+    .style(move |t, s| style::card_button(t, s, active))
     .into()
 }
 
 /// Target drive selection panel
-fn view_target_section(selected: &Option<DriveInfo>) -> Element<'_, Message> {
-    let content = if let Some(target) = selected {
+fn view_target_section<'a>(
+    selected: &'a Option<DriveInfo>,
+    marked: &'a [DriveInfo],
+) -> Element<'a, Message> {
+    let active = selected.is_some() || !marked.is_empty();
+    let total: f64 = marked.iter().map(|d| d.size_gb).sum();
+    let content = if marked.len() > 1 {
+        column![
+            icons::icon(bootstrap::collection_fill(), 50.0),
+            text(format!("{} drives", marked.len())).size(16),
+            text(format!("{total:.1} GB total")).size(12),
+            text("flashed at once").size(10),
+        ]
+    } else if let Some(target) = marked.first().or(selected.as_ref()) {
         column![
             icons::icon(bootstrap::check_circle(), 50.0),
             text(&target.name).size(16),
@@ -100,6 +117,7 @@ fn view_target_section(selected: &Option<DriveInfo>) -> Element<'_, Message> {
     )
     .on_press(Message::OpenDeviceSelection)
     .padding(10)
+    .style(move |t, s| style::card_button(t, s, active))
     .into()
 }
 
@@ -123,7 +141,14 @@ fn view_flash_section(is_ready: bool) -> Element<'static, Message> {
             .center_x(Length::Fill)
             .center_y(Length::Fill),
     )
-    .padding(10);
+    .padding(10)
+    .style(move |t, s| {
+        if is_ready {
+            style::primary_button(t, s)
+        } else {
+            style::card_button(t, s, false)
+        }
+    });
 
     if is_ready {
         btn.on_press(Message::FlashClicked).into()

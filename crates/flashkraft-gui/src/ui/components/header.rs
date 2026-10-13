@@ -1,41 +1,38 @@
 //! Header Component
 //!
-//! This module contains the application header with title and theme selector.
+//! Left-aligned brand (`⚡ Flash`**Kraft** + version chip) and the theme picker
+//! on the right — the same title-bar layout as the TUI and web front-ends.
 
-use iced::widget::{column, container, row, text, Space};
+use iced::widget::{container, row, text, Space};
 use iced::{Alignment, Element, Length, Theme};
 
 use crate::core::message::Message;
 use crate::core::FlashKraft;
 use crate::ui::components::theme_selector;
+use crate::ui::theme as style;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
 
-/// Application header with title and theme selector
+/// Application header: brand on the left, theme selector on the right.
 pub fn view_header(state: &FlashKraft) -> Element<'_, Message> {
-    // Centered title with larger text
-    let title_content = container(
-        column![container(
-            row![
-                icons::icon(bootstrap::lightning_fill(), 48.0),
-                Space::new().width(20),
-                text("FlashKraft").size(56).style(move |theme: &Theme| {
-                    let palette = theme.palette();
-                    iced::widget::text::Style {
-                        color: Some(palette.primary),
-                    }
-                }),
-            ]
-            .align_y(Alignment::Center),
-        )
-        .center_x(Length::Fill),]
-        .spacing(0),
-    )
-    .width(Length::Fill);
-
-    column![
-        theme_selector::theme_selector_right(&state.theme),
-        title_content,
+    let brand = row![
+        icons::icon(bootstrap::lightning_fill(), 30.0),
+        text("Flash").size(32).style(|theme: &Theme| text::Style {
+            color: Some(theme.palette().primary),
+        }),
+        text("Kraft").size(32),
+        container(text(format!("v{}", env!("CARGO_PKG_VERSION"))).size(12))
+            .padding([2, 10])
+            .style(style::chip),
     ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+
+    row![
+        brand,
+        Space::new().width(Length::Fill),
+        theme_selector::theme_selector(&state.theme),
+    ]
+    .align_y(Alignment::Center)
     .into()
 }

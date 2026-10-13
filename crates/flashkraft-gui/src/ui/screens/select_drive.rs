@@ -8,6 +8,7 @@ use iced::{Alignment, Color, Element, Length};
 
 use crate::core::message::Message;
 use crate::domain::{constraints, DriveInfo, ImageInfo};
+use crate::ui::theme as style;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
 
@@ -44,8 +45,11 @@ pub fn view_device_selector<'a>(
     available_drives: &'a [DriveInfo],
     selected_target: &'a Option<DriveInfo>,
     selected_image: &'a Option<ImageInfo>,
+    marked: &'a [DriveInfo],
 ) -> Element<'a, Message> {
     let title = text("Select Target Drive").size(24);
+    let subtitle =
+        text("Click a drive to flash it, or tick several to flash them all at once").size(13);
 
     let drives_list: Element<'_, Message> = if available_drives.is_empty() {
         column![text("No drives detected").size(16)]
@@ -55,7 +59,14 @@ pub fn view_device_selector<'a>(
     } else {
         let drive_rows: Vec<Element<'_, Message>> = available_drives
             .iter()
-            .map(|drive| view_device_row(drive, selected_target.as_ref(), selected_image.as_ref()))
+            .map(|drive| {
+                view_device_row(
+                    drive,
+                    selected_target.as_ref(),
+                    selected_image.as_ref(),
+                    marked,
+                )
+            })
             .collect();
 
         scrollable(column(drive_rows).spacing(10))
@@ -72,18 +83,33 @@ pub fn view_device_selector<'a>(
         .align_y(Alignment::Center),
     )
     .on_press(Message::RefreshDrivesClicked)
-    .padding(10);
+    .padding(10)
+    .style(style::ghost_button);
 
     let cancel_button = button(text("Cancel").size(14))
         .on_press(Message::CloseDeviceSelection)
-        .padding(10);
+        .padding(10)
+        .style(style::ghost_button);
+
+    let done_button = (!marked.is_empty()).then(|| {
+        button(text(format!("Use {} marked", marked.len())).size(14))
+            .on_press(Message::CloseDeviceSelection)
+            .padding(10)
+            .style(style::primary_button)
+    });
+    let mut actions =
+        row![refresh_button, Space::new().width(10), cancel_button].align_y(Alignment::Center);
+    if let Some(done) = done_button {
+        actions = actions.push(Space::new().width(10)).push(done);
+    }
 
     let content = column![
         title,
+        subtitle,
         Space::new().height(20),
         drives_list,
         Space::new().height(20),
-        row![refresh_button, Space::new().width(10), cancel_button].align_y(Alignment::Center)
+        actions
     ]
     .spacing(10)
     .padding(30)
@@ -102,8 +128,10 @@ fn view_device_row<'a>(
     drive: &'a DriveInfo,
     selected: Option<&'a DriveInfo>,
     image: Option<&'a ImageInfo>,
+    marked: &'a [DriveInfo],
 ) -> Element<'a, Message> {
-    let is_selected = selected.is_some_and(|s| s.device_path == drive.device_path);
+    let is_marked = marked.iter().any(|m| m.device_path == drive.device_path);
+    let is_selected = selected.is_some_and(|s| s.device_path == drive.device_path) || is_marked;
 
     // Get compatibility statuses
     let statuses = constraints::get_drive_image_compatibility_statuses(drive, image);
@@ -166,12 +194,39 @@ fn view_device_row<'a>(
 
     // Only allow clicking if not disabled
     let drive_button = if is_disabled {
-        button(row_content).padding(5)
+        button(row_content).padding(12)
     } else {
         button(row_content)
             .on_press(Message::TargetDriveClicked(drive.clone()))
-            .padding(5)
+            .padding(12)
+    }
+    .width(Length::Fill)
+    .style(move |t, s| style::card_button(t, s, is_selected));
+
+    let mark_button = button(
+        text(if is_marked {
+            "\u{2713} Marked"
+        } else {
+            "+ Add"
+        })
+        .size(13),
+    )
+    .padding([8, 12])
+    .style(move |t, s| {
+        if is_marked {
+            style::primary_button(t, s)
+        } else {
+            style::ghost_button(t, s)
+        }
+    });
+    let mark_button = if is_disabled {
+        mark_button
+    } else {
+        mark_button.on_press(Message::ToggleMarkTarget(drive.clone()))
     };
 
-    drive_button.into()
+    row![drive_button, mark_button]
+        .spacing(10)
+        .align_y(Alignment::Center)
+        .into()
 }

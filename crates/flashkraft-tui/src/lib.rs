@@ -170,6 +170,7 @@ where
         app.poll_hotplug();
         app.poll_drives();
         app.poll_flash();
+        app.poll_batch();
         app.poll_update_check();
         app.poll_update_banner_expiry();
 

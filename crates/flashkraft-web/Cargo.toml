@@ -1,0 +1,31 @@
+[package]
+name = "flashkraft-web"
+version.workspace = true
+edition = "2024"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "FlashKraft — local drive & image inspector web dashboard (Topcoat)"
+rust-version = "1.98" # required by topcoat 0.10
+readme = "README.md"
+categories = ["web-programming", "command-line-utilities"]
+keywords = ["imager", "usb", "iso", "flash", "web"]
+
+[lib]
+name = "flashkraft_web"
+path = "src/lib.rs"
+
+[[bin]]
+name = "flashkraft-web"
+path = "src/main.rs"
+
+[dependencies]
+flashkraft-core = { workspace = true }
+topcoat         = { workspace = true }
+tokio           = { workspace = true }
+serde_json      = { workspace = true }
+serde           = { workspace = true }
+clap            = { workspace = true }
+
+[dev-dependencies]
+tempfile        = { workspace = true }

@@ -13,6 +13,9 @@ use iced_fonts::bootstrap;
 
 /// Flashing progress view
 pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
+    if let Some(batch) = &state.batch {
+        return view_batch(state, batch);
+    }
     let progress = state.flash_progress.unwrap_or(0.0);
     let progress_percent = (progress * 100.0) as u32;
     let speed_mb_s = state.flash_speed_mb_s;
@@ -173,4 +176,96 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
         );
 
     super::status_page(state, progress_content.into())
+}
+
+/// Multi-device flash: a card per drive with its own bar.
+fn view_batch<'a>(
+    state: &'a FlashKraft,
+    batch: &'a flashkraft_core::MultiState,
+) -> Element<'a, Message> {
+    use flashkraft_core::multi_flash::TargetStatus;
+    use iced::widget::{container, progress_bar, scrollable};
+    use iced::{Length, Theme};
+
+    let headline = text(format!(
+        "Flashing {} drives… {}%",
+        batch.targets.len(),
+        (batch.overall() * 100.0) as u32
+    ))
+    .size(28);
+    let sub = text(format!(
+        "{} running · {} done · {} failed · {:.1} MB/s total",
+        batch.running(),
+        batch.done(),
+        batch.failed(),
+        batch.total_speed_mb_s()
+    ))
+    .size(13);
+
+    let rows: Vec<Element<'a, Message>> = batch
+        .targets
+        .iter()
+        .map(|t| {
+            let (icon, note) = match &t.status {
+                TargetStatus::Queued => (bootstrap::hourglass_split(), "queued".to_string()),
+                TargetStatus::Running => (
+                    bootstrap::lightning_fill(),
+                    format!("{:.1} MB/s  {}", t.speed_mb_s, t.message),
+                ),
+                TargetStatus::Done => (bootstrap::check_circle_fill(), "verified".to_string()),
+                TargetStatus::Failed(e) => (bootstrap::x_circle_fill(), e.clone()),
+            };
+            let failed = matches!(t.status, TargetStatus::Failed(_));
+            let done = t.status == TargetStatus::Done;
+            container(
+                column![
+                    row![
+                        icons::icon(icon, 18.0),
+                        text(&t.device).size(15),
+                        Space::new().width(Length::Fill),
+                        text(format!("{}%", (t.overall() * 100.0) as u32)).size(13),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center),
+                    progress_bar(0.0..=1.0, t.overall())
+                        .girth(8)
+                        .style(move |theme: &Theme| {
+                            let mut s = progress_bar::primary(theme);
+                            let p = theme.extended_palette();
+                            if failed {
+                                s.bar = p.danger.base.color.into();
+                            } else if done {
+                                s.bar = p.success.base.color.into();
+                            }
+                            s
+                        }),
+                    text(note).size(11),
+                ]
+                .spacing(6),
+            )
+            .padding(14)
+            .width(Length::Fill)
+            .style(move |theme: &Theme| crate::ui::theme::card(theme, done))
+            .into()
+        })
+        .collect();
+
+    let cancel = button(text("Cancel all").size(14))
+        .on_press(Message::CancelFlash)
+        .padding(10)
+        .style(crate::ui::theme::ghost_button);
+
+    let content = column![
+        headline,
+        sub,
+        Space::new().height(10),
+        scrollable(column(rows).spacing(10)).height(Length::Fill),
+        cancel,
+    ]
+    .spacing(8)
+    .align_x(Alignment::Center)
+    .padding(30)
+    .max_width(760);
+
+    super::status_page(state, content.into())
 }

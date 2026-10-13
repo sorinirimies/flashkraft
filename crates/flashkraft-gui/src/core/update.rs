@@ -66,6 +66,65 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::ToggleMarkTarget(drive) => {
+            match state.toggle_mark(drive) {
+                Ok(()) => state.error_message = None,
+                Err(e) => state.error_message = Some(e),
+            }
+            Task::none()
+        }
+
+        Message::BatchUpdate(update) => {
+            if let Some(batch) = state.batch.as_mut() {
+                batch.apply(&update);
+                state.flash_progress = Some(batch.overall());
+            }
+            if let flashkraft_core::MultiUpdate::Finished(summary) = update {
+                state.flashing_active = false;
+                if summary.all_ok() {
+                    state.flash_progress = Some(1.0);
+                    state.flash_stage = format!("Flashed {} drives", summary.succeeded.len());
+                    state.flash_complete = true;
+                    state.error_message = None;
+                    if let (Some(image), Some(storage)) =
+                        (state.selected_image.as_ref(), state.storage.as_mut())
+                    {
+                        for ok in &summary.succeeded {
+                            let label = state
+                                .marked_targets
+                                .iter()
+                                .find(|d| &d.device_path == ok)
+                                .map(|d| format!("{} ({:.1} GB)", d.name, d.size_gb))
+                                .unwrap_or_else(|| ok.clone());
+                            let entry = flashkraft_core::FlashHistoryEntry::new(
+                                image.path.display().to_string(),
+                                label,
+                                image.size_mb,
+                            );
+                            if let Err(e) = storage.record_flash(entry) {
+                                eprintln!("Failed to record flash history: {e}");
+                            }
+                        }
+                    }
+                } else {
+                    let failed: Vec<String> = summary
+                        .failed
+                        .iter()
+                        .map(|(d, e)| format!("{d}: {e}"))
+                        .collect();
+                    state.flash_progress = None;
+                    state.flash_complete = false;
+                    state.error_message = Some(format!(
+                        "{} of {} drives flashed. Failed — {}",
+                        summary.succeeded.len(),
+                        summary.total(),
+                        failed.join("; ")
+                    ));
+                }
+            }
+            Task::none()
+        }
+
         Message::OpenDeviceSelection => {
             // Open the device selection view
             state.device_selection_open = true;
@@ -81,6 +140,10 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
 
         Message::FlashClicked => {
             if state.is_ready_to_flash() {
+                // A single marked drive is just the single-target flow.
+                if state.marked_targets.len() == 1 {
+                    state.selected_target = state.marked_targets.pop();
+                }
                 // The UI intentionally runs unprivileged. The core pipeline
                 // performs checked, narrowly scoped privilege transitions.
                 state.begin_flash_state();
@@ -113,6 +176,7 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
 
             // Cancel ongoing flash operation
             state.flashing_active = false;
+            state.batch = None;
             state.flash_progress = None;
             state.flash_bytes_written = 0;
             state.flash_speed_mb_s = 0.0;
@@ -168,6 +232,23 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
                     })
                     .cloned()
             });
+
+            // Marked drives follow the same identity rule; a running batch
+            // keeps its targets (a refresh must not change what is written).
+            if !state.flashing_active {
+                let image = state.selected_image.clone();
+                state.marked_targets = state
+                    .marked_targets
+                    .iter()
+                    .filter_map(|m| {
+                        drives
+                            .iter()
+                            .find(|d| m.has_same_physical_identity(d))
+                            .filter(|d| constraints::is_drive_valid(d, image.as_ref()))
+                            .cloned()
+                    })
+                    .collect();
+            }
 
             state.available_drives = drives;
             Task::none()
@@ -928,5 +1009,128 @@ mod tests {
         let _ = update(&mut state, Message::CloseDeviceSelection);
 
         assert!(!state.device_selection_open);
+    }
+
+    // ========================================================================
+    // Multi-device flash
+    // ========================================================================
+
+    fn drive(name: &str, dev: &str) -> DriveInfo {
+        DriveInfo::new(name.into(), format!("/media/{name}"), 16.0, dev.into())
+    }
+
+    fn state_with_image() -> FlashKraft {
+        let mut state = FlashKraft::new();
+        state.selected_image = Some(ImageInfo {
+            path: "/tmp/x.img".into(),
+            name: "x.img".into(),
+            size_mb: 10.0,
+        });
+        state
+    }
+
+    #[test]
+    fn marking_drives_toggles_and_enables_batch() {
+        let mut state = state_with_image();
+        let (a, b) = (drive("a", "/dev/sda"), drive("b", "/dev/sdb"));
+        let _ = update(&mut state, Message::ToggleMarkTarget(a.clone()));
+        assert!(!state.is_batch());
+        let _ = update(&mut state, Message::ToggleMarkTarget(b));
+        assert!(state.is_batch());
+        assert!(state.is_ready_to_flash());
+        let _ = update(&mut state, Message::ToggleMarkTarget(a));
+        assert_eq!(state.marked_targets.len(), 1);
+    }
+
+    #[test]
+    fn unsafe_drives_cannot_be_marked() {
+        let mut state = state_with_image();
+        let mut sys = drive("sys", "/dev/sdz");
+        sys.is_system = true;
+        let _ = update(&mut state, Message::ToggleMarkTarget(sys));
+        assert!(state.marked_targets.is_empty());
+        assert!(state.error_message.is_some());
+    }
+
+    #[test]
+    fn flashing_two_marked_drives_creates_batch_state() {
+        let mut state = state_with_image();
+        for (n, d) in [("a", "/dev/sda"), ("b", "/dev/sdb")] {
+            let _ = update(&mut state, Message::ToggleMarkTarget(drive(n, d)));
+        }
+        let _ = update(&mut state, Message::FlashClicked);
+        assert!(state.flashing_active);
+        assert_eq!(state.batch.as_ref().unwrap().targets.len(), 2);
+    }
+
+    #[test]
+    fn a_single_marked_drive_uses_the_single_flow() {
+        let mut state = state_with_image();
+        let _ = update(
+            &mut state,
+            Message::ToggleMarkTarget(drive("a", "/dev/sda")),
+        );
+        let _ = update(&mut state, Message::FlashClicked);
+        assert!(state.batch.is_none());
+        assert_eq!(
+            state.selected_target.as_ref().unwrap().device_path,
+            "/dev/sda"
+        );
+    }
+
+    #[test]
+    fn batch_updates_drive_progress_and_finish_with_failure_shows_error() {
+        use flashkraft_core::{FlashUpdate, MultiSummary, MultiUpdate};
+        let mut state = state_with_image();
+        for (n, d) in [("a", "/dev/sda"), ("b", "/dev/sdb")] {
+            let _ = update(&mut state, Message::ToggleMarkTarget(drive(n, d)));
+        }
+        let _ = update(&mut state, Message::FlashClicked);
+        let _ = update(
+            &mut state,
+            Message::BatchUpdate(MultiUpdate::Target {
+                index: 0,
+                device: "/dev/sda".into(),
+                update: FlashUpdate::Progress {
+                    progress: 1.0,
+                    bytes_written: 1,
+                    speed_mb_s: 5.0,
+                },
+            }),
+        );
+        assert!(state.flash_progress.unwrap() > 0.0);
+        let _ = update(
+            &mut state,
+            Message::BatchUpdate(MultiUpdate::Finished(MultiSummary {
+                succeeded: vec!["/dev/sda".into()],
+                failed: vec![("/dev/sdb".into(), "boom".into())],
+            })),
+        );
+        assert!(!state.flashing_active);
+        assert!(state.error_message.as_ref().unwrap().contains("1 of 2"));
+        assert!(!state.is_flash_complete());
+    }
+
+    #[test]
+    fn batch_success_completes_and_cancel_clears_batch() {
+        use flashkraft_core::{MultiSummary, MultiUpdate};
+        let mut state = state_with_image();
+        for (n, d) in [("a", "/dev/sda"), ("b", "/dev/sdb")] {
+            let _ = update(&mut state, Message::ToggleMarkTarget(drive(n, d)));
+        }
+        let _ = update(&mut state, Message::FlashClicked);
+        let _ = update(
+            &mut state,
+            Message::BatchUpdate(MultiUpdate::Finished(MultiSummary {
+                succeeded: vec!["/dev/sda".into(), "/dev/sdb".into()],
+                failed: vec![],
+            })),
+        );
+        assert!(state.is_flash_complete());
+
+        let mut state = state_with_image();
+        state.batch = Some(flashkraft_core::MultiState::new(&["x".into()]));
+        let _ = update(&mut state, Message::CancelFlash);
+        assert!(state.batch.is_none());
     }
 }

@@ -80,6 +80,7 @@ fn view_main(state: &FlashKraft) -> Element<'_, Message> {
             &state.available_drives,
             &state.selected_target,
             &state.selected_image,
+            &state.marked_targets,
         );
     }
 
@@ -88,6 +89,7 @@ fn view_main(state: &FlashKraft) -> Element<'_, Message> {
     let buttons = screens::select_image::view_buttons(
         &state.selected_image,
         &state.selected_target,
+        &state.marked_targets,
         state.is_ready_to_flash(),
     );
 

@@ -29,11 +29,14 @@ pub(in crate::ui) fn render_complete(
         .split(body);
 
     // ── Success banner ────────────────────────────────────────────────────────
-    let drive_name = app
-        .selected_drive
-        .as_ref()
-        .map(|d| format!("  Your USB drive ({}) is ready.", d.name))
-        .unwrap_or_default();
+    let drive_name = match app.batch.as_ref().filter(|b| b.targets.len() > 1) {
+        Some(b) => format!("  All {} USB drives are ready.", b.targets.len()),
+        None => app
+            .selected_drive
+            .as_ref()
+            .map(|d| format!("  Your USB drive ({}) is ready.", d.name))
+            .unwrap_or_default(),
+    };
 
     let banner = Paragraph::new(Line::from(vec![
         Span::styled(
@@ -52,6 +55,30 @@ pub(in crate::ui) fn render_complete(
             .border_style(Style::default().fg(pal.success)),
     );
     frame.render_widget(banner, rows[0]);
+
+    // A multi-device flash has no single drive to browse: list every target.
+    if let Some(batch) = app.batch.as_ref().filter(|b| b.targets.len() > 1) {
+        let mut lines = vec![Line::from("")];
+        for t in &batch.targets {
+            lines.push(Line::from(vec![
+                Span::styled("  \u{2713} ", Style::default().fg(pal.success)),
+                Span::styled(
+                    t.device.clone(),
+                    Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("  written and verified", Style::default().fg(pal.dim)),
+            ]));
+        }
+        frame.render_widget(
+            Paragraph::new(lines).block(themed_block!(
+                format!(" \u{1f4be}  {} drives flashed ", batch.targets.len()),
+                pal.brand,
+                pal.success
+            )),
+            rows[1],
+        );
+        return;
+    }
 
     // ── Main split: USB tree (left) + piechart (right) ────────────────────────
     let cols = Layout::default()
