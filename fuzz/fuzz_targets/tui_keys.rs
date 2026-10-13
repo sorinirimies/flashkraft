@@ -16,6 +16,12 @@ fn key(b: [u8; 2]) -> KeyEvent {
         18 => KeyCode::Char('n'), 19 => KeyCode::Char('y'),
         _ => KeyCode::Char((b'a' + (b[0] % 26)) as char),
     };
+    // Never emit keys that mutate the filesystem (delete/cut/paste/confirm): the
+    // explorer can navigate up out of the sandbox HOME and delete the corpus dir.
+    let code = match code {
+        KeyCode::Char('y' | 'Y' | 'd' | 'x' | 'p') => KeyCode::Char('k'),
+        c => c,
+    };
     let mods = KeyModifiers::from_bits_truncate(b[1] & 0b111);
     KeyEvent::new(code, mods)
 }
