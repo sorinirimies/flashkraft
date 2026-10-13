@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2.2.0 - 2026-10-13
+### 📚 Documentation
+- docs: web --read-only in quick-start, settings.rs note
+### 📦 Build
+- build: require Rust 1.98+ workspace-wide
+- build: Rust 1.98 requirement only for flashkraft-web
+### 🔄 CI
+- ci: split fuzz into own workflow; add audit & fuzz badges to README
+- ci: publish flashkraft-web in release workflows and just publish
+### 🧪 Testing
+- test(fuzz): web guards, TUI key sequences and GUI reducer; fuzz CI installs GUI libs
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.1.0...v2.2.0
+## 2.1.0 - 2026-10-13
+### 🔧 Chores
+- chore: bump version to 2.1.0
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.0.2...v2.1.0
 ## 2.0.2 - 2026-10-13
 ### ✨ Features
 - feat(web): flash one or many drives from the browser, with layered safety guards
