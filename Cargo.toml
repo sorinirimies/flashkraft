@@ -12,6 +12,7 @@ resolver = "2"
 [workspace.package]
 version      = "2.1.0"
 edition      = "2021"
+rust-version = "1.98"
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
 license      = "MIT"
 repository   = "https://github.com/sorinirimies/flashkraft"

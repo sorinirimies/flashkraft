@@ -224,12 +224,14 @@ just install-nix tui    # TUI
 
 ### Build
 
+All crates require **Rust 1.98+** (`rust-version` is set workspace-wide; Topcoat needs it). Update with `rustup update stable`.
+
 ```sh
 git clone https://github.com/sorinirimies/flashkraft.git && cd flashkraft
 cargo build --release                       # everything
 cargo build --release -p flashkraft         # GUI
 cargo build --release -p flashkraft-tui     # TUI
-cargo build --release -p flashkraft-web     # web (Rust 1.98+, required by Topcoat)
+cargo build --release -p flashkraft-web     # web
 ```
 
 Unix installs: a root-owned setuid binary via `just install`. GUI needs X11 or Wayland; the TUI works in any terminal.
