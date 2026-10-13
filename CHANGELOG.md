@@ -7,10 +7,15 @@ All notable changes to this project will be documented in this file.
 - feat: web dashboard, multi-drive flashing, shared flash worker, TUI/GUI redesign
 ### 🐛 Bug Fixes
 - fix(ci): gate deps-update on Cargo.lock only, add permissions, make Gitea commit-only
+- fix(deps): bump quinn-proto 0.11.19 and rustls 0.23.45 (RUSTSEC-2026-0338/0340/0343/0285)
 ### 🔄 CI
 - ci(security): add cargo-audit workflow and just audit recipe
 ### 🔧 Chores
 - chore: bump version to 1.5.2
+- chore: bump version to 2.0.0
+- chore(just): setup-gitea-<instance> remote recipes
+### 🧪 Testing
+- test: nightly fuzzing (settings, compatibility, version compare, device dedupe)
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.5.1...v2.0.0
 ## 1.5.1 - 2026-09-11
 ### ✨ Features
