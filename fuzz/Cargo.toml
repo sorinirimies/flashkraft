@@ -2,7 +2,7 @@
 name = "flashkraft-fuzz"
 version = "0.0.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [package.metadata]
 cargo-fuzz = true
@@ -10,6 +10,13 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 flashkraft-core = { path = "../crates/flashkraft-core" }
+serde = { version = "1", features = ["derive"] }
+flashkraft-tui = { path = "../crates/flashkraft-tui" }
+flashkraft = { path = "../crates/flashkraft-gui" }
+ratatui = "*"
+crossterm = "*"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+serde_json = "1"
 
 # Not part of the main workspace (needs nightly).
 [workspace]
@@ -35,5 +42,29 @@ doc = false
 [[bin]]
 name = "dedupe_devices"
 path = "fuzz_targets/dedupe_devices.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "web_validate"
+path = "fuzz_targets/web_validate.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "web_host"
+path = "fuzz_targets/web_host.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "tui_keys"
+path = "fuzz_targets/tui_keys.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "gui_update"
+path = "fuzz_targets/gui_update.rs"
 test = false
 doc = false

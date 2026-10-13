@@ -19,13 +19,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install GUI system libraries (the GUI fuzz target links iced)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libwayland-dev libgl1-mesa-dev \
+            libfontconfig1-dev libssl-dev
       - name: Install Rust nightly
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
-      - name: Fuzz each target for 60s
+      - name: Fuzz each target for 60s (core, web guards, TUI keys, GUI reducer)
         run: |
           for t in $(cargo +nightly fuzz list); do
             cargo +nightly fuzz run "$t" -- -max_total_time=60
