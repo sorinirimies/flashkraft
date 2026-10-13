@@ -6,6 +6,35 @@
 //! Breakpoints match the TUI: **wide** ≥ 980 px · **medium** ≥ 700 px · **narrow** below.
 
 pub const CSS: &str = r#"
+.pickcol { width:34px; padding-right:0; text-align:center; }
+.pick { width:18px; height:18px; padding:0; accent-color:var(--accent); cursor:pointer; }
+.noflash .pickcol { display:none; }
+.flash-bar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.flash-go { padding:9px 18px; font-size:15px; }
+.flash-go:disabled { opacity:.45; cursor:not-allowed; }
+button.ghost { background:transparent; color:var(--fg); border-color:var(--line); }
+button.danger { background:var(--err); border-color:var(--err); color:#fff; }
+.flash-panel { background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.flash-panel[hidden] { display:none; }
+.flash-head { display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; }
+.flash-head h2 { margin:0; color:var(--fg); font-size:18px; text-transform:none; letter-spacing:0; }
+.flash-head .flash-actions { margin-left:auto; }
+.flash-target { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
+.flash-target.done { border-color:var(--ok); }
+.flash-target.failed { border-color:var(--err); }
+.flash-row { display:flex; justify-content:space-between; gap:12px; }
+.flash-track { height:8px; background:var(--sel); border-radius:999px; overflow:hidden; }
+.flash-fill { height:100%; background:var(--accent); border-radius:999px; transition:width .4s ease; }
+.flash-target.done .flash-fill { background:var(--ok); }
+.flash-target.failed .flash-fill { background:var(--err); }
+.flash-sub { font-size:12px; }
+dialog.flash-dialog { background:var(--panel); color:var(--fg); border:1px solid var(--err); border-radius:14px; padding:22px; max-width:520px; width:calc(100% - 32px); }
+dialog.flash-dialog::backdrop { background:rgba(0,0,0,.6); }
+dialog.flash-dialog h3 { margin:0 0 8px; color:var(--err); }
+.flash-list { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px 10px 10px 28px; margin:10px 0; max-height:200px; overflow:auto; }
+.flash-actions { display:flex; gap:10px; justify-content:flex-end; }
+.flash-err { color:var(--err); min-height:1em; }
+
 :root { color-scheme: dark; --bg:#12121a; --panel:#1b1d29; --line:#2b3042; --fg:#e6e9f5; --dim:#8b92aa; --accent:#50c8ff; --ok:#50dc78; --warn:#ffc832; --err:#ff5050; --fg2:#ff641e; --sel:#28303f; }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }

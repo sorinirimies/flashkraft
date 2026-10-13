@@ -16,6 +16,9 @@ pub const TUI_SETTINGS_FILE: &str = "tui-settings.json";
 /// File written by the Iced front-end.
 pub const GUI_SETTINGS_FILE: &str = "gui-settings.json";
 
+/// File written by the web dashboard (it only stores history).
+pub const WEB_SETTINGS_FILE: &str = "web-settings.json";
+
 /// The subset of a settings file other tools care about.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct SharedSettings {
@@ -57,11 +60,44 @@ pub fn merge_history(
 /// Merged flash history of both front-ends found in `dir`.
 pub fn load_history_from(dir: &Path) -> Vec<FlashHistoryEntry> {
     merge_history(
-        [TUI_SETTINGS_FILE, GUI_SETTINGS_FILE]
+        [TUI_SETTINGS_FILE, GUI_SETTINGS_FILE, WEB_SETTINGS_FILE]
             .iter()
             .filter_map(|f| read_file(&dir.join(f)))
             .map(|s| s.flash_history),
     )
+}
+
+/// Append `entry` to the web dashboard's own history file in `dir`
+/// (`web-settings.json`), newest first and capped. Other keys in the file are
+/// preserved. Errors are returned so the caller can decide to ignore them —
+/// a history write must never fail a flash.
+pub fn record_flash_in(dir: &Path, entry: FlashHistoryEntry) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(WEB_SETTINGS_FILE);
+    let mut doc: serde_json::Map<String, serde_json::Value> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    let mut history = doc
+        .get("flash_history")
+        .and_then(|v| serde_json::from_value::<Vec<FlashHistoryEntry>>(v.clone()).ok())
+        .unwrap_or_default();
+    crate::domain::flash_history::push_entry(&mut history, entry);
+    doc.insert(
+        "flash_history".into(),
+        serde_json::to_value(&history).unwrap_or_default(),
+    );
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, serde_json::to_vec_pretty(&doc)?)?;
+    std::fs::rename(tmp, path)
+}
+
+/// [`record_flash_in`] for the real config directory.
+pub fn record_flash(entry: FlashHistoryEntry) -> std::io::Result<()> {
+    match config_dir() {
+        Some(d) => record_flash_in(&d, entry),
+        None => Ok(()),
+    }
 }
 
 /// Merged flash history from the real config directory.
@@ -116,6 +152,22 @@ mod tests {
             .map(|i| entry(&format!("{i}.iso"), i))
             .collect::<Vec<_>>();
         assert_eq!(merge_history([many]).len(), MAX_HISTORY_ENTRIES);
+    }
+
+    #[test]
+    fn web_history_is_recorded_merged_and_capped() {
+        let dir = tempfile::tempdir().unwrap();
+        for i in 0..(MAX_HISTORY_ENTRIES as u64 + 3) {
+            record_flash_in(dir.path(), entry(&format!("{i}.iso"), 100 + i)).unwrap();
+        }
+        let h = load_history_from(dir.path());
+        assert_eq!(h.len(), MAX_HISTORY_ENTRIES);
+        assert_eq!(h[0].image_path, format!("{}.iso", MAX_HISTORY_ENTRIES + 2));
+        // unrelated keys survive
+        let p = dir.path().join(WEB_SETTINGS_FILE);
+        std::fs::write(&p, r#"{"keep":1,"flash_history":[]}"#).unwrap();
+        record_flash_in(dir.path(), entry("a.iso", 1)).unwrap();
+        assert!(std::fs::read_to_string(p).unwrap().contains("\"keep\""));
     }
 
     #[test]

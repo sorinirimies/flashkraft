@@ -29,7 +29,7 @@ Same engine, same 43 themes, same safety checks — pick whichever fits how you 
 |---|---|---|
 | [`flashkraft-tui`](crates/flashkraft-tui) | Terminal UI ([Ratatui](https://ratatui.rs)) | SSH, headless boxes, keyboard people |
 | [`flashkraft`](crates/flashkraft-gui) | Desktop GUI ([Iced](https://iced.rs)) | Mouse, native file dialogs |
-| [`flashkraft-web`](crates/flashkraft-web) | Web dashboard ([Topcoat](https://github.com/tokio-rs/topcoat)) | Seeing drives and image fit from a browser — read-only |
+| [`flashkraft-web`](crates/flashkraft-web) | Web dashboard ([Topcoat](https://github.com/tokio-rs/topcoat)) | Flashing one or many drives from a browser tab |
 
 ### 🖥️ Terminal UI — `flashkraft-tui`
 
@@ -63,9 +63,11 @@ cargo install flashkraft
 
 ### 🌐 Web dashboard — `flashkraft-web`
 
-A local, server-rendered page ([Topcoat](https://github.com/tokio-rs/topcoat)) in the same visual language. It lists the connected drives, shows whether an image fits each one, and keeps your flash history. Drives appear live over a WebSocket — plug a stick in and the table updates.
+A local, server-rendered page ([Topcoat](https://github.com/tokio-rs/topcoat)) in the same visual language. It lists the connected drives, shows whether an image fits each one, and **flashes one or several drives at once** with per-drive progress. Drives appear live over a WebSocket — plug a stick in and the table updates.
 
 ![Web dashboard](docs/media/web-wide.png)
+
+![Flashing three drives from the browser](docs/media/web-flashing.png)
 
 <details>
 <summary>Medium, narrow and history views</summary>
@@ -80,7 +82,8 @@ A local, server-rendered page ([Topcoat](https://github.com/tokio-rs/topcoat)) i
 - All 43 themes as CSS custom properties; `?theme=Nord`, or the one saved by the TUI
 - `?image=/path/to.iso` checks the image against every drive
 - JSON API: `/api/drives`, `/api/history`, `/api/themes`, `/api/health`
-- **Read-only by design** — flashing needs raw device access, so it stays in the TUI and GUI. The server binds to `127.0.0.1` and never opens a device for writing
+- **Flash from the browser:** type an image path, tick the drives, press **Flash**, confirm the dialog. Progress streams per drive; **Cancel all** stops everything
+- `--read-only` turns flashing off completely
 
 ```sh
 cargo install flashkraft-web
@@ -88,11 +91,26 @@ flashkraft-web                 # live mode needs the Topcoat bundle, see `just b
 flashkraft-web --demo          # fake drives
 ```
 
+#### Why flashing from a web page is safe
+
+A page that can erase disks has to be hard to abuse. Every flash must pass **all** of these on the server:
+
+1. **Loopback only.** Flashing is offered only when the server is bound to `127.0.0.1`/`::1` (the default). Bind elsewhere and it silently becomes read-only. `--read-only` disables it outright.
+2. **No DNS rebinding.** The `Host` header must be `localhost` / a loopback address.
+3. **Per-session token.** A random 128-bit token (`x-flashkraft-token`) is generated at start-up and embedded only in pages the server serves, so another website cannot read it. It is compared in constant time.
+4. **No cross-site requests.** Topcoat's origin policy rejects cross-origin POSTs, and the endpoint only accepts `application/json` (browsers will not send that cross-site without a pre-flight, which is never granted).
+5. **Server-side re-validation.** Device paths from the browser are only *names*: each one is matched against a fresh drive scan and re-checked with the same rules as the TUI/GUI — system drives, read-only media and too-small drives are refused. Arbitrary paths such as `/dev/sda` or `/etc/passwd` never reach the writer.
+6. **Explicit confirmation.** The request must state the exact number of drives being erased (the UI shows a dialog listing each one).
+7. **One job at a time**, at most 16 drives.
+
+Privileges follow the TUI model: the process drops root at start-up and regains it only inside the flash pipeline (setuid install, or `sudo` re-exec on Linux).
+
 ## Flash several drives at once
 
 Mark any number of drives, press flash, and each gets its own worker, progress bar and verification.
 
 - **TUI:** in the drive list press `m` on each drive, then `Enter`
+- **Web:** tick the drives in the table, press **Flash N drives**
 - **GUI:** open *Select target* and click **+ Add** on each drive, then **Use N marked**
 - Up to **4 drives are written in parallel** (USB hubs share bandwidth); the rest queue
 - One failing drive never stops the others — you get a per-drive verdict at the end
@@ -110,6 +128,7 @@ Under the hood it is [`flashkraft_core::spawn_multi_flash`](crates/flashkraft-co
 - 🛡️ **Safe drive selection** — system drives blocked, undersized and read-only drives refused, huge drives warned
 - 🔌 **Hot-plug aware** — the drive list updates when you plug or unplug
 - 🎨 **43 themes** shared by all three front-ends (`flashkraft-core`)
+- 🌐 **Guarded web flashing** — loopback only, session token, server-side re-validation, explicit confirmation
 - 🧪 **Demo mode** — `FLASHKRAFT_DEMO=1` shows fake drives and *simulates* writes; it can never touch a real device
 
 ## How flashing works

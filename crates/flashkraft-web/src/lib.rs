@@ -2,16 +2,19 @@
 //! [Topcoat](https://github.com/tokio-rs/topcoat).
 //!
 //! It shows what the TUI and GUI see — the connected drives, whether a chosen
-//! image fits each one, and your flash history — in a browser. It is
-//! **read-only by design**: flashing needs raw device access, so it stays in
-//! the TUI/GUI; this crate never opens a block device for writing.
+//! image fits each one, and your flash history — in a browser — and can
+//! **flash one or several drives at once**. Because a page that can erase disks
+//! must be hard to abuse, every flash passes the guards in [`flash`]
+//! (loopback only, `Host` check, per-session token, server-side drive
+//! re-validation, explicit confirmation). `--read-only` disables flashing.
 //!
 //! | module | what |
 //! |---|---|
 //! | [`app`] | [`ServerOptions`], router construction, [`serve`] |
 //! | [`pages`] | document shell, dashboard, history, about, live shard |
 //! | [`components`] | cards, tables, filters |
-//! | [`api`] | JSON + static routes |
+//! | [`api`] | JSON + static routes, flash endpoints |
+//! | [`flash`] | flash job manager and every request guard |
 //! | [`data`] | shaping drives / image / history into a [`data::Snapshot`] |
 //! | [`params`] | query-string values |
 //! | [`style`] | the stylesheet |
@@ -28,6 +31,7 @@ pub mod api;
 pub mod app;
 pub mod components;
 pub mod data;
+pub mod flash;
 pub mod pages;
 pub mod params;
 pub mod style;

@@ -24,14 +24,29 @@ FLASHKRAFT_WEB_ASSETS="$root/target/debug/assets" "$root/target/debug/flashkraft
 web=$!; trap 'kill $web 2>/dev/null || true' EXIT
 sleep 2
 
-shot() { # name width height query
+shot() { # name width height path
+    rm -f "$out/$1.png"
     "$BROWSER" --headless=new --disable-gpu --hide-scrollbars --window-size="$2,$3" \
-        --virtual-time-budget=5000 --screenshot="$out/$1.png" \
-        "http://127.0.0.1:$port/$4" >/dev/null 2>&1
-    echo "wrote $out/$1.png"
+        --virtual-time-budget=4000 --screenshot="$out/$1.png" \
+        "http://127.0.0.1:$port/$4" >/dev/null 2>&1 &
+    local b=$!
+    # A stuck headless browser must not hang the script.
+    for _ in $(seq 1 30); do [ -s "$out/$1.png" ] && break; sleep 1; done
+    sleep 1; kill "$b" 2>/dev/null || true; wait "$b" 2>/dev/null || true
+    [ -s "$out/$1.png" ] && echo "wrote $out/$1.png" || echo "FAILED $1" >&2
 }
 q="image=/tmp/fk/debian-12.iso"
 shot web-wide   1400 760 "?$q"
 shot web-medium 860  900 "?$q"
 shot web-narrow 420  1100 "?$q"
 shot web-history 1400 520 "history"
+
+# A flash in progress: three simulated drives, slowed down so it can be captured.
+kill $web 2>/dev/null || true; wait $web 2>/dev/null || true
+FLASHKRAFT_DEMO_STEP_MS=200 FLASHKRAFT_WEB_ASSETS="$root/target/debug/assets" "$root/target/debug/flashkraft-web" --port "$port" --no-open >/dev/null 2>&1 &
+web=$!; sleep 2
+token=$(curl -s "http://127.0.0.1:$port/" | grep -Eo '[0-9a-f]{32}' | head -1)
+curl -s -XPOST "http://127.0.0.1:$port/api/flash" -H 'content-type: application/json' -H "x-flashkraft-token: $token" \
+    -d '{"image":"/tmp/fk/debian-12.iso","devices":["/dev/sdb","/dev/sdc","/dev/sdd"],"confirm":3}' >/dev/null
+sleep 4
+shot web-flashing 1400 1150 "?$q"

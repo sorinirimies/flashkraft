@@ -25,13 +25,16 @@ struct Args {
     #[arg(long)]
     demo: bool,
 
+    /// Never flash from the browser (list drives and history only).
+    #[arg(long)]
+    read_only: bool,
+
     /// Print every theme name and exit.
     #[arg(long)]
     list_themes: bool,
 }
 
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
+fn main() -> std::io::Result<()> {
     let args = Args::parse();
     if args.list_themes {
         for name in flashkraft_core::THEME_NAMES {
@@ -43,10 +46,19 @@ async fn main() -> std::io::Result<()> {
         // SAFETY: single-threaded at this point — before the server starts.
         unsafe { std::env::set_var(flashkraft_core::commands::demo::DEMO_ENV, "1") };
     }
-    serve(ServerOptions {
-        host: args.host,
-        port: args.port,
-        open_browser: !args.no_open,
-    })
-    .await
+    // Same privilege model as the TUI: drop root now, regain it only inside
+    // the flash pipeline. Before the runtime starts any threads.
+    flashkraft_core::flash_helper::initialize_privileges(true).map_err(std::io::Error::other)?;
+    flashkraft_web::flash::configure(flashkraft_web::flash::flashing_allowed(
+        &args.host,
+        args.read_only,
+    ));
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(serve(ServerOptions {
+            host: args.host,
+            port: args.port,
+            open_browser: !args.no_open,
+        }))
 }

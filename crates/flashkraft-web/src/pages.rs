@@ -34,6 +34,8 @@ pub async fn document(
                     // Static fallback: no runtime, so reload every 10 s.
                     <meta http-equiv="refresh" content="10">
                 }
+                <meta name="flashkraft-token" content=(crate::flash::config().token.clone())>
+                <meta name="flashkraft-flash" content=(if crate::flash::config().enabled { "on" } else { "off" })>
                 <title>(title)</title>
                 <link rel="stylesheet" href="/style.css">
                 theme_style(index: theme)
@@ -74,12 +76,15 @@ async fn home(cx: &Cx) -> Result<impl View> {
                 <header class="top">
                     brand(active: "drives".to_string())
                 </header>
+                <div id="flash-root"></div>
                 filters(image: image.clone(), theme: theme_index)
                 dashboard_body(s: s, live: false)
             } else {
                 <header class="top">brand(active: "drives".to_string())</header>
+                <div id="flash-root"></div>
                 live_dashboard(image: image, theme: theme::names()[theme_index].to_string())
             }
+            <script src="/flash.js"></script>
         )
     })
 }
@@ -95,7 +100,7 @@ async fn history_page(cx: &Cx) -> Result<impl View> {
             <section>
                 <h2>"Flash history"</h2>
                 if history.is_empty() {
-                    <div class="empty">"Nothing flashed yet. Successful flashes from the TUI and GUI show up here."</div>
+                    <div class="empty">"Nothing flashed yet. Successful flashes from the TUI, GUI and web show up here."</div>
                 } else {
                     history_table(history: &history)
                 }
@@ -140,7 +145,13 @@ async fn about_page(cx: &Cx) -> Result<impl View> {
                         </tr>
                     }
                 </tbody></table>
-                <p class="dim">"This dashboard is read-only: it never writes to a device."</p>
+                <p class="dim">
+                    if crate::flash::config().enabled {
+                        "Flashing is enabled on this server (loopback only). Each flash needs a per-session token, re-checks every drive on the server, and asks for confirmation."
+                    } else {
+                        "Flashing is disabled on this server: it is read-only."
+                    }
+                </p>
             </section>
         )
     })

@@ -57,7 +57,7 @@ pub async fn steps(s: &Snapshot) -> Result<impl View> {
             <span class="arrow">"▸"</span>
             <div class=(c2)><span class="n">"2"</span><div><b>"Select drive"</b><span class="sub">(t2)</span></div></div>
             <span class="arrow">"▸"</span>
-            <div class=(c3)><span class="n">"3"</span><div><b>"Flash!"</b><span class="sub">"in flashkraft-tui or flashkraft"</span></div></div>
+            <div class=(c3)><span class="n">"3"</span><div><b>"Flash!"</b><span class="sub">(if has_image && has_drive { "tick drives below" } else { "tick drives, then flash" })</span></div></div>
         </section>
     })
 }
@@ -137,11 +137,16 @@ pub async fn fit_chip(fit: Fit) -> Result<impl View> {
 
 /// The drive table: capacity bar, USB info, and fit against the chosen image.
 #[component]
-pub async fn drives_table(drives: &[DriveRow], has_image: bool) -> Result<impl View> {
+pub async fn drives_table(
+    drives: &[DriveRow],
+    has_image: bool,
+    image: String,
+) -> Result<impl View> {
     Ok(view! {
-        <div class="table-wrap"><table>
+        <div class="table-wrap" data-image=(image)><table>
             <thead>
                 <tr>
+                    <th class="pickcol"></th>
                     <th class="left">"drive"</th>
                     <th class="left opt2">"device"</th>
                     <th>"size"</th>
@@ -153,6 +158,11 @@ pub async fn drives_table(drives: &[DriveRow], has_image: bool) -> Result<impl V
             <tbody>
                 for d in drives {
                     <tr class=(if d.fit == Fit::Blocked { "blocked" } else { "" })>
+                        <td class="pickcol">
+                            if has_image && matches!(d.fit, Fit::Ok | Fit::Warn) {
+                                <input type="checkbox" class="pick" value=(d.device_path.clone()) data-name=(d.name.clone()) aria-label=(format!("Select {}", d.name))>
+                            }
+                        </td>
                         <td class="left">
                             <div class="name">(d.name.clone())</div>
                             if let Some(u) = &d.usb {
@@ -232,7 +242,7 @@ pub async fn dashboard_body(s: &Snapshot, live: bool) -> Result<impl View> {
             if s.drives.is_empty() {
                 <div class="empty">"No drives detected. Plug in a USB stick — this page refreshes itself."</div>
             } else {
-                drives_table(drives: &s.drives, has_image: s.image.is_some())
+                drives_table(drives: &s.drives, has_image: s.image.is_some(), image: s.image.as_ref().map(|i| i.path.clone()).unwrap_or_default())
             }
         </section>
 
@@ -247,7 +257,6 @@ pub async fn dashboard_body(s: &Snapshot, live: bool) -> Result<impl View> {
                 <span class="badge">"○ static"</span>
             }
             " updated " (s.updated_at.clone())
-            " · read-only — flash with " <code>"flashkraft-tui"</code> " or " <code>"flashkraft"</code>
             " · JSON at " <a href="/api/drives">"/api/drives"</a>
         </footer>
     })
