@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2.0.0 - 2026-10-13
+### ✨ Features
+- feat: web dashboard, multi-drive flashing, shared flash worker, TUI/GUI redesign
+### 🐛 Bug Fixes
+- fix(ci): gate deps-update on Cargo.lock only, add permissions, make Gitea commit-only
+### 🔄 CI
+- ci(security): add cargo-audit workflow and just audit recipe
+### 🔧 Chores
+- chore: bump version to 1.5.2
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.5.1...v2.0.0
 ## 1.5.1 - 2026-09-11
 ### ✨ Features
 - feat(gui): remember last used image directory
