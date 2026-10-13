@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2.2.1 - 2026-10-13
+### ✨ Features
+- feat(web): server-side file browser to choose the image (Choose image…)
+### 🐛 Bug Fixes
+- fix(fuzz): stop tui_keys from emitting fs-mutating keys
+- fix(web): static mode no longer reloads away the drive selection
+- fix(web): reset dialog style after browsing
+### 📦 Other Changes
+- Revert "fix(web): static mode no longer reloads away the drive selection"
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.0...v2.2.1
 ## 2.2.0 - 2026-10-13
 ### 📚 Documentation
 - docs: web --read-only in quick-start, settings.rs note
@@ -11,6 +21,8 @@ All notable changes to this project will be documented in this file.
 ### 🔄 CI
 - ci: split fuzz into own workflow; add audit & fuzz badges to README
 - ci: publish flashkraft-web in release workflows and just publish
+### 🔧 Chores
+- chore: bump version to 2.2.0
 ### 🧪 Testing
 - test(fuzz): web guards, TUI key sequences and GUI reducer; fuzz CI installs GUI libs
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.1.0...v2.2.0
