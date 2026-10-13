@@ -88,7 +88,8 @@ A local, server-rendered page ([Topcoat](https://github.com/tokio-rs/topcoat)) i
 ```sh
 cargo install flashkraft-web
 flashkraft-web                 # live mode needs the Topcoat bundle, see `just bundle-web`
-flashkraft-web --demo          # fake drives
+flashkraft-web --demo          # fake drives, simulated writes
+flashkraft-web --read-only     # never flash from the browser
 ```
 
 #### Why flashing from a web page is safe
@@ -264,7 +265,7 @@ flashkraft/
 │   │       ├── flash_helper.rs    privileged pipeline (unmount → write → sync → verify)
 │   │       ├── flash_worker.rs    ★ one worker for every front-end: one verdict, no polling
 │   │       ├── multi_flash.rs     ★ flash N drives at once + MultiState for UIs
-│   │       ├── settings.rs        read the GUI/TUI settings + history (used by the web)
+│   │       ├── settings.rs        read the GUI/TUI settings + history, record web flashes
 │   │       ├── commands/          drive detection, hot-plug, demo mode
 │   │       ├── domain/            DriveInfo, ImageInfo, constraints, history
 │   │       └── theme/             the 43 themes
