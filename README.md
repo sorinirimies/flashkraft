@@ -224,7 +224,7 @@ just install-nix tui    # TUI
 
 ### Build
 
-All crates require **Rust 1.98+** (`rust-version` is set workspace-wide; Topcoat needs it). Update with `rustup update stable`.
+Only `flashkraft-web` needs **Rust 1.98+** (Topcoat requires it); the other crates build on older toolchains. Update with `rustup update stable`.
 
 ```sh
 git clone https://github.com/sorinirimies/flashkraft.git && cd flashkraft
