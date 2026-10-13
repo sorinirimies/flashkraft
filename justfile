@@ -683,6 +683,21 @@ sync-all:
 setup-gitea url: _check-nu
     nu scripts/setup_gitea.nu {{ url }}
 
+# Add the `gitea-microlab` remote (idempotent)
+setup-gitea-microlab url="gitea@192.168.1.43:sorin/flashkraft.git":
+    @git remote get-url gitea-microlab >/dev/null 2>&1 && git remote set-url gitea-microlab {{ url }} || git remote add gitea-microlab {{ url }}
+    @echo "✅ gitea-microlab → {{ url }}"
+
+# Add the `gitea-starscream` remote (idempotent)
+setup-gitea-starscream url="gitea@192.168.1.44:sorin/flashkraft.git":
+    @git remote get-url gitea-starscream >/dev/null 2>&1 && git remote set-url gitea-starscream {{ url }} || git remote add gitea-starscream {{ url }}
+    @echo "✅ gitea-starscream → {{ url }}"
+
+# Add the `gitea-nexus-lab` remote (idempotent)
+setup-gitea-nexus-lab url:
+    @git remote get-url gitea-nexus-lab >/dev/null 2>&1 && git remote set-url gitea-nexus-lab {{ url }} || git remote add gitea-nexus-lab {{ url }}
+    @echo "✅ gitea-nexus-lab → {{ url }}"
+
 # Migrate this project to dual GitHub + Gitea hosting (interactive)
 migrate-gitea: _check-nu
     nu scripts/migrate_to_gitea.nu
