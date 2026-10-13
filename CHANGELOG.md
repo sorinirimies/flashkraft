@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## 2.0.2 - 2026-10-13
 ### ✨ Features
 - feat(web): flash one or many drives from the browser, with layered safety guards
+### 🔧 Chores
+- chore: bump version to 2.0.2
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.0.1...v2.0.2
 ## 2.0.1 - 2026-10-13
 ### 🔧 Chores
