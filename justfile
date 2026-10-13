@@ -705,3 +705,15 @@ migrate-gitea: _check-nu
 # Security: dependency vulnerability scan (needs `cargo install cargo-audit`)
 audit:
     cargo audit
+
+# Fuzz one target (needs nightly + cargo-fuzz): just fuzz settings_parse
+fuzz target="settings_parse" secs="60":
+    cargo +nightly fuzz run {{ target }} -- -max_total_time={{ secs }}
+
+# Short fuzz run of every target (needs nightly + cargo-fuzz)
+fuzz-smoke secs="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for t in $(cargo +nightly fuzz list); do
+        cargo +nightly fuzz run "$t" -- -max_total_time={{ secs }}
+    done

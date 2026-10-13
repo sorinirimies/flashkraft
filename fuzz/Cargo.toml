@@ -1,0 +1,39 @@
+[package]
+name = "flashkraft-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+flashkraft-core = { path = "../crates/flashkraft-core" }
+
+# Not part of the main workspace (needs nightly).
+[workspace]
+
+[[bin]]
+name = "settings_parse"
+path = "fuzz_targets/settings_parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "compatibility"
+path = "fuzz_targets/compatibility.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "version_compare"
+path = "fuzz_targets/version_compare.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "dedupe_devices"
+path = "fuzz_targets/dedupe_devices.rs"
+test = false
+doc = false

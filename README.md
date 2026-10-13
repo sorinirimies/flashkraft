@@ -217,6 +217,7 @@ Unix installs: a root-owned setuid binary via `just install`. GUI needs X11 or W
 ```sh
 just test                 # whole workspace
 just check-all            # fmt + clippy + tests + docs
+just fuzz-smoke            # nightly + cargo-fuzz: settings, compatibility, versions, device lists
 just demo-web             # web dashboard with fake drives
 FLASHKRAFT_DEMO=1 cargo run -p flashkraft-tui
 ```

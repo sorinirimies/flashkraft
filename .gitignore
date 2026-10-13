@@ -22,6 +22,8 @@ target/
 
 # cargo-fuzz
 fuzz/target/
+fuzz/artifacts/
+fuzz/corpus/
 
 # cargo-tarpaulin coverage reports
 tarpaulin-report.html
