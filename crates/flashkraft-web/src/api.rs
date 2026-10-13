@@ -15,7 +15,7 @@ use topcoat::{
 use crate::{
     data::{inspect_image, load},
     flash::{self, FlashStatus, Reject, StartRequest, TOKEN_HEADER},
-    params::PageParams,
+    params::{BrowseParams, PageParams},
     style::CSS,
 };
 
@@ -88,6 +88,28 @@ async fn flash_js() -> Result<Js<&'static str>> {
 async fn drives(cx: &Cx) -> Result<Json<crate::data::Snapshot>> {
     let params = query_params::<PageParams>(cx)?;
     Ok(Json(load(params.image_path()).await))
+}
+
+/// List a directory for the image picker (needs the `Host` + token guards).
+#[route(GET "/api/browse")]
+async fn browse(cx: &Cx) -> Result<(StatusCode, Json<serde_json::Value>)> {
+    let params = query_params::<BrowseParams>(cx)?;
+    if let Err(e) = guard(cx) {
+        return Ok(reply(Err(e)));
+    }
+    let path = params.path.clone().unwrap_or_default();
+    let listing = tokio::task::spawn_blocking(move || crate::browse::list_dir(&path)).await;
+    Ok(match listing {
+        Ok(Ok(l)) => (StatusCode::OK, Json(serde_json::json!(l))),
+        Ok(Err(e)) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e })),
+        ),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": "browse failed" })),
+        ),
+    })
 }
 
 /// Flash history of the GUI and TUI.

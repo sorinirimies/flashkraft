@@ -6,6 +6,14 @@
 //! Breakpoints match the TUI: **wide** ≥ 980 px · **medium** ≥ 700 px · **narrow** below.
 
 pub const CSS: &str = r#"
+dialog.flash-dialog.browse { border-color:var(--accent); }
+dialog.flash-dialog.browse h3 { color:var(--accent); }
+.browse-path { word-break:break-all; margin:0 0 8px; }
+.browse-list { list-style:none; margin:0 0 12px; padding:0; max-height:50vh; overflow:auto; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
+.browse-list li { display:flex; justify-content:space-between; gap:12px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--line); }
+.browse-list li:last-child { border-bottom:0; }
+.browse-list li:hover { background:var(--sel); }
+.browse-list li.image { color:var(--ok); }
 .pickcol { width:34px; padding-right:0; text-align:center; }
 .pick { width:18px; height:18px; padding:0; accent-color:var(--accent); cursor:pointer; }
 .noflash .pickcol { display:none; }
@@ -28,7 +36,7 @@ button.danger { background:var(--err); border-color:var(--err); color:#fff; }
 .flash-target.done .flash-fill { background:var(--ok); }
 .flash-target.failed .flash-fill { background:var(--err); }
 .flash-sub { font-size:12px; }
-dialog.flash-dialog { background:var(--panel); color:var(--fg); border:1px solid var(--err); border-radius:14px; padding:22px; max-width:520px; width:calc(100% - 32px); }
+dialog.flash-dialog { background:var(--panel); color:var(--fg); border:1px solid var(--err); border-radius:14px; padding:22px; max-width:640px; width:calc(100% - 32px); }
 dialog.flash-dialog::backdrop { background:rgba(0,0,0,.6); }
 dialog.flash-dialog h3 { margin:0 0 8px; color:var(--err); }
 .flash-list { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px 10px 10px 28px; margin:10px 0; max-height:200px; overflow:auto; }

@@ -29,6 +29,7 @@
 
 pub mod api;
 pub mod app;
+pub mod browse;
 pub mod components;
 pub mod data;
 pub mod flash;

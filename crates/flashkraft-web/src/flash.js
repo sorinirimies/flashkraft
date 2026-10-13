@@ -57,6 +57,9 @@
       bar.append(el('span', 'dim', 'Flashing is disabled on this server (read-only, or not bound to loopback).'));
       return;
     }
+    const pick = el('button', 'ghost', '📂 Choose image…');
+    pick.addEventListener('click', () => openBrowser(imageInput()?.value || ''));
+    bar.append(pick);
     const n = selected.size;
     const btn = el('button', 'flash-go', n ? `⚡ Flash ${n} drive${n > 1 ? 's' : ''}` : '⚡ Flash');
     btn.disabled = !n || !imagePath() || running;
@@ -65,6 +68,74 @@
     bar.append(el('span', 'dim', !imagePath()
       ? 'Enter an image path, then tick the drives to write.'
       : running ? 'A flash is running.' : n ? 'Selected drives will be erased.' : 'Tick one or more drives.'));
+  }
+
+  // ---- file browser -------------------------------------------------------
+  const imageInput = () =>
+    document.querySelector('input[name="image"]') || document.querySelector('.filters input[type="text"]');
+
+  const fmtSize = (b) => (b >= 1 << 30 ? `${(b / (1 << 30)).toFixed(1)} GB` : `${(b / (1 << 20)).toFixed(0)} MB`);
+
+  async function openBrowser(start) {
+    const dir = start && /[\\/]/.test(start) ? start.replace(/[\\/][^\\/]*$/, '') || '/' : '';
+    if (!dlg.open) dlg.showModal();
+    await browse(dir, true);
+  }
+
+  async function browse(path, first) {
+    dlg.replaceChildren(el('p', 'dim', 'Loading…'));
+    let data;
+    try {
+      const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`, { headers: { 'x-flashkraft-token': token } });
+      data = await res.json();
+      if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
+    } catch (e) {
+      if (first) return browse('', false); // start dir vanished: fall back to the default
+      dlg.replaceChildren(el('h3', '', 'Cannot browse'), el('p', 'flash-err', String(e.message || e)));
+      const close = el('button', 'ghost', 'Close');
+      close.addEventListener('click', () => dlg.close());
+      dlg.append(el('div', 'flash-actions'));
+      dlg.lastChild.append(close);
+      return;
+    }
+    dlg.replaceChildren();
+    dlg.className = 'flash-dialog browse';
+    dlg.append(el('h3', '', 'Choose an image'));
+    dlg.append(el('p', 'dim browse-path', data.path));
+    const list = el('ul', 'browse-list');
+    if (data.parent) {
+      const up = el('li', 'dir', '⬆  ..');
+      up.addEventListener('click', () => browse(data.parent, false));
+      list.append(up);
+    }
+    for (const e of data.entries) {
+      const li = el('li', e.kind);
+      li.append(el('span', '', `${e.kind === 'dir' ? '📁' : '💿'}  ${e.name}`));
+      if (e.kind === 'image') li.append(el('span', 'dim', fmtSize(e.size)));
+      li.addEventListener('click', () => {
+        const full = data.path.replace(/\/$/, '') + '/' + e.name;
+        if (e.kind === 'dir') browse(full, false); else chooseImage(full);
+      });
+      list.append(li);
+    }
+    if (!data.entries.length) list.append(el('li', 'dim', 'No folders or disk images here.'));
+    if (data.truncated) list.append(el('li', 'dim', 'List truncated…'));
+    const close = el('button', 'ghost', 'Cancel');
+    close.addEventListener('click', () => dlg.close());
+    const row = el('div', 'flash-actions');
+    row.append(close);
+    dlg.append(list, row);
+  }
+
+  function chooseImage(path) {
+    dlg.close();
+    const input = imageInput();
+    if (!input) return;
+    input.value = path;
+    selected.clear();
+    // Live mode listens for `change`; static mode has a real form to submit.
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (input.form) input.form.submit();
   }
 
   // ---- confirm ------------------------------------------------------------

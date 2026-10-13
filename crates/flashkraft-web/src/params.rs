@@ -12,6 +12,12 @@ pub struct PageParams {
     pub theme: Option<String>,
 }
 
+/// `?path=` for the file browser.
+#[query_params(error = redirect("?"))]
+pub struct BrowseParams {
+    pub path: Option<String>,
+}
+
 impl PageParams {
     /// The image path, `None` when empty or absent.
     pub fn image_path(&self) -> Option<String> {
