@@ -142,6 +142,7 @@
   function confirmDialog() {
     const devices = [...selected];
     const rows = picks().filter((b) => selected.has(b.value));
+    dlg.className = 'flash-dialog';
     dlg.replaceChildren();
     dlg.append(el('h3', '', `Erase ${devices.length} drive${devices.length > 1 ? 's' : ''}?`));
     dlg.append(el('p', '', `Everything on the drives below will be destroyed and replaced with ${imagePath().split('/').pop()}.`));
