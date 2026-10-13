@@ -372,12 +372,14 @@ publish-dry: check-all
     cargo publish --dry-run -p flashkraft
     @echo "Dry-run: flashkraft-tui"
     cargo publish --dry-run -p flashkraft-tui
+    @echo "Dry-run: flashkraft-web"
+    cargo publish --dry-run -p flashkraft-web
 
 # Publish all three in dependency order: core → gui → tui.
 
 # core must hit the crates.io index before gui and tui can resolve it.
-publish: check-all publish-core publish-gui publish-tui
-    @echo "✅ flashkraft-core, flashkraft, and flashkraft-tui published to crates.io!"
+publish: check-all publish-core publish-gui publish-tui publish-web
+    @echo "✅ flashkraft-core, flashkraft, flashkraft-tui, and flashkraft-web published to crates.io!"
 
 # Publish flashkraft-core (required by gui and tui)
 publish-core:
@@ -395,6 +397,11 @@ publish-gui:
 publish-tui:
     @echo "📦 Publishing flashkraft-tui…"
     cargo publish -p flashkraft-tui
+
+# Publish flashkraft-web (Topcoat dashboard; needs Rust 1.98+)
+publish-web:
+    @echo "📦 Publishing flashkraft-web…"
+    cargo publish -p flashkraft-web
 
 # Show what would be released without making any changes
 release-preview: _check-git-cliff

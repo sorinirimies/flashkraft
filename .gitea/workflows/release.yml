@@ -363,3 +363,20 @@ jobs:
             }
           fi
           echo "✅ Publish step complete."
+
+      - name: Publish flashkraft-web
+        if: env.HAS_TOKEN == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          if cargo info flashkraft-web@${VERSION} 2>/dev/null | grep -q "^flashkraft-web"; then
+            echo "⏭️  flashkraft-web@${VERSION} already on crates.io — skipping."
+          else
+            echo "📦 Publishing flashkraft-web (needs Rust 1.98+)…"
+            output=$(cargo publish -p flashkraft-web --allow-dirty 2>&1) && echo "$output" || {
+              echo "$output"
+              echo "$output" | grep -q "already exists" && echo "⏭️  Already published — skipping." || exit 1
+            }
+          fi
+          echo "✅ Publish step complete."
