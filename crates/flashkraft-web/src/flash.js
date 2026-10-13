@@ -179,4 +179,14 @@
   }).observe(document.body, { childList: true, subtree: true });
   syncBoxes();
   poll();
+
+  // Static mode (no Topcoat bundle): refresh the drive list, but never while
+  // the user is mid-selection or a flash is being confirmed/running.
+  if (meta('flashkraft-static') === 'on') {
+    setInterval(() => {
+      const typing = document.activeElement instanceof HTMLInputElement
+        && document.activeElement.type === 'text';
+      if (!selected.size && !dlg.open && !lastStatus?.running && !typing) location.reload();
+    }, 10000);
+  }
 })();

@@ -31,8 +31,10 @@ pub async fn document(
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 if !interactive {
-                    // Static fallback: no runtime, so reload every 10 s.
-                    <meta http-equiv="refresh" content="10">
+                    // Static fallback: no runtime. flash.js reloads every 10 s
+                    // but only while nothing is ticked and no dialog is open —
+                    // a blind <meta refresh> would wipe the selection.
+                    <meta name="flashkraft-static" content="on">
                 }
                 <meta name="flashkraft-token" content=(crate::flash::config().token.clone())>
                 <meta name="flashkraft-flash" content=(if crate::flash::config().enabled { "on" } else { "off" })>
