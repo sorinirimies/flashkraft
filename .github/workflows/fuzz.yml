@@ -5,10 +5,15 @@ on:
     - cron: "0 4 * * *"
   push:
     branches: [main]
+    tags: ["v*"]
     paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock"]
   pull_request:
     paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock"]
   workflow_dispatch:
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,7 +40,8 @@ jobs:
       - name: Fuzz each target for 60s (core, web guards, TUI keys, GUI reducer)
         run: |
           for t in $(cargo +nightly fuzz list); do
-            cargo +nightly fuzz run "$t" -- -max_total_time=60
+            mkdir -p "$RUNNER_TEMP/corpus/$t"
+            cargo +nightly fuzz run "$t" "$RUNNER_TEMP/corpus/$t" -- -max_total_time=60
           done
       - name: Upload crashes
         if: failure()
