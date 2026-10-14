@@ -713,6 +713,10 @@ migrate-gitea: _check-nu
 audit:
     cargo audit
 
+# Security: licenses, bans, advisories, sources (needs `cargo install cargo-deny`)
+deny:
+    cargo deny check
+
 # Fuzz one target (needs nightly + cargo-fuzz): just fuzz settings_parse
 fuzz target="settings_parse" secs="60":
     cargo +nightly fuzz run {{ target }} -- -max_total_time={{ secs }}
