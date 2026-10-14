@@ -6,23 +6,22 @@ use std::sync::OnceLock;
 
 static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
+// Only keys that cannot mutate the filesystem. The file explorer binds
+// delete/cut/paste/rename/confirm to letters, Delete and modifier combos, and as
+// root in CI it can walk up out of the sandbox HOME and remove the corpus dir
+// ("No such file or directory: /tmp/corpus/tui_keys"). So: no letters except
+// harmless ones, no Delete, no Ctrl/Alt.
+const SAFE: [KeyCode; 16] = [
+    KeyCode::Enter, KeyCode::Esc, KeyCode::Backspace, KeyCode::Tab,
+    KeyCode::Up, KeyCode::Down, KeyCode::Left, KeyCode::Right,
+    KeyCode::Home, KeyCode::End, KeyCode::PageUp, KeyCode::PageDown,
+    KeyCode::Char(' '), KeyCode::Char('/'), KeyCode::Char('m'), KeyCode::Char('f'),
+];
+
 fn key(b: [u8; 2]) -> KeyEvent {
-    let code = match b[0] % 24 {
-        0 => KeyCode::Enter, 1 => KeyCode::Esc, 2 => KeyCode::Backspace, 3 => KeyCode::Tab,
-        4 => KeyCode::Up, 5 => KeyCode::Down, 6 => KeyCode::Left, 7 => KeyCode::Right,
-        8 => KeyCode::Home, 9 => KeyCode::End, 10 => KeyCode::PageUp, 11 => KeyCode::PageDown,
-        12 => KeyCode::Delete, 13 => KeyCode::Char(' '), 14 => KeyCode::Char('/'),
-        15 => KeyCode::Char('m'), 16 => KeyCode::Char('r'), 17 => KeyCode::Char('f'),
-        18 => KeyCode::Char('n'), 19 => KeyCode::Char('y'),
-        _ => KeyCode::Char((b'a' + (b[0] % 26)) as char),
-    };
-    // Never emit keys that mutate the filesystem (delete/cut/paste/confirm): the
-    // explorer can navigate up out of the sandbox HOME and delete the corpus dir.
-    let code = match code {
-        KeyCode::Char('y' | 'Y' | 'd' | 'x' | 'p') => KeyCode::Char('k'),
-        c => c,
-    };
-    let mods = KeyModifiers::from_bits_truncate(b[1] & 0b111);
+    let code = SAFE[(b[0] as usize) % SAFE.len()];
+    // Shift only; Ctrl/Alt carry the destructive explorer bindings.
+    let mods = if b[1] & 1 == 1 { KeyModifiers::SHIFT } else { KeyModifiers::NONE };
     KeyEvent::new(code, mods)
 }
 
