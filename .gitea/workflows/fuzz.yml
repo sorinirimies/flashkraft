@@ -34,14 +34,14 @@ jobs:
       - name: Install Rust nightly
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz each target for 60s (core, web guards, TUI keys, GUI reducer)
         run: |
-          for t in $(cargo +nightly fuzz list); do
+          cargo +nightly fuzz list | while read -r t; do
             mkdir -p "$RUNNER_TEMP/corpus/$t"
-            cargo +nightly fuzz run "$t" "$RUNNER_TEMP/corpus/$t" -- -max_total_time=60
+            cargo +nightly fuzz run "$t" "$RUNNER_TEMP/corpus/$t" -- -max_total_time=60 < /dev/null
           done
       - name: Upload crashes
         if: failure()
