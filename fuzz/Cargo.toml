@@ -68,3 +68,9 @@ name = "gui_update"
 path = "fuzz_targets/gui_update.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "web_browse"
+path = "fuzz_targets/web_browse.rs"
+test = false
+doc = false
