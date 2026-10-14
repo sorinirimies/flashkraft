@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2.2.2 - 2026-10-14
+### ✨ Features
+- feat(gui,tui,web): responsive layouts across all front-ends
+### 🔄 CI
+- ci(fuzz): run on release tags, cancel superseded runs, keep a per-target corpus
+- ci(fuzz): shellcheck-clean loop, don't let fuzzers read the target list
+### 🧪 Testing
+- test(web): end-to-end guard test for browse/flash endpoints; web_browse fuzz target
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.1...v2.2.2
 ## 2.2.1 - 2026-10-13
 ### ✨ Features
 - feat(web): server-side file browser to choose the image (Choose image…)
@@ -11,6 +20,8 @@ All notable changes to this project will be documented in this file.
 - fix(web): reset dialog style after browsing
 ### 📦 Other Changes
 - Revert "fix(web): static mode no longer reloads away the drive selection"
+### 🔧 Chores
+- chore: bump version to 2.2.1
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.0...v2.2.1
 ## 2.2.0 - 2026-10-13
 ### 📚 Documentation
