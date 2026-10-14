@@ -114,7 +114,7 @@ pub fn view_error<'a>(state: &'a FlashKraft, error: &'a str) -> Element<'a, Mess
                     ..Default::default()
                 }
             })
-            .width(Length::Fixed(480.0));
+            .max_width(480);
 
         body = body.push(Space::new().height(16));
         body = body.push(container(card).width(Length::Fill).center_x(Length::Fill));
@@ -135,11 +135,9 @@ pub fn view_error<'a>(state: &'a FlashKraft, error: &'a str) -> Element<'a, Mess
         .align_y(Alignment::Center),
     );
 
-    let error_content = container(body.padding(40))
+    let error_content = iced::widget::scrollable(body.padding(40).width(Length::Fill))
         .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill);
+        .height(Length::Fill);
 
     super::status_page(state, error_content.into())
 }

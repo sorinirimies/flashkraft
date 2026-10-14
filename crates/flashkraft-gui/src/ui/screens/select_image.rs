@@ -20,16 +20,25 @@ pub fn view_buttons<'a>(
     selected_target: &'a Option<DriveInfo>,
     marked: &'a [DriveInfo],
     is_ready_to_flash: bool,
+    m: crate::ui::layout::Metrics,
 ) -> Element<'a, Message> {
-    let image_button = view_image_section(selected_image);
-    let target_button = view_target_section(selected_target, marked);
-    let flash_button = view_flash_section(is_ready_to_flash);
+    let image_button = view_image_section(selected_image, m.card_w);
+    let target_button = view_target_section(selected_target, marked, m.card_w);
+    let flash_button = view_flash_section(is_ready_to_flash, m.card_w);
 
-    let buttons_row = row![image_button, target_button, flash_button]
-        .spacing(40)
-        .align_y(Alignment::Start);
+    let buttons: Element<'a, Message> = if m.stacked {
+        column![image_button, target_button, flash_button]
+            .spacing(m.gap)
+            .align_x(Alignment::Center)
+            .into()
+    } else {
+        row![image_button, target_button, flash_button]
+            .spacing(m.gap)
+            .align_y(Alignment::Start)
+            .into()
+    };
 
-    let mut content = column![buttons_row].spacing(20).align_x(Alignment::Center);
+    let mut content = column![buttons].spacing(20).align_x(Alignment::Center);
 
     // Show cancel button if something is selected
     if selected_image.is_some() || selected_target.is_some() {
@@ -50,7 +59,7 @@ pub fn view_buttons<'a>(
 }
 
 /// Image selection panel
-fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
+fn view_image_section(image: &Option<ImageInfo>, card_w: f32) -> Element<'_, Message> {
     let active = image.is_some();
     let content = if let Some(img) = image {
         column![
@@ -68,7 +77,7 @@ fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
 
     button(
         container(content.spacing(10).align_x(Alignment::Center))
-            .width(220)
+            .width(card_w)
             .height(90)
             .center_x(Length::Fill)
             .center_y(Length::Fill),
@@ -83,6 +92,7 @@ fn view_image_section(image: &Option<ImageInfo>) -> Element<'_, Message> {
 fn view_target_section<'a>(
     selected: &'a Option<DriveInfo>,
     marked: &'a [DriveInfo],
+    card_w: f32,
 ) -> Element<'a, Message> {
     let active = selected.is_some() || !marked.is_empty();
     let total: f64 = marked.iter().map(|d| d.size_gb).sum();
@@ -110,7 +120,7 @@ fn view_target_section<'a>(
 
     button(
         container(content.spacing(10).align_x(Alignment::Center))
-            .width(220)
+            .width(card_w)
             .height(90)
             .center_x(Length::Fill)
             .center_y(Length::Fill),
@@ -122,7 +132,7 @@ fn view_target_section<'a>(
 }
 
 /// Flash button panel
-fn view_flash_section(is_ready: bool) -> Element<'static, Message> {
+fn view_flash_section(is_ready: bool, card_w: f32) -> Element<'static, Message> {
     let content = column![
         icons::icon(bootstrap::lightning_fill(), 50.0),
         text("Flash!").size(16),
@@ -136,7 +146,7 @@ fn view_flash_section(is_ready: bool) -> Element<'static, Message> {
 
     let btn = button(
         container(content.spacing(10).align_x(Alignment::Center))
-            .width(220)
+            .width(card_w)
             .height(90)
             .center_x(Length::Fill)
             .center_y(Length::Fill),

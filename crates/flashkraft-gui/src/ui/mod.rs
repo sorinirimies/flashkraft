@@ -13,6 +13,7 @@
 //! | [`theme`] | Theme helpers and constants |
 
 pub mod components;
+pub mod layout;
 pub mod screens;
 pub mod theme;
 
@@ -74,6 +75,14 @@ pub fn view(state: &FlashKraft) -> Element<'_, Message> {
 
 /// Main application view (normal state)
 fn view_main(state: &FlashKraft) -> Element<'_, Message> {
+    iced::widget::responsive(move |size| {
+        view_main_sized(state, layout::Metrics::for_width(size.width))
+    })
+    .into()
+}
+
+/// Main view laid out for the given [`layout::Metrics`].
+fn view_main_sized(state: &FlashKraft, m: layout::Metrics) -> Element<'_, Message> {
     // If device selection is open, show it as an overlay
     if state.device_selection_open {
         return screens::select_drive::view_device_selector(
@@ -84,20 +93,25 @@ fn view_main(state: &FlashKraft) -> Element<'_, Message> {
         );
     }
 
-    let header = components::header::view_header(state);
-    let step_indicators = components::step_indicators::view_step_indicators(state);
+    let header = components::header::view_header(state, m);
+    let step_indicators = components::step_indicators::view_step_indicators(state, m);
     let buttons = screens::select_image::view_buttons(
         &state.selected_image,
         &state.selected_target,
         &state.marked_targets,
         state.is_ready_to_flash(),
+        m,
     );
 
-    column![header, step_indicators, buttons]
-        .spacing(30)
-        .padding(20)
-        .width(Length::Fill)
-        .into()
+    // Scrollable so short windows never clip content.
+    iced::widget::scrollable(
+        column![header, step_indicators, buttons]
+            .spacing(if m.stacked { 16 } else { 30 })
+            .padding(m.padding)
+            .width(Length::Fill),
+    )
+    .height(Length::Fill)
+    .into()
 }
 
 // ============================================================================
@@ -113,5 +127,17 @@ mod tests {
         let state = FlashKraft::new();
         let _view = view(&state);
         // If this compiles and runs, the view renders successfully
+    }
+
+    #[test]
+    fn view_builds_for_every_screen() {
+        // Building the element tree must not panic in any state.
+        let mut state = FlashKraft::new();
+        let _ = view(&state);
+        state.device_selection_open = true;
+        let _ = view(&state);
+        state.device_selection_open = false;
+        state.error_message = Some("boom".into());
+        let _ = view(&state);
     }
 }

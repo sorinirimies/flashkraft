@@ -93,6 +93,7 @@ macro_rules! themed_checkbox {
 // ── Module declarations (AFTER macros so children can use them) ───────────────
 
 mod components;
+pub mod responsive;
 mod screens;
 pub mod theme;
 
@@ -125,6 +126,11 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let theme_name = app.current_theme_name().to_string();
     frame.render_widget(Block::default().style(Style::default().bg(pal.bg)), area);
 
+    if responsive::too_small(area) {
+        render_too_small(frame, area, &pal);
+        return;
+    }
+
     match app.screen {
         AppScreen::SelectImage => render_select_image(app, frame, area, &pal, &theme_name),
         AppScreen::BrowseImage => render_browse_image(app, frame, area, &pal, &theme_name),
@@ -145,6 +151,27 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     if let Some(banner) = &app.update_banner {
         render_update_banner(banner, frame, area, &pal);
     }
+}
+
+/// Fallback shown when the terminal is smaller than the minimum usable size.
+fn render_too_small(frame: &mut Frame, area: Rect, pal: &TuiPalette) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let msg = format!(
+        "Terminal too small ({}x{}). Need {}x{}.",
+        area.width,
+        area.height,
+        responsive::MIN_WIDTH,
+        responsive::MIN_HEIGHT
+    );
+    frame.render_widget(
+        Paragraph::new(msg)
+            .wrap(Wrap { trim: true })
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(pal.warn).bg(pal.bg)),
+        area,
+    );
 }
 
 /// Render the dismissible "a new version is available" banner as a single
@@ -185,4 +212,101 @@ fn render_update_banner(
         ),
         banner_area,
     );
+}
+
+#[cfg(test)]
+mod responsive_tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    const SCREENS: [AppScreen; 8] = [
+        AppScreen::SelectImage,
+        AppScreen::BrowseImage,
+        AppScreen::SelectDrive,
+        AppScreen::DriveInfo,
+        AppScreen::ConfirmFlash,
+        AppScreen::Flashing,
+        AppScreen::Complete,
+        AppScreen::Error,
+    ];
+
+    const SIZES: [(u16, u16); 16] = [
+        (0, 0),
+        (1, 1),
+        (10, 3),
+        (29, 9),
+        (30, 10),
+        (30, 10),
+        (40, 12),
+        (60, 20),
+        (69, 24),
+        (79, 24),
+        (80, 24),
+        (99, 30),
+        (100, 30),
+        (140, 40),
+        (250, 70),
+        (300, 5),
+    ];
+
+    fn draw(app: &mut App, w: u16, h: u16) -> String {
+        let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();
+        term.draw(|f| render(app, f)).unwrap();
+        let buf = term.backend().buffer().clone();
+        (0..h)
+            .map(|y| {
+                (0..w)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn every_screen_renders_at_every_size_without_panic() {
+        for screen in SCREENS {
+            for (w, h) in SIZES {
+                for panel in [false, true] {
+                    let mut app = App::new();
+                    app.screen = screen.clone();
+                    app.show_app_theme_panel = panel;
+                    let _ = draw(&mut app, w, h);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tiny_terminal_shows_too_small_message() {
+        let mut app = App::new();
+        let out = draw(&mut app, 29, 9);
+        assert!(out.contains("too small"), "{out}");
+    }
+
+    #[test]
+    fn usable_terminal_does_not_show_too_small_message() {
+        let mut app = App::new();
+        let out = draw(&mut app, 30, 10);
+        assert!(!out.contains("too small"), "{out}");
+    }
+
+    #[test]
+    fn footer_hints_are_dropped_not_cut_mid_word() {
+        let mut app = App::new();
+        app.screen = AppScreen::SelectDrive;
+        let wide = draw(&mut app, 140, 30);
+        assert!(wide.contains("Refresh"));
+        let narrow = draw(&mut app, 40, 30);
+        assert!(!narrow.contains("Refres "), "{narrow}");
+    }
+
+    #[test]
+    fn resizing_between_frames_is_safe() {
+        let mut app = App::new();
+        app.screen = AppScreen::SelectDrive;
+        for (w, h) in SIZES.iter().chain(SIZES.iter().rev()) {
+            let _ = draw(&mut app, *w, *h);
+        }
+    }
 }

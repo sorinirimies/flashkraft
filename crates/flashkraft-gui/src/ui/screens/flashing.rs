@@ -175,7 +175,12 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
                 .padding(10),
         );
 
-    super::status_page(state, progress_content.into())
+    super::status_page(
+        state,
+        iced::widget::scrollable(progress_content.width(iced::Length::Fill))
+            .width(iced::Length::Fill)
+            .into(),
+    )
 }
 
 /// Multi-device flash: a card per drive with its own bar.

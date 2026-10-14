@@ -119,7 +119,18 @@ a { color:var(--accent); }
 html { -webkit-text-size-adjust:100%; }
 .table-wrap { overflow-x:auto; border-radius:10px; }
 .table-wrap table { min-width:100%; }
-@media (prefers-reduced-motion: reduce) { .bar > span { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .bar > span, .flash-fill { transition:none; } }
+img, svg, canvas { max-width:100%; height:auto; }
+.tabs { flex-wrap:wrap; }
+.flash-row, .browse-list li { flex-wrap:wrap; }
+.browse-list li span { min-width:0; overflow-wrap:anywhere; }
+code, .mono { overflow-wrap:anywhere; }
+/* touch devices: comfortable tap targets */
+@media (pointer:coarse) {
+  button, select, input:not([type=checkbox]) { min-height:44px; }
+  .pick { width:24px; height:24px; }
+  .tabs .tab { padding:10px 16px; }
+}
 
 /* medium: below 980 px — secondary columns drop out */
 @media (max-width:979px) {
@@ -142,6 +153,19 @@ html { -webkit-text-size-adjust:100%; }
   .steps .arrow { display:none; }
   th, td { padding:8px 9px; }
   footer { word-break:break-word; }
+  .bar { width:80px; }
+  table.kv th { white-space:normal; }
+  .flash-go, .flash-bar button { flex:1 1 100%; }
+  .flash-actions { flex-direction:column-reverse; }
+  .flash-actions button { width:100%; }
+  .flash-head .flash-actions { margin-left:0; width:100%; }
+  dialog.flash-dialog { padding:16px; width:calc(100% - 16px); }
+  .browse-list { max-height:40vh; }
+}
+/* very small phones */
+@media (max-width:379px) {
+  .cards { grid-template-columns:1fr; }
+  h1 { font-size:18px; }
 }
 "#;
 
@@ -174,6 +198,39 @@ mod tests {
         let before = CSS.split("/* medium").next().unwrap();
         assert!(!before.contains(".opt1 { display:none"));
         assert!(!before.contains(".opt2 { display:none"));
+    }
+
+    #[test]
+    fn narrow_stacks_actions_and_dialogs_for_phones() {
+        let narrow = CSS.split("@media (max-width:699px)").nth(1).unwrap();
+        for needle in [
+            ".flash-actions { flex-direction:column-reverse; }",
+            "dialog.flash-dialog { padding:16px;",
+            ".bar { width:80px; }",
+        ] {
+            assert!(narrow.contains(needle), "{needle}");
+        }
+        assert!(CSS.contains("@media (max-width:379px)"));
+    }
+
+    #[test]
+    fn touch_devices_get_large_tap_targets() {
+        let touch = CSS.split("@media (pointer:coarse)").nth(1).unwrap();
+        assert!(touch.contains("min-height:44px"));
+    }
+
+    #[test]
+    fn long_content_wraps_instead_of_overflowing() {
+        assert!(CSS.contains(".tabs { flex-wrap:wrap; }"));
+        assert!(CSS.contains("overflow-wrap:anywhere"));
+        assert!(CSS.contains(".table-wrap { overflow-x:auto;"));
+    }
+
+    #[test]
+    fn braces_are_balanced() {
+        let open = CSS.matches('{').count();
+        let close = CSS.matches('}').count();
+        assert_eq!(open, close);
     }
 
     #[test]

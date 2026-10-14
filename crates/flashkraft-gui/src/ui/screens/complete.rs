@@ -33,5 +33,10 @@ pub fn view_complete(state: &FlashKraft) -> Element<'_, Message> {
     .align_x(Alignment::Center)
     .padding(40);
 
-    super::status_page(state, complete_content.into())
+    super::status_page(
+        state,
+        iced::widget::scrollable(complete_content.width(iced::Length::Fill))
+            .width(iced::Length::Fill)
+            .into(),
+    )
 }

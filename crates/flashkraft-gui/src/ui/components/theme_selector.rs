@@ -17,13 +17,13 @@ use iced::{Alignment, Element, Length, Theme};
 /// # Returns
 ///
 /// An Element containing the theme picker
-pub fn theme_selector(current_theme: &Theme) -> Element<'static, Message> {
+pub fn theme_selector(current_theme: &Theme, compact: bool) -> Element<'static, Message> {
     let themes = all_themes();
 
     pick_list(themes, Some(current_theme.clone()), Message::ThemeChanged)
         .placeholder("Select theme")
         .text_size(14.0)
-        .width(Length::Fixed(200.0))
+        .width(Length::Fixed(if compact { 140.0 } else { 200.0 }))
         .into()
 }
 
@@ -42,7 +42,7 @@ pub fn theme_selector_right(current_theme: &Theme) -> Element<'static, Message> 
     container(
         row![
             Space::new().width(Length::Fill),
-            theme_selector(current_theme),
+            theme_selector(current_theme, false),
         ]
         .align_y(Alignment::Start),
     )

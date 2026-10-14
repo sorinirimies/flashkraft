@@ -28,6 +28,8 @@ pub(in crate::ui) fn render_flashing(
     }
 
     let is_verifying = app.verify_progress.is_some();
+    // Short bodies get a slimmer slider so progress stays visible.
+    let slider_h: u16 = if body.height < 16 { 3 } else { 5 };
 
     // Layout grows the Statistics/Log row (`Min`) to absorb any extra
     // vertical space when the terminal is resized taller, instead of that
@@ -36,10 +38,10 @@ pub(in crate::ui) fn render_flashing(
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1), // stage label
-                Constraint::Length(5), // overall progress slider
-                Constraint::Length(7), // verify panel (two sub-bars)
-                Constraint::Min(8),    // stats + log (grows with the window)
+                Constraint::Length(1),        // stage label
+                Constraint::Length(slider_h), // overall progress slider
+                Constraint::Length(7),        // verify panel (two sub-bars)
+                Constraint::Min(4),           // stats + log (grows with the window)
             ])
             .split(body)
     } else {
@@ -47,10 +49,10 @@ pub(in crate::ui) fn render_flashing(
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1), // stage label
-                Constraint::Length(5), // overall progress slider
-                Constraint::Length(0), // (hidden verify panel)
-                Constraint::Min(8),    // stats + log (grows with the window)
+                Constraint::Length(1),        // stage label
+                Constraint::Length(slider_h), // overall progress slider
+                Constraint::Length(0),        // (hidden verify panel)
+                Constraint::Min(4),           // stats + log (grows with the window)
             ])
             .split(body)
     };
@@ -178,10 +180,7 @@ pub(in crate::ui) fn render_flashing(
     }
 
     // ── Stats + log ───────────────────────────────────────────────────────────
-    let stats_log_cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
-        .split(rows[3]);
+    let stats_log_cols = crate::ui::responsive::split_two(rows[3], 38, 62);
 
     let fmt_bytes = |b: u64| -> String {
         if b >= 1_000_000_000 {

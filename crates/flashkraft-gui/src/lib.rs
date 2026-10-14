@@ -82,8 +82,12 @@ pub fn run_gui() -> iced::Result {
         ..Default::default()
     })
     .window(iced::window::Settings {
-        size: iced::Size::new(1300.0, 700.0),
-        resizable: false,
+        size: iced::Size::new(ui::layout::DEFAULT_WINDOW.0, ui::layout::DEFAULT_WINDOW.1),
+        min_size: Some(iced::Size::new(
+            ui::layout::MIN_WINDOW.0,
+            ui::layout::MIN_WINDOW.1,
+        )),
+        resizable: true,
         decorations: true,
         ..Default::default()
     })

@@ -81,10 +81,7 @@ pub(in crate::ui) fn render_complete(
     }
 
     // ── Main split: USB tree (left) + piechart (right) ────────────────────────
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
-        .split(rows[1]);
+    let cols = crate::ui::responsive::split_two(rows[1], 55, 45);
 
     render_usb_contents(app, frame, cols[0], pal);
     render_contents_piechart(app, frame, cols[1], pal);

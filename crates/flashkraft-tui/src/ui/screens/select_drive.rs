@@ -26,10 +26,7 @@ pub(in crate::ui) fn render_select_drive(
         pal,
     );
 
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-        .split(body);
+    let cols = crate::ui::responsive::split_two(body, 60, 40);
 
     // ── Drive list — each entry rendered as a tui-checkbox ───────────────────
     let drives = &app.available_drives;
@@ -216,10 +213,7 @@ pub(in crate::ui) fn render_drive_info(
         pal,
     );
 
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(body);
+    let cols = crate::ui::responsive::split_two(body, 50, 50);
 
     // ── Left: tui-piechart — image vs free space ──────────────────────────────
     let drive_bytes = app.drive_size_bytes();
