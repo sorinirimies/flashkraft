@@ -498,22 +498,32 @@ push-gitea-nexus-lab:
 # Push the current branch to all remotes (continues on failure)
 push-all:
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     fail=0
-    git push origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
-    git push gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
+    git_try origin git push origin main            || { echo "⚠️  origin failed";            fail=1; }
+    git_try gitea-microlab git push gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
+    git_try gitea-starscream git push gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git_try gitea-nexus-lab git push gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Pushed to GitHub, Gitea, Gitea Starscream, and Gitea (nexus-lab)!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
 # Force-push the current branch to all remotes (continues on failure)
 push-all-force:
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     fail=0
-    git push --force origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --force gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push --force gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
-    git push --force gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
+    git_try origin git push --force origin main            || { echo "⚠️  origin failed";            fail=1; }
+    git_try gitea-microlab git push --force gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
+    git_try gitea-starscream git push --force gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git_try gitea-nexus-lab git push --force gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Force-pushed to GitHub, Gitea, Gitea Starscream, and Gitea (nexus-lab)!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -536,11 +546,16 @@ pull-gitea-nexus-lab:
 # Pull the current branch from all remotes (continues on failure)
 pull-all:
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     fail=0
-    git pull origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git pull gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git pull gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
-    git pull gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
+    git_try origin git pull origin main            || { echo "⚠️  origin failed";            fail=1; }
+    git_try gitea-microlab git pull gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
+    git_try gitea-starscream git pull gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git_try gitea-nexus-lab git pull gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Pulled from GitHub, Gitea, Gitea Starscream, and Gitea (nexus-lab)!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -551,11 +566,16 @@ push-tags:
 # Push all tags to all remotes (continues on failure)
 push-tags-all:
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     fail=0
-    git push origin --tags            || { echo "⚠️  origin failed";            fail=1; }
-    git push gitea-microlab --tags             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push gitea-starscream --tags  || { echo "⚠️  gitea-starscream failed";  fail=1; }
-    git push gitea-nexus-lab --tags   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
+    git_try origin git push origin --tags            || { echo "⚠️  origin failed";            fail=1; }
+    git_try gitea-microlab git push gitea-microlab --tags             || { echo "⚠️  gitea-microlab failed";             fail=1; }
+    git_try gitea-starscream git push gitea-starscream --tags  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git_try gitea-nexus-lab git push gitea-nexus-lab --tags   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Tags pushed to all remotes!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -618,12 +638,17 @@ release-gitea-nexus-lab version: (bump version)
 # Bump, commit, tag, then push to all remotes (continues on failure).
 release-all version: (bump version)
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     echo "Pushing release v{{ version }} to all remotes…"
     fail=0
-    git push --follow-tags origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --follow-tags gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push --follow-tags gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
-    git push --follow-tags gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
+    git_try origin git push --follow-tags origin main            || { echo "⚠️  origin failed";            fail=1; }
+    git_try gitea-microlab git push --follow-tags gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
+    git_try gitea-starscream git push --follow-tags gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git_try gitea-nexus-lab git push --follow-tags gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Release v{{ version }} pushed to GitHub, Gitea, Gitea Starscream, and Gitea (nexus-lab)!"; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -635,11 +660,16 @@ release-all version: (bump version)
 # release workflow trigger reliably.
 push-release-all: check-all
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     fail=0
-    git push --follow-tags origin main            || { echo "⚠️  origin failed";            fail=1; }
-    git push --follow-tags gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
-    git push --follow-tags gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
-    git push --follow-tags gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
+    git_try origin git push --follow-tags origin main            || { echo "⚠️  origin failed";            fail=1; }
+    git_try gitea-microlab git push --follow-tags gitea-microlab main             || { echo "⚠️  gitea-microlab failed";             fail=1; }
+    git_try gitea-starscream git push --follow-tags gitea-starscream main  || { echo "⚠️  gitea-starscream failed";  fail=1; }
+    git_try gitea-nexus-lab git push --follow-tags gitea-nexus-lab main   || { echo "⚠️  gitea-nexus-lab failed";   fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ Latest commit + tags pushed to all remotes."; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
@@ -676,13 +706,18 @@ sync-gitea-nexus-lab:
 # Force-sync all Gitea instances with GitHub (continues on failure)
 sync-all:
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     fail=0
-    git push gitea-microlab main --force                  || { echo "⚠️  gitea-microlab main failed";              fail=1; }
-    git push gitea-microlab --tags --force                || { echo "⚠️  gitea-microlab tags failed";              fail=1; }
-    git push gitea-starscream main --force       || { echo "⚠️  gitea-starscream main failed";   fail=1; }
-    git push gitea-starscream --tags --force     || { echo "⚠️  gitea-starscream tags failed";   fail=1; }
-    git push gitea-nexus-lab main --force        || { echo "⚠️  gitea-nexus-lab main failed";    fail=1; }
-    git push gitea-nexus-lab --tags --force      || { echo "⚠️  gitea-nexus-lab tags failed";    fail=1; }
+    git_try gitea-microlab git push gitea-microlab main --force                  || { echo "⚠️  gitea-microlab main failed";              fail=1; }
+    git_try gitea-microlab git push gitea-microlab --tags --force                || { echo "⚠️  gitea-microlab tags failed";              fail=1; }
+    git_try gitea-starscream git push gitea-starscream main --force       || { echo "⚠️  gitea-starscream main failed";   fail=1; }
+    git_try gitea-starscream git push gitea-starscream --tags --force     || { echo "⚠️  gitea-starscream tags failed";   fail=1; }
+    git_try gitea-nexus-lab git push gitea-nexus-lab main --force        || { echo "⚠️  gitea-nexus-lab main failed";    fail=1; }
+    git_try gitea-nexus-lab git push gitea-nexus-lab --tags --force      || { echo "⚠️  gitea-nexus-lab tags failed";    fail=1; }
     if [ "$fail" -eq 0 ]; then echo "✅ All Gitea instances force-synced with GitHub."; \
     else echo "⚠️  Some remotes failed — check output above."; fi
 
