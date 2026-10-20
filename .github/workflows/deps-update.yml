@@ -12,15 +12,18 @@ env:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: deps-update
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   upgrade-deps:
     name: Upgrade Dependencies
     runs-on: ubuntu-latest
+    env:
+      HAS_PAT: ${{ secrets.GH_PAT != '' }}
 
     steps:
       - name: Checkout repository
@@ -83,6 +86,11 @@ jobs:
       # [workspace.dependencies] so pinned libs like `dirs = "5.0"` can advance
       # to "6.0", `nix = "0.29"` to "0.31", etc.
       # `cargo update` then resolves the new constraints into Cargo.lock.
+      # Snapshot dependency requirements as data: a patch release is cut ONLY when
+      # `cargo upgrade` really changed one (it also reformats manifests, which must not count).
+      - name: Snapshot dependency requirements (before)
+        run: cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-before.json"
+
       - name: Upgrade workspace dependency pins
         run: cargo upgrade --incompatible allow
 
@@ -114,6 +122,19 @@ jobs:
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check for dependency requirement changes
+        id: reqs
+        run: |
+          cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-after.json"
+          if cmp -s "$RUNNER_TEMP/reqs-before.json" "$RUNNER_TEMP/reqs-after.json"; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            # Lock-only: drop cosmetic manifest reformatting from cargo-edit.
+            git ls-files -m -- '*Cargo.toml' | xargs -r git checkout --
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml dependency requirements changed -> patch release."
           fi
 
       # ── Generate upgrade summary for the PR body ─────────────────────────────
@@ -202,16 +223,70 @@ jobs:
       # above, so merging is safe.  Try --auto first (honours branch protection
       # rules and waits for any required status checks triggered by the PR);
       # fall back to immediate merge if auto-merge is not enabled in the repo.
-      - name: Auto-merge Pull Request
+      - name: Merge Pull Request
+        id: merge
         if: steps.create-pr.outputs.pull-request-number
         run: |
           PR="${{ steps.create-pr.outputs.pull-request-number }}"
           echo "Merging PR #${PR}..."
-          gh pr merge "$PR" --auto --merge --delete-branch 2>/dev/null \
-            || gh pr merge "$PR" --merge --delete-branch
-          echo "✅ PR #${PR} merged."
+          gh pr merge "$PR" --merge --delete-branch 2>/dev/null \
+            || gh pr merge "$PR" --auto --merge --delete-branch
+          # Wait until the PR is really MERGED: a release must be cut from merged main.
+          for _ in $(seq 1 60); do
+            STATE=$(gh pr view "$PR" --json state -q .state)
+            if [ "$STATE" = "MERGED" ]; then
+              echo "merged=true" >> "$GITHUB_OUTPUT"
+              echo "✅ PR #${PR} merged."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "PR #${PR} not merged after 30 min - no release cut." >&2
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      # ── Patch release: ONLY when a Cargo.toml dependency requirement changed ─────
+      # A lockfile-only upgrade was merged above WITHOUT a version bump.
+      - name: Install nushell
+        if: steps.merge.outputs.merged == 'true' && steps.reqs.outputs.release == 'true'
+        uses: hustcer/setup-nu@v3
+        with:
+          version: "0.111.0"
+
+      - name: Install git-cliff
+        if: steps.merge.outputs.merged == 'true' && steps.reqs.outputs.release == 'true'
+        run: command -v git-cliff >/dev/null || cargo install git-cliff --locked
+
+      - name: Bump patch version, tag and push
+        id: release
+        if: steps.merge.outputs.merged == 'true' && steps.reqs.outputs.release == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          current=$(nu scripts/version.nu)
+          IFS='.' read -r major minor patch <<< "$current"
+          next="$major.$minor.$((patch + 1))"
+          while git rev-parse -q --verify "refs/tags/v$next" >/dev/null; do
+            patch=$((patch + 1))
+            next="$major.$minor.$((patch + 1))"
+          done
+          echo "Releasing $current -> $next"
+          nu scripts/bump_version.nu --yes --skip-checks "$next"
+          git push origin HEAD:main
+          git push origin "v$next"
+          echo "tag=v$next" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      # Pushes made with the default GITHUB_TOKEN do not trigger workflows: dispatch.
+      - name: Trigger Release workflow
+        if: steps.release.outputs.tag != '' && env.HAS_PAT != 'true'
+        run: gh workflow run release.yml -f tag="${{ steps.release.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Nothing to update
         if: steps.check.outputs.has_changes == 'false'

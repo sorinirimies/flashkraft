@@ -82,6 +82,11 @@ jobs:
       # [workspace.dependencies] so pinned libs like `dirs = "5.0"` can advance
       # to "6.0", `nix = "0.29"` to "0.31", etc.
       # `cargo update` then resolves the new constraints into Cargo.lock.
+      # Snapshot dependency requirements as data: a patch release is cut ONLY when
+      # `cargo upgrade` really changed one (it also reformats manifests, which must not count).
+      - name: Snapshot dependency requirements (before)
+        run: cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-before.json"
+
       - name: Upgrade workspace dependency pins
         run: cargo upgrade --incompatible allow
 
@@ -116,6 +121,17 @@ jobs:
           fi
 
       # ── Quality gate ─────────────────────────────────────────────────────────
+      - name: Check for dependency requirement changes
+        id: reqs
+        run: |
+          cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-after.json"
+          if cmp -s "$RUNNER_TEMP/reqs-before.json" "$RUNNER_TEMP/reqs-after.json"; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml dependency requirements changed -> patch release."
+          fi
+
       - name: Check formatting
         if: steps.check.outputs.has_changes == 'true'
         run: cargo fmt --all -- --check
@@ -150,7 +166,13 @@ jobs:
           git config user.name  "gitea-actions[bot]"
           git config user.email "gitea-actions[bot]@noreply.gitea"
 
-          git add Cargo.toml Cargo.lock
+          if [ "${{ steps.reqs.outputs.release }}" = "true" ]; then
+            git add Cargo.toml Cargo.lock
+          else
+            # Lock-only: no version bump; drop cosmetic manifest reformatting.
+            git ls-files -m -- '*Cargo.toml' | xargs -r git checkout --
+            git add Cargo.lock
+          fi
           git commit -m "chore(deps): nightly dependency upgrade $DATE"
           git push origin main
 
@@ -161,6 +183,53 @@ jobs:
       # never auto-tags or auto-triggers a release. Cutting a release stays a
       # deliberate, separate step (`just release <version>` or manually
       # pushing a tag).
+
+      # ── Patch release: ONLY when a Cargo.toml dependency requirement changed ─────
+      # A lockfile-only update was already pushed above WITHOUT a version bump.
+      - name: Install nushell
+        if: steps.check.outputs.has_changes == 'true' && steps.reqs.outputs.release == 'true'
+        uses: hustcer/setup-nu@v3
+        with:
+          version: "0.111.0"
+
+      - name: Install git-cliff
+        if: steps.check.outputs.has_changes == 'true' && steps.reqs.outputs.release == 'true'
+        run: command -v git-cliff >/dev/null || cargo install git-cliff --locked
+
+      - name: Compute next patch version
+        if: steps.check.outputs.has_changes == 'true' && steps.reqs.outputs.release == 'true'
+        id: version
+        run: |
+          current=$(nu scripts/version.nu)
+          IFS='.' read -r major minor patch <<< "$current"
+          next="$major.$minor.$((patch + 1))"
+          while git rev-parse -q --verify "refs/tags/v$next" >/dev/null; do
+            patch=$((patch + 1))
+            next="$major.$minor.$((patch + 1))"
+          done
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "Releasing $current -> $next"
+
+      - name: Bump version, changelog, commit and tag
+        if: steps.check.outputs.has_changes == 'true' && steps.reqs.outputs.release == 'true'
+        run: nu scripts/bump_version.nu --yes --skip-checks ${{ steps.version.outputs.next }}
+
+      - name: Push release commit and tag
+        if: steps.check.outputs.has_changes == 'true' && steps.reqs.outputs.release == 'true'
+        run: |
+          git push origin HEAD:main
+          git push origin "v${{ steps.version.outputs.next }}"
+
+      - name: Trigger release workflow for the new tag
+        if: steps.check.outputs.has_changes == 'true' && steps.reqs.outputs.release == 'true'
+        run: |
+          TAG="v${{ steps.version.outputs.next }}"
+          curl -sf -X POST \
+            "${{ github.server_url }}/api/v1/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches" \
+            -H "Authorization: token ${{ secrets.GITEA_TOKEN || github.token }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"ref\": \"main\", \"inputs\": {\"tag\": \"${TAG}\"}}" \
+            || echo "Dispatch failed - the tag push may already have started the release."
 
       - name: Nothing to update
         if: steps.check.outputs.has_changes == 'false'
