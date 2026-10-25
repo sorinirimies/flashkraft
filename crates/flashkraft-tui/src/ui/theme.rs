@@ -1,17 +1,13 @@
 //! TUI Application Colour Palette
 //!
-//! Derives [`TuiPalette`] from the platform-agnostic [`flashkraft_core::AppTheme`]
-//! presets, giving the TUI access to all 28 themes including Cyberpunk.
+//! Derives [`TuiPalette`] from `tui-nuances` themes (the shared theme source),
+//! keeping the catalogue order and names of `flashkraft_core::THEME_NAMES`.
 
-use flashkraft_core::{theme_by_index, AppTheme, THEME_COUNT, THEME_NAMES};
+use flashkraft_core::{THEME_COUNT, THEME_NAMES};
 use ratatui::style::Color;
+use tui_nuances::Theme;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/// Convert a core [`flashkraft_core::Rgb`] to a ratatui [`Color`].
-fn rgb(c: flashkraft_core::Rgb) -> Color {
-    Color::Rgb(c.r, c.g, c.b)
-}
 
 // ── Palette struct ────────────────────────────────────────────────────────────
 
@@ -74,25 +70,32 @@ pub fn all_app_themes() -> Vec<(String, TuiPalette)> {
 
 // ── Conversion ────────────────────────────────────────────────────────────────
 
-/// Convert a core [`AppTheme`] index into a [`TuiPalette`].
-pub fn palette_from_theme(index: usize) -> TuiPalette {
-    let t = theme_by_index(index);
-    palette_from_app_theme(&t)
+/// The `tui-nuances` theme matching core preset `index` (same name).
+fn nuances_theme(index: usize) -> Theme {
+    THEME_NAMES
+        .get(index)
+        .and_then(|n| Theme::by_name(n))
+        .unwrap_or_default()
 }
 
-/// Convert a core [`AppTheme`] into a [`TuiPalette`].
-pub fn palette_from_app_theme(t: &AppTheme) -> TuiPalette {
+/// Convert core preset `index` into a [`TuiPalette`] via `tui-nuances`.
+pub fn palette_from_theme(index: usize) -> TuiPalette {
+    palette_from_nuances(&nuances_theme(index))
+}
+
+/// Convert a [`tui_nuances::Theme`] into a [`TuiPalette`].
+pub fn palette_from_nuances(t: &Theme) -> TuiPalette {
     TuiPalette {
-        brand: rgb(t.accent),  // primary brand colour (bold, titles, active elements)
-        accent: rgb(t.border), // secondary accent (softer, borders, badges, hints)
-        success: rgb(t.success),
-        warn: rgb(t.warning),
-        err: rgb(t.error),
-        dim: rgb(t.text_muted),
-        fg: rgb(t.text_primary),
-        bg: rgb(t.background),
-        sel_bg: rgb(t.selection),
-        dir: rgb(t.text_secondary), // directory names — secondary colour
+        brand: t.accent,  // primary brand colour (bold, titles, active elements)
+        accent: t.border, // secondary accent (softer, borders, badges, hints)
+        success: t.success,
+        warn: t.warning,
+        err: t.error,
+        dim: t.muted,
+        fg: t.foreground,
+        bg: t.background.unwrap_or(Color::Reset),
+        sel_bg: t.selection_bg,
+        dir: t.secondary, // directory names — secondary colour
     }
 }
 
