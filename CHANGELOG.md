@@ -2,12 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2.2.3 - 2026-10-26
+### ✨ Features
+- feat(tui): derive app palettes from tui-nuances
+### 🐛 Bug Fixes
+- fix(fuzz): tui_keys only emits non-mutating keys so the explorer can't delete the corpus dir
+- fix(deps): bump rustls-webpki and webpki-roots for RUSTSEC-2026-0382/0381
+### 🔄 CI
+- ci: prebuilt Nushell, cargo-deny + cargo-audit security workflow
+- ci: nightly merges lockfile-only updates; bump + release only when a Cargo.toml requirement changes
+- ci: ignore unmaintained zbus/zvariant advisories in cargo-deny
+### 🔧 Chores
+- chore(deps): bump rustls to 0.23.46 (RUSTSEC-2026-0348/0349 and others)
+- chore(deps): cargo update
+- chore(fuzz): bump rustls in fuzz lockfile to 0.23.46 (fixes cargo audit)
+- chore(justfile): skip unconfigured remotes in *-all recipes
+- chore(justfile): push/pull current branch instead of hardcoded main
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.2...v2.2.3
 ## 2.2.2 - 2026-10-14
 ### ✨ Features
 - feat(gui,tui,web): responsive layouts across all front-ends
 ### 🔄 CI
 - ci(fuzz): run on release tags, cancel superseded runs, keep a per-target corpus
 - ci(fuzz): shellcheck-clean loop, don't let fuzzers read the target list
+### 🔧 Chores
+- chore: bump version to 2.2.2
 ### 🧪 Testing
 - test(web): end-to-end guard test for browse/flash endpoints; web_browse fuzz target
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.1...v2.2.2

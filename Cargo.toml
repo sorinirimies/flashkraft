@@ -10,7 +10,7 @@ resolver = "2"
 
 
 [workspace.package]
-version      = "2.2.2"
+version      = "2.2.3"
 edition      = "2021"
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
 license      = "MIT"
@@ -67,7 +67,7 @@ clap         = { version = "4", features = ["derive", "env"] }
 topcoat      = "0.10"
 
 # Internal crates
-flashkraft-core = { path = "crates/flashkraft-core", version = "2.2.2" }
+flashkraft-core = { path = "crates/flashkraft-core", version = "2.2.3" }
 
 [profile.dev]
 opt-level = 0
