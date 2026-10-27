@@ -71,7 +71,7 @@ pub fn all_app_themes() -> Vec<(String, TuiPalette)> {
 // ── Conversion ────────────────────────────────────────────────────────────────
 
 /// The `tui-nuances` theme matching core preset `index` (same name).
-fn nuances_theme(index: usize) -> Theme {
+pub(crate) fn nuances_theme(index: usize) -> Theme {
     THEME_NAMES
         .get(index)
         .and_then(|n| Theme::by_name(n))

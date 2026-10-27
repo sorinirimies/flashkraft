@@ -1,9 +1,8 @@
 //! Named [`AppTheme`] presets — single source of truth for every theme used
 //! by all FlashKraft frontends.
 //!
-//! The first 27 entries mirror the `tui_file_explorer::Theme::all_presets()`
-//! catalogue in the same order so that saved theme indices remain compatible.
-//! The 28th entry ("Cyberpunk") is an addition not present in the file-explorer library.
+//! Every entry has a same-named `tui-nuances` theme; saved theme indices stay
+//! stable.
 
 use super::types::{AppTheme, Rgb};
 

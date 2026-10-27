@@ -248,9 +248,13 @@ impl App {
             usb_contents: Vec::new(),
             contents_scroll: 0,
             file_explorer: FileExplorer::new(start_dir, vec!["iso".into(), "img".into()]),
-            explorer_themes: Theme::all_presets()
-                .into_iter()
-                .map(|(name, _, t)| (name.to_string(), t))
+            explorer_themes: (0..flashkraft_core::THEME_COUNT)
+                .map(|i| {
+                    (
+                        flashkraft_core::THEME_NAMES[i].to_string(),
+                        Theme::from(&crate::ui::theme::nuances_theme(i)),
+                    )
+                })
                 .collect(),
             app_themes: all_app_themes(),
             explorer_theme_idx,

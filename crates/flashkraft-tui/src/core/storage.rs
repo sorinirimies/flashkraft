@@ -32,7 +32,7 @@ use std::path::PathBuf;
 /// Persistent TUI user preferences.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TuiSettings {
-    /// Name of the active TUI theme (must match a `tui_file_explorer::Theme::all_presets()` entry).
+    /// Name of the active TUI theme (must match a `flashkraft_core::THEME_NAMES` entry).
     #[serde(default = "default_theme_name")]
     pub theme: String,
 
@@ -308,9 +308,8 @@ mod tests {
 
     #[test]
     fn roundtrip_all_preset_names() {
-        use tui_file_explorer::Theme;
         let (mut s, _tmp) = temp_storage();
-        for (name, _, _) in Theme::all_presets() {
+        for name in flashkraft_core::THEME_NAMES {
             s.save_theme(name);
             assert_eq!(
                 s.load_theme().as_deref(),
