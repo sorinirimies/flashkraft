@@ -58,7 +58,7 @@ tui-slider   = "0.3.4"
 tui-piechart = "1.0.2"
 tui-checkbox = "0.4.6"
 tui-spinner  = "0.4.19"
-tui-nuances  = "0.1.9"
+tui-nuances  = "0.1.10"
 
 # CLI (clap) — web binary
 clap         = { version = "4", features = ["derive", "env"] }
