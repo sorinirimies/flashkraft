@@ -4,7 +4,7 @@ pub(in crate::ui) fn render_confirm_flash(
     app: &mut App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
     theme_name: &str,
 ) {
     let [hdr, bc, body, ftr] = chrome_layout(area);
@@ -69,43 +69,47 @@ pub(in crate::ui) fn render_confirm_flash(
         Line::from(""),
         Line::from(vec![Span::styled(
             "  \u{26a0}   ALL DATA ON THE TARGET DRIVE WILL BE ERASED",
-            Style::default().fg(pal.warn).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(pal.warning)
+                .add_modifier(Modifier::BOLD),
         )]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Image:   ", Style::default().fg(pal.dim)),
+            Span::styled("  Image:   ", Style::default().fg(pal.muted)),
             Span::styled(
                 image_name,
-                Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(pal.foreground)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Size:    ", Style::default().fg(pal.dim)),
-            Span::styled(image_size, Style::default().fg(pal.dim)),
+            Span::styled("  Size:    ", Style::default().fg(pal.muted)),
+            Span::styled(image_size, Style::default().fg(pal.muted)),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Target:  ", Style::default().fg(pal.dim)),
+            Span::styled("  Target:  ", Style::default().fg(pal.muted)),
             Span::styled(
                 drive_desc,
-                Style::default().fg(pal.err).add_modifier(Modifier::BOLD),
+                Style::default().fg(pal.error).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Press ", Style::default().fg(pal.dim)),
+            Span::styled("  Press ", Style::default().fg(pal.muted)),
             Span::styled(
                 "[Y / Enter]",
                 Style::default()
                     .fg(pal.success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" to flash  or  ", Style::default().fg(pal.dim)),
+            Span::styled(" to flash  or  ", Style::default().fg(pal.muted)),
             Span::styled(
                 "[N / Esc]",
-                Style::default().fg(pal.err).add_modifier(Modifier::BOLD),
+                Style::default().fg(pal.error).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" to cancel.", Style::default().fg(pal.dim)),
+            Span::styled(" to cancel.", Style::default().fg(pal.muted)),
         ]),
     ];
 
@@ -114,12 +118,12 @@ pub(in crate::ui) fn render_confirm_flash(
             Block::default()
                 .title(Span::styled(
                     " \u{26a1}  Ready to Flash ",
-                    Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
+                    Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
                 ))
                 .title_alignment(Alignment::Center)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Double)
-                .border_style(Style::default().fg(pal.warn)),
+                .border_style(Style::default().fg(pal.warning)),
         )
         .wrap(Wrap { trim: false });
 
@@ -170,11 +174,11 @@ pub(in crate::ui) fn render_confirm_flash(
                 .unwrap_or("\u{2014}")
         ),
         drive_ready,
-        if drive_ready { pal.success } else { pal.err },
+        if drive_ready { pal.success } else { pal.error },
         pal
     );
 
-    let cb_warn = themed_checkbox!("Data loss understood", true, pal.warn, pal);
+    let cb_warn = themed_checkbox!("Data loss understood", true, pal.warning, pal);
 
     frame.render_widget(cb_image, indent(cb_rows[1]));
     frame.render_widget(cb_drive, indent(cb_rows[2]));

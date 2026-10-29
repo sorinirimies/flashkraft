@@ -26,7 +26,6 @@ use tui_piechart::{LegendLayout, LegendPosition, PieChart, PieSlice};
 use tui_slider::{Slider, SliderOrientation, SliderState};
 use tui_spinner::{BarSpinner, FluxFrames, FluxSpinner, Spin as SpinDir};
 
-use self::theme::TuiPalette;
 use crate::core::message::{AppScreen, FileOpMode, InputMode};
 use crate::core::state::App;
 use tui_file_explorer::render_themed;
@@ -51,19 +50,19 @@ macro_rules! themed_block {
 macro_rules! kv_line {
     ($label:expr, $value:expr, $pal:expr) => {
         Line::from(vec![
-            Span::styled($label, Style::default().fg($pal.dim)),
-            Span::styled($value, Style::default().fg($pal.fg)),
+            Span::styled($label, Style::default().fg($pal.muted)),
+            Span::styled($value, Style::default().fg($pal.foreground)),
         ])
     };
     ($label:expr, $value:expr, $pal:expr, $color:expr) => {
         Line::from(vec![
-            Span::styled($label, Style::default().fg($pal.dim)),
+            Span::styled($label, Style::default().fg($pal.muted)),
             Span::styled($value, Style::default().fg($color)),
         ])
     };
     ($label:expr, $value:expr, $pal:expr, bold $color:expr) => {
         Line::from(vec![
-            Span::styled($label, Style::default().fg($pal.dim)),
+            Span::styled($label, Style::default().fg($pal.muted)),
             Span::styled(
                 $value,
                 Style::default().fg($color).add_modifier(Modifier::BOLD),
@@ -77,14 +76,14 @@ macro_rules! themed_checkbox {
     ($label:expr, $checked:expr, $color:expr, $pal:expr) => {
         Checkbox::new($label, $checked)
             .checkbox_style(Style::default().fg($color).add_modifier(Modifier::BOLD))
-            .label_style(Style::default().fg($pal.dim))
+            .label_style(Style::default().fg($pal.muted))
             .checked_symbol("☑ ")
             .unchecked_symbol("☐ ")
     };
     ($label:expr, $checked:expr, $color:expr, $pal:expr, $check_sym:expr, $uncheck_sym:expr) => {
         Checkbox::new($label, $checked)
             .checkbox_style(Style::default().fg($color).add_modifier(Modifier::BOLD))
-            .label_style(Style::default().fg($pal.dim))
+            .label_style(Style::default().fg($pal.muted))
             .checked_symbol($check_sym)
             .unchecked_symbol($uncheck_sym)
     };
@@ -124,7 +123,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     let pal = app.palette().clone();
     let theme_name = app.current_theme_name().to_string();
-    frame.render_widget(Block::default().style(Style::default().bg(pal.bg)), area);
+    frame.render_widget(
+        Block::default().style(Style::default().bg(pal.background.unwrap_or_default())),
+        area,
+    );
 
     if responsive::too_small(area) {
         render_too_small(frame, area, &pal);
@@ -154,7 +156,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 }
 
 /// Fallback shown when the terminal is smaller than the minimum usable size.
-fn render_too_small(frame: &mut Frame, area: Rect, pal: &TuiPalette) {
+fn render_too_small(frame: &mut Frame, area: Rect, pal: &tui_nuances::Theme) {
     if area.width == 0 || area.height == 0 {
         return;
     }
@@ -169,7 +171,11 @@ fn render_too_small(frame: &mut Frame, area: Rect, pal: &TuiPalette) {
         Paragraph::new(msg)
             .wrap(Wrap { trim: true })
             .alignment(Alignment::Center)
-            .style(Style::default().fg(pal.warn).bg(pal.bg)),
+            .style(
+                Style::default()
+                    .fg(pal.warning)
+                    .bg(pal.background.unwrap_or_default()),
+            ),
         area,
     );
 }
@@ -183,7 +189,7 @@ fn render_update_banner(
     banner: &crate::core::state::UpdateBanner,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     if area.height == 0 {
         return;
@@ -206,8 +212,8 @@ fn render_update_banner(
     frame.render_widget(
         Paragraph::new(text).style(
             Style::default()
-                .fg(pal.bg)
-                .bg(pal.accent)
+                .fg(pal.background.unwrap_or_default())
+                .bg(pal.border)
                 .add_modifier(Modifier::BOLD),
         ),
         banner_area,

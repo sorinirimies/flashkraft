@@ -4,7 +4,7 @@ pub(in crate::ui) fn render_flashing(
     app: &mut App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
     theme_name: &str,
 ) {
     let [hdr, _bc, body, ftr] = chrome_layout(area);
@@ -61,10 +61,10 @@ pub(in crate::ui) fn render_flashing(
     let stage_label = app.flash_stage.trim().to_string();
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("Stage: ", Style::default().fg(pal.dim)),
+            Span::styled("Stage: ", Style::default().fg(pal.muted)),
             Span::styled(
                 stage_label,
-                Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
+                Style::default().fg(pal.border).add_modifier(Modifier::BOLD),
             ),
         ]))
         .alignment(Alignment::Center),
@@ -76,7 +76,7 @@ pub(in crate::ui) fn render_flashing(
 
     let slider_state = SliderState::new((pct * 100.0) as f64, 0.0, 100.0);
 
-    let slider_outer = themed_block!(" \u{26a1}  Flashing ", pal.brand, pal.accent)
+    let slider_outer = themed_block!(" \u{26a1}  Flashing ", pal.accent, pal.border)
         .title_alignment(Alignment::Center);
 
     let slider_inner = slider_outer.inner(rows[1]);
@@ -88,8 +88,8 @@ pub(in crate::ui) fn render_flashing(
         .show_handle(false)
         .filled_symbol("\u{2501}")
         .empty_symbol("\u{2500}")
-        .filled_color(pal.brand)
-        .empty_color(pal.dim);
+        .filled_color(pal.accent)
+        .empty_color(pal.muted);
 
     frame.render_widget(slider, slider_inner);
 
@@ -142,7 +142,7 @@ pub(in crate::ui) fn render_flashing(
         let img_state = SliderState::new(image_pct, 0.0, 100.0);
         let img_label = format!(" Image hash  {image_pct:.1}% ");
         let img_block = Block::default()
-            .title(Span::styled(img_label, Style::default().fg(pal.dim)))
+            .title(Span::styled(img_label, Style::default().fg(pal.muted)))
             .borders(Borders::NONE);
         let img_inner = img_block.inner(sub_rows[0]);
         frame.render_widget(img_block, sub_rows[0]);
@@ -154,7 +154,7 @@ pub(in crate::ui) fn render_flashing(
                 .filled_symbol("\u{2500}")
                 .empty_symbol("\u{2500}")
                 .filled_color(pal.success)
-                .empty_color(pal.dim),
+                .empty_color(pal.muted),
             img_inner,
         );
 
@@ -162,7 +162,7 @@ pub(in crate::ui) fn render_flashing(
         let dev_state = SliderState::new(device_pct, 0.0, 100.0);
         let dev_label = format!(" Device read  {device_pct:.1}% ");
         let dev_block = Block::default()
-            .title(Span::styled(dev_label, Style::default().fg(pal.dim)))
+            .title(Span::styled(dev_label, Style::default().fg(pal.muted)))
             .borders(Borders::NONE);
         let dev_inner = dev_block.inner(sub_rows[1]);
         frame.render_widget(dev_block, sub_rows[1]);
@@ -173,8 +173,8 @@ pub(in crate::ui) fn render_flashing(
                 .show_handle(false)
                 .filled_symbol("\u{2500}")
                 .empty_symbol("\u{2500}")
-                .filled_color(pal.accent)
-                .empty_color(pal.dim),
+                .filled_color(pal.border)
+                .empty_color(pal.muted),
             dev_inner,
         );
     }
@@ -200,14 +200,15 @@ pub(in crate::ui) fn render_flashing(
     };
 
     let stats_lines = vec![
-        kv_line!("Written:  ", fmt_bytes(app.flash_bytes), pal, bold pal.fg),
-        kv_line!("Total:    ", fmt_bytes(total), pal, pal.dim),
-        kv_line!("Speed:    ", speed_label, pal, bold pal.accent),
-        kv_line!("Progress: ", format!("{:.1}%", pct * 100.0), pal, bold pal.brand),
+        kv_line!("Written:  ", fmt_bytes(app.flash_bytes), pal, bold pal.foreground),
+        kv_line!("Total:    ", fmt_bytes(total), pal, pal.muted),
+        kv_line!("Speed:    ", speed_label, pal, bold pal.border),
+        kv_line!("Progress: ", format!("{:.1}%", pct * 100.0), pal, bold pal.accent),
     ];
 
-    let stats = Paragraph::new(stats_lines)
-        .block(themed_block!(" Statistics ", pal.accent, pal.dim).padding(Padding::horizontal(1)));
+    let stats = Paragraph::new(stats_lines).block(
+        themed_block!(" Statistics ", pal.border, pal.muted).padding(Padding::horizontal(1)),
+    );
     frame.render_widget(stats, stats_log_cols[0]);
 
     // ── Log panel + Zed-style spinner ────────────────────────────────────────
@@ -219,9 +220,13 @@ pub(in crate::ui) fn render_flashing(
     // Uses tui-spinner's LinearSpinner (vertical bounce) for the Zed/Copilot look.
 
     // The log block — rendered first so we can measure the inner height.
-    // Border brightens to `pal.brand` while focused so it's obvious Tab/arrow
+    // Border brightens to `pal.accent` while focused so it's obvious Tab/arrow
     // keys are about to scroll this panel.
-    let log_border_color = if app.log_focused { pal.brand } else { pal.dim };
+    let log_border_color = if app.log_focused {
+        pal.accent
+    } else {
+        pal.muted
+    };
     let log_title = match (app.log_focused, app.log_scroll) {
         (true, 0) => " Log (focused) ".to_string(),
         (true, n) => format!(" Log ↑{n} (focused) "),
@@ -229,7 +234,7 @@ pub(in crate::ui) fn render_flashing(
         (false, n) => format!(" Log ↑{n} "),
     };
     let log_block =
-        themed_block!(log_title, pal.accent, log_border_color).padding(Padding::horizontal(1));
+        themed_block!(log_title, pal.border, log_border_color).padding(Padding::horizontal(1));
 
     let log_inner = log_block.inner(stats_log_cols[1]);
 
@@ -257,16 +262,16 @@ pub(in crate::ui) fn render_flashing(
             .iter()
             .map(|l| {
                 let style = if l.to_lowercase().contains("error") {
-                    Style::default().fg(pal.err)
+                    Style::default().fg(pal.error)
                 } else if l.to_lowercase().contains("verif")
                     || l.to_lowercase().contains("complete")
                     || l.to_lowercase().contains("done")
                 {
                     Style::default().fg(pal.success)
                 } else if l.to_uppercase() == *l && !l.is_empty() {
-                    Style::default().fg(pal.accent)
+                    Style::default().fg(pal.border)
                 } else {
-                    Style::default().fg(pal.dim)
+                    Style::default().fg(pal.muted)
                 };
                 Line::from(Span::styled(l.as_str(), style))
             })
@@ -286,7 +291,7 @@ pub(in crate::ui) fn render_flashing(
         .height(log_cols[1].height as usize)
         .phase_step(1)
         .spin(SpinDir::Clockwise)
-        .color(pal.brand)
+        .color(pal.accent)
         .ticks_per_step(2);
 
     frame.render_widget(log_block, stats_log_cols[1]);
@@ -295,7 +300,7 @@ pub(in crate::ui) fn render_flashing(
 }
 
 /// Multi-device flash: one gauge per target plus a summary line.
-fn render_batch_body(app: &App, frame: &mut Frame, body: Rect, pal: &TuiPalette) {
+fn render_batch_body(app: &App, frame: &mut Frame, body: Rect, pal: &tui_nuances::Theme) {
     use flashkraft_core::multi_flash::TargetStatus;
     let Some(batch) = app.batch.as_ref() else {
         return;
@@ -308,8 +313,8 @@ fn render_batch_body(app: &App, frame: &mut Frame, body: Rect, pal: &TuiPalette)
         Span::styled(
             format!(" {:>3.0}% ", overall * 100.0),
             Style::default()
-                .fg(pal.bg)
-                .bg(pal.brand)
+                .fg(pal.background.unwrap_or_default())
+                .bg(pal.accent)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -320,19 +325,19 @@ fn render_batch_body(app: &App, frame: &mut Frame, body: Rect, pal: &TuiPalette)
                 batch.failed(),
                 batch.total_speed_mb_s()
             ),
-            Style::default().fg(pal.fg),
+            Style::default().fg(pal.foreground),
         ),
     ]);
     frame.render_widget(
         Paragraph::new(summary).block(themed_block!(
             format!(" \u{26a1}  Flashing {} drives ", batch.targets.len()),
-            pal.brand,
-            pal.accent
+            pal.accent,
+            pal.border
         )),
         head,
     );
 
-    let block = themed_block!(" Drives ", pal.brand, pal.accent);
+    let block = themed_block!(" Drives ", pal.accent, pal.border);
     let inner = block.inner(list);
     frame.render_widget(block, list);
 
@@ -345,14 +350,14 @@ fn render_batch_body(app: &App, frame: &mut Frame, body: Rect, pal: &TuiPalette)
             height: 2,
         };
         let (icon, colour, note) = match &t.status {
-            TargetStatus::Queued => ("\u{23f3}", pal.dim, "queued".to_string()),
+            TargetStatus::Queued => ("\u{23f3}", pal.muted, "queued".to_string()),
             TargetStatus::Running => (
                 "\u{26a1}",
-                pal.brand,
+                pal.accent,
                 format!("{:.1} MB/s  {}", t.speed_mb_s, t.message),
             ),
             TargetStatus::Done => ("\u{2713}", pal.success, "verified".to_string()),
-            TargetStatus::Failed(e) => ("\u{2717}", pal.err, e.clone()),
+            TargetStatus::Failed(e) => ("\u{2717}", pal.error, e.clone()),
         };
         let [label, bar] =
             Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(row);
@@ -361,9 +366,11 @@ fn render_batch_body(app: &App, frame: &mut Frame, body: Rect, pal: &TuiPalette)
                 Span::styled(format!(" {icon} "), Style::default().fg(colour)),
                 Span::styled(
                     t.device.clone(),
-                    Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(pal.foreground)
+                        .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(format!("  {note}"), Style::default().fg(pal.dim)),
+                Span::styled(format!("  {note}"), Style::default().fg(pal.muted)),
             ])),
             label,
         );
@@ -375,11 +382,11 @@ fn render_batch_body(app: &App, frame: &mut Frame, body: Rect, pal: &TuiPalette)
                 Span::styled("\u{2501}".repeat(filled), Style::default().fg(colour)),
                 Span::styled(
                     "\u{2501}".repeat(width.saturating_sub(filled)),
-                    Style::default().fg(pal.sel_bg),
+                    Style::default().fg(pal.selection_bg),
                 ),
                 Span::styled(
                     format!(" {:>3.0}%", t.overall() * 100.0),
-                    Style::default().fg(pal.dim),
+                    Style::default().fg(pal.muted),
                 ),
             ])),
             bar,

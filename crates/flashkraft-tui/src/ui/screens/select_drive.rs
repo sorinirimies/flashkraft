@@ -4,7 +4,7 @@ pub(in crate::ui) fn render_select_drive(
     app: &mut App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
     theme_name: &str,
 ) {
     let [hdr, bc, body, ftr] = chrome_layout(area);
@@ -36,7 +36,7 @@ pub(in crate::ui) fn render_select_drive(
             " \u{27f3}  Scanning for drives\u{2026} ".to_string(),
             vec![ListItem::new(Line::from(Span::styled(
                 "  Detecting USB drives\u{2026}",
-                Style::default().fg(pal.dim),
+                Style::default().fg(pal.muted),
             )))],
         )
     } else if drives.is_empty() {
@@ -44,7 +44,7 @@ pub(in crate::ui) fn render_select_drive(
             " \u{1f4be}  No drives found ".to_string(),
             vec![ListItem::new(Line::from(Span::styled(
                 "  No removable drives detected. Press [R] to refresh.",
-                Style::default().fg(pal.warn),
+                Style::default().fg(pal.warning),
             )))],
         )
     } else {
@@ -59,13 +59,13 @@ pub(in crate::ui) fn render_select_drive(
                 // tui-checkbox: checked if this is the actively selected drive,
                 // styled differently if it is the highlighted cursor row.
                 let cb_style = if d.is_system || d.is_read_only {
-                    Style::default().fg(pal.dim)
+                    Style::default().fg(pal.muted)
                 } else if selected {
                     Style::default()
-                        .fg(pal.brand)
+                        .fg(pal.accent)
                         .add_modifier(Modifier::BOLD | Modifier::REVERSED)
                 } else {
-                    Style::default().fg(pal.fg)
+                    Style::default().fg(pal.foreground)
                 };
 
                 let size_str = if d.size_gb >= 1.0 {
@@ -95,7 +95,7 @@ pub(in crate::ui) fn render_select_drive(
                 let prefix = if selected { " \u{25b6} " } else { "   " };
 
                 ListItem::new(Line::from(vec![
-                    Span::styled(prefix, Style::default().fg(pal.accent)),
+                    Span::styled(prefix, Style::default().fg(pal.border)),
                     Span::styled(checked_sym, cb_style.add_modifier(Modifier::BOLD)),
                     Span::styled(label, cb_style),
                 ]))
@@ -122,8 +122,8 @@ pub(in crate::ui) fn render_select_drive(
     }
 
     let list = List::new(items)
-        .block(themed_block!(title_text, pal.accent, pal.accent))
-        .highlight_style(Style::default().fg(pal.brand).add_modifier(Modifier::BOLD));
+        .block(themed_block!(title_text, pal.border, pal.border))
+        .highlight_style(Style::default().fg(pal.accent).add_modifier(Modifier::BOLD));
 
     // When scanning, split the list area vertically to fit a bar spinner at the bottom.
     if app.drives_loading {
@@ -135,8 +135,8 @@ pub(in crate::ui) fn render_select_drive(
         frame.render_stateful_widget(list, list_spinner_rows[0], &mut list_state);
 
         let scan_spinner = BarSpinner::new(app.tick_count)
-            .arc_color(pal.brand)
-            .dim_color(pal.dim);
+            .arc_color(pal.accent)
+            .dim_color(pal.muted);
         frame.render_widget(scan_spinner, list_spinner_rows[1]);
     } else {
         frame.render_stateful_widget(list, cols[0], &mut list_state);
@@ -147,12 +147,12 @@ pub(in crate::ui) fn render_select_drive(
         let status_spans = if d.is_system {
             vec![Span::styled(
                 "\u{26a0} System drive \u{2014} cannot flash",
-                Style::default().fg(pal.err),
+                Style::default().fg(pal.error),
             )]
         } else if d.is_read_only {
             vec![Span::styled(
                 "\u{26a0} Read-only \u{2014} cannot flash",
-                Style::default().fg(pal.warn),
+                Style::default().fg(pal.warning),
             )]
         } else {
             vec![Span::styled(
@@ -168,10 +168,10 @@ pub(in crate::ui) fn render_select_drive(
         };
 
         vec![
-            kv_line!("Name:    ", d.name.clone(), pal, bold pal.fg),
+            kv_line!("Name:    ", d.name.clone(), pal, bold pal.foreground),
             Line::from(""),
-            kv_line!("Device:  ", d.device_path.clone(), pal, pal.accent),
-            kv_line!("Mount:   ", d.mount_point.clone(), pal, pal.dim),
+            kv_line!("Device:  ", d.device_path.clone(), pal, pal.border),
+            kv_line!("Mount:   ", d.mount_point.clone(), pal, pal.muted),
             kv_line!("Size:    ", size_str, pal),
             Line::from(""),
             Line::from(status_spans),
@@ -179,12 +179,12 @@ pub(in crate::ui) fn render_select_drive(
     } else {
         vec![Line::from(Span::styled(
             "No drive selected",
-            Style::default().fg(pal.dim),
+            Style::default().fg(pal.muted),
         ))]
     };
 
     let detail = Paragraph::new(detail_lines)
-        .block(themed_block!(" Drive Details ", pal.brand, pal.dim).padding(Padding::uniform(1)))
+        .block(themed_block!(" Drive Details ", pal.accent, pal.muted).padding(Padding::uniform(1)))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(detail, cols[1]);
@@ -194,7 +194,7 @@ pub(in crate::ui) fn render_drive_info(
     app: &mut App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
     theme_name: &str,
 ) {
     let [hdr, bc, body, ftr] = chrome_layout(area);
@@ -227,8 +227,8 @@ pub(in crate::ui) fn render_drive_info(
     };
 
     let slices = vec![
-        PieSlice::new("Image", image_pct, pal.brand),
-        PieSlice::new("Free", free_pct, pal.accent),
+        PieSlice::new("Image", image_pct, pal.accent),
+        PieSlice::new("Free", free_pct, pal.border),
     ];
 
     let pie = PieChart::new(slices)
@@ -239,8 +239,8 @@ pub(in crate::ui) fn render_drive_info(
         .high_resolution(true)
         .block(themed_block!(
             " \u{1f967}  Drive Storage Layout ",
-            pal.brand,
-            pal.accent
+            pal.accent,
+            pal.border
         ));
 
     frame.render_widget(pie, cols[0]);
@@ -260,35 +260,40 @@ pub(in crate::ui) fn render_drive_info(
         Line::from(Span::styled(
             "Image Details",
             Style::default()
-                .fg(pal.accent)
+                .fg(pal.border)
                 .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
         )),
         Line::from(""),
     ];
 
     if let Some(img) = &app.selected_image {
-        lines.push(kv_line!("File:   ", img.name.clone(), pal, bold pal.fg));
-        lines.push(kv_line!("Size:   ", fmt_bytes(image_bytes), pal, pal.brand));
+        lines.push(kv_line!("File:   ", img.name.clone(), pal, bold pal.foreground));
+        lines.push(kv_line!(
+            "Size:   ",
+            fmt_bytes(image_bytes),
+            pal,
+            pal.accent
+        ));
     }
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "Drive Details",
         Style::default()
-            .fg(pal.accent)
+            .fg(pal.border)
             .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
     )));
     lines.push(Line::from(""));
 
     if let Some(d) = &app.selected_drive {
-        lines.push(kv_line!("Name:   ", d.name.clone(), pal, bold pal.fg));
-        lines.push(kv_line!("Device: ", d.device_path.clone(), pal, pal.accent));
+        lines.push(kv_line!("Name:   ", d.name.clone(), pal, bold pal.foreground));
+        lines.push(kv_line!("Device: ", d.device_path.clone(), pal, pal.border));
         lines.push(kv_line!("Total:  ", fmt_bytes(drive_bytes), pal));
         lines.push(kv_line!(
             "Image:  ",
             format!("{} ({:.1}%)", fmt_bytes(image_bytes), image_pct),
             pal,
-            pal.brand
+            pal.accent
         ));
         lines.push(kv_line!(
             "Free:   ",
@@ -298,20 +303,20 @@ pub(in crate::ui) fn render_drive_info(
                 free_pct
             ),
             pal,
-            pal.accent
+            pal.border
         ));
 
         if image_bytes > drive_bytes && drive_bytes > 0 {
             lines.push(Line::from(""));
             lines.push(Line::from(Span::styled(
                 "\u{26a0} Image is larger than the drive!",
-                Style::default().fg(pal.err).add_modifier(Modifier::BOLD),
+                Style::default().fg(pal.error).add_modifier(Modifier::BOLD),
             )));
         }
     }
 
     let detail = Paragraph::new(lines)
-        .block(themed_block!(" Storage Info ", pal.brand, pal.dim).padding(Padding::uniform(1)))
+        .block(themed_block!(" Storage Info ", pal.accent, pal.muted).padding(Padding::uniform(1)))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(detail, cols[1]);

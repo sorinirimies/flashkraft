@@ -5,7 +5,7 @@ pub(in crate::ui) fn render_file_op_modal(
     title: &str,
     body: &str,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     let w = 60u16;
     let h = 7u16;
@@ -22,7 +22,7 @@ pub(in crate::ui) fn render_file_op_modal(
         Line::from(vec![]),
         Line::from(Span::styled(
             format!("  {body}"),
-            Style::default().fg(pal.fg),
+            Style::default().fg(pal.foreground),
         )),
         Line::from(vec![]),
         Line::from(vec![
@@ -37,13 +37,13 @@ pub(in crate::ui) fn render_file_op_modal(
             Span::styled(
                 " n / Esc ",
                 Style::default()
-                    .fg(pal.dim)
+                    .fg(pal.muted)
                     .add_modifier(Modifier::REVERSED),
             ),
-            Span::styled(" No", Style::default().fg(pal.dim)),
+            Span::styled(" No", Style::default().fg(pal.muted)),
         ]),
     ];
-    let popup = Paragraph::new(lines).block(themed_block!(title, pal.brand, pal.brand));
+    let popup = Paragraph::new(lines).block(themed_block!(title, pal.accent, pal.accent));
     frame.render_widget(popup, modal);
 }
 
@@ -51,7 +51,7 @@ pub(in crate::ui) fn render_file_op_status(
     app: &App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     use crate::core::message::ClipOp;
     let text = if !app.file_op_status.is_empty() {
@@ -84,7 +84,7 @@ pub(in crate::ui) fn render_file_op_status(
         Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.accent)),
+            .border_style(Style::default().fg(pal.border)),
     );
     frame.render_widget(p, bar);
 }

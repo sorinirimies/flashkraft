@@ -17,7 +17,7 @@ pub(in crate::ui) fn render_header(
     area: Rect,
     subtitle: &str,
     theme_name: &str,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     if area.height == 0 {
         return;
@@ -47,17 +47,19 @@ pub(in crate::ui) fn render_header(
     let mut left = vec![
         Span::styled(
             " ⚡ Flash",
-            Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
+            Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             "Kraft ",
-            Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(pal.foreground)
+                .add_modifier(Modifier::BOLD),
         ),
     ];
     if !narrow {
         left.push(Span::styled(
             format!("v{} ", env!("CARGO_PKG_VERSION")),
-            Style::default().fg(pal.dim),
+            Style::default().fg(pal.muted),
         ));
     }
     left.push(Span::raw(" "));
@@ -66,7 +68,11 @@ pub(in crate::ui) fn render_header(
     let left_budget = (area.width as usize).saturating_sub(theme_w + 1);
     let brand_w: usize = left.iter().map(|s| s.content.chars().count()).sum();
     if brand_w + subtitle.chars().count() + 2 <= left_budget {
-        left.push(pill(subtitle, pal.bg, pal.brand));
+        left.push(pill(
+            subtitle,
+            pal.background.unwrap_or_default(),
+            pal.accent,
+        ));
     }
     let left_area = Rect {
         width: (left_budget as u16).min(line.width),
@@ -76,9 +82,9 @@ pub(in crate::ui) fn render_header(
 
     let mut right = Vec::new();
     if !tiny {
-        right.push(Span::styled("theme ", Style::default().fg(pal.dim)));
+        right.push(Span::styled("theme ", Style::default().fg(pal.muted)));
     }
-    right.push(pill(theme_name, pal.fg, pal.sel_bg));
+    right.push(pill(theme_name, pal.foreground, pal.selection_bg));
     right.push(Span::raw(" "));
     frame.render_widget(
         Paragraph::new(Line::from(right)).alignment(Alignment::Right),
@@ -92,7 +98,7 @@ pub(in crate::ui) fn render_header(
         Block::default()
             .borders(Borders::TOP)
             .border_type(BorderType::Plain)
-            .border_style(Style::default().fg(pal.sel_bg)),
+            .border_style(Style::default().fg(pal.selection_bg)),
         rule,
     );
 }
@@ -102,7 +108,7 @@ pub(in crate::ui) fn render_footer(
     frame: &mut Frame,
     area: Rect,
     hints: &[(&str, &str)],
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     if area.height == 0 {
         return;
@@ -143,10 +149,10 @@ pub(in crate::ui) fn render_footer(
         if i > 0 {
             spans.push(Span::raw("  "));
         }
-        spans.push(pill(*key, pal.fg, pal.sel_bg));
+        spans.push(pill(*key, pal.foreground, pal.selection_bg));
         spans.push(Span::styled(
             format!(" {desc}"),
-            Style::default().fg(pal.dim),
+            Style::default().fg(pal.muted),
         ));
     }
     frame.render_widget(Paragraph::new(Line::from(spans)), keys);
@@ -154,7 +160,9 @@ pub(in crate::ui) fn render_footer(
     if bar.height == 0 {
         return;
     }
-    let bar_style = Style::default().fg(pal.bg).bg(pal.brand);
+    let bar_style = Style::default()
+        .fg(pal.background.unwrap_or_default())
+        .bg(pal.accent);
     let demo = if flashkraft_core::commands::demo::is_demo() {
         "  demo mode — no real drives  "
     } else {
@@ -178,7 +186,7 @@ pub(in crate::ui) fn render_breadcrumbs(
     frame: &mut Frame,
     area: Rect,
     active: usize,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     // Narrow terminals show only the active step's label.
     let compact = area.width < 56;
@@ -187,11 +195,15 @@ pub(in crate::ui) fn render_breadcrumbs(
     let mut spans: Vec<Span> = Vec::new();
     for (i, (num, label)) in steps.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::styled(" ▸ ", Style::default().fg(pal.dim)));
+            spans.push(Span::styled(" ▸ ", Style::default().fg(pal.muted)));
         }
         let label = if compact && *num != active { "" } else { label };
         let span = if *num == active {
-            pill(format!("{num} {label}"), pal.bg, pal.brand)
+            pill(
+                format!("{num} {label}"),
+                pal.background.unwrap_or_default(),
+                pal.accent,
+            )
         } else if *num < active {
             Span::styled(
                 format!(" ✓ {label} "),
@@ -200,7 +212,7 @@ pub(in crate::ui) fn render_breadcrumbs(
                     .add_modifier(Modifier::BOLD),
             )
         } else {
-            Span::styled(format!(" {num} {label} "), Style::default().fg(pal.dim))
+            Span::styled(format!(" {num} {label} "), Style::default().fg(pal.muted))
         };
         spans.push(span);
     }
@@ -257,7 +269,7 @@ mod tests {
 
     #[test]
     fn header_shows_brand_subtitle_and_theme() {
-        let pal = TuiPalette::default();
+        let pal = tui_nuances::Theme::default();
         let out = draw(100, 4, |f, a| {
             render_header(f, a, "OS Image Writer", "Tokyo Night", &pal)
         });
@@ -269,7 +281,7 @@ mod tests {
 
     #[test]
     fn narrow_header_drops_the_version_but_keeps_the_brand() {
-        let pal = TuiPalette::default();
+        let pal = tui_nuances::Theme::default();
         let out = draw(50, 4, |f, a| render_header(f, a, "Flash", "Default", &pal));
         assert!(out.contains("FlashKraft"));
         assert!(!out.contains(&format!("v{}", env!("CARGO_PKG_VERSION"))));
@@ -277,7 +289,7 @@ mod tests {
 
     #[test]
     fn footer_lists_every_hint() {
-        let pal = TuiPalette::default();
+        let pal = tui_nuances::Theme::default();
         let out = draw(100, 3, |f, a| {
             render_footer(f, a, &[("q", "quit"), ("Enter", "select")], &pal)
         });
@@ -288,7 +300,7 @@ mod tests {
 
     #[test]
     fn breadcrumbs_mark_done_active_and_pending_steps() {
-        let pal = TuiPalette::default();
+        let pal = tui_nuances::Theme::default();
         let out = draw(80, 1, |f, a| render_breadcrumbs(f, a, 2, &pal));
         assert!(out.contains("✓ Select Image"), "{out}");
         assert!(out.contains("2 Select Drive"));
@@ -297,7 +309,7 @@ mod tests {
 
     #[test]
     fn zero_height_areas_do_not_panic() {
-        let pal = TuiPalette::default();
+        let pal = tui_nuances::Theme::default();
         draw(10, 1, |f, _| {
             let empty = Rect::new(0, 0, 10, 0);
             render_header(f, empty, "x", "y", &pal);
@@ -318,7 +330,7 @@ mod tests {
 
     #[test]
     fn header_footer_breadcrumbs_survive_every_small_size() {
-        let pal = TuiPalette::default();
+        let pal = tui_nuances::Theme::default();
         for w in 0..90u16 {
             for h in 0..6u16 {
                 let _ = draw(w, h, |f, a| {

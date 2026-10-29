@@ -18,7 +18,7 @@ use crate::domain::{constraints, CompatibilityStatusType, DriveInfo, ImageInfo};
 use tui_file_explorer::{FileExplorer, Theme};
 
 use super::storage::TuiStorage;
-use crate::ui::theme::{all_app_themes, TuiPalette};
+use crate::ui::theme::all_app_themes;
 use flashkraft_core::THEME_NAMES;
 
 use super::message::{
@@ -114,7 +114,7 @@ pub struct App {
     /// All available themes, as `(name, Theme)` pairs.
     pub explorer_themes: Vec<(String, Theme)>,
     /// All available app-level palettes, parallel to `explorer_themes`.
-    pub app_themes: Vec<(String, TuiPalette)>,
+    pub app_themes: Vec<(String, tui_nuances::Theme)>,
     /// Index into `explorer_themes` / `app_themes` for the currently active theme.
     pub explorer_theme_idx: usize,
     /// Whether the global theme-picker side panel is visible (shown on every screen).
@@ -966,7 +966,7 @@ impl App {
     }
 
     /// The currently active TUI application palette.
-    pub fn palette(&self) -> &TuiPalette {
+    pub fn palette(&self) -> &tui_nuances::Theme {
         &self.app_themes[self.explorer_theme_idx].1
     }
 

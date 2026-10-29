@@ -4,7 +4,7 @@ pub(in crate::ui) fn render_error(
     app: &mut App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
     theme_name: &str,
 ) {
     let [hdr, _bc, body, ftr] = chrome_layout(area);
@@ -29,28 +29,28 @@ pub(in crate::ui) fn render_error(
         Line::from(""),
         Line::from(Span::styled(
             "  \u{2715}  An error occurred:",
-            Style::default().fg(pal.err).add_modifier(Modifier::BOLD),
+            Style::default().fg(pal.error).add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
         Line::from(Span::styled(
             format!("  {}", app.error_message),
-            Style::default().fg(pal.fg),
+            Style::default().fg(pal.foreground),
         )),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Press ", Style::default().fg(pal.dim)),
+            Span::styled("  Press ", Style::default().fg(pal.muted)),
             Span::styled(
                 "[R / Enter]",
                 Style::default()
                     .fg(pal.success)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" to start over  or  ", Style::default().fg(pal.dim)),
+            Span::styled(" to start over  or  ", Style::default().fg(pal.muted)),
             Span::styled(
                 "[Q / Esc]",
-                Style::default().fg(pal.err).add_modifier(Modifier::BOLD),
+                Style::default().fg(pal.error).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" to quit.", Style::default().fg(pal.dim)),
+            Span::styled(" to quit.", Style::default().fg(pal.muted)),
         ]),
     ];
 
@@ -59,12 +59,12 @@ pub(in crate::ui) fn render_error(
             Block::default()
                 .title(Span::styled(
                     " \u{2715}  FlashKraft Error ",
-                    Style::default().fg(pal.err).add_modifier(Modifier::BOLD),
+                    Style::default().fg(pal.error).add_modifier(Modifier::BOLD),
                 ))
                 .title_alignment(Alignment::Center)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(pal.err)),
+                .border_style(Style::default().fg(pal.error)),
         )
         .wrap(Wrap { trim: true });
 

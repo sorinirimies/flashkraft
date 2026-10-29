@@ -4,7 +4,7 @@ pub(in crate::ui) fn render_select_image(
     app: &mut App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
     theme_name: &str,
 ) {
     let [hdr, bc, body, ftr] = chrome_layout(area);
@@ -38,49 +38,49 @@ pub(in crate::ui) fn render_select_image(
     // Instruction panel
     let instr = Paragraph::new(vec![
         Line::from(vec![
-            Span::styled("Enter the full path to an ", Style::default().fg(pal.dim)),
+            Span::styled("Enter the full path to an ", Style::default().fg(pal.muted)),
             Span::styled(
                 ".iso / .img",
-                Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
+                Style::default().fg(pal.border).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 " file to flash onto your USB drive.",
-                Style::default().fg(pal.dim),
+                Style::default().fg(pal.muted),
             ),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("Example: ", Style::default().fg(pal.dim)),
+            Span::styled("Example: ", Style::default().fg(pal.muted)),
             Span::styled(
                 "/home/user/Downloads/ubuntu-24.04-desktop-amd64.iso",
-                Style::default().fg(pal.dim),
+                Style::default().fg(pal.muted),
             ),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("Press ", Style::default().fg(pal.dim)),
+            Span::styled("Press ", Style::default().fg(pal.muted)),
             Span::styled(
                 "Tab",
-                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" to open the interactive ", Style::default().fg(pal.dim)),
-            Span::styled(
-                "file browser",
                 Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" instead.", Style::default().fg(pal.dim)),
+            Span::styled(" to open the interactive ", Style::default().fg(pal.muted)),
+            Span::styled(
+                "file browser",
+                Style::default().fg(pal.border).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" instead.", Style::default().fg(pal.muted)),
         ]),
     ])
     .alignment(Alignment::Center)
     .block(
-        themed_block!(" \u{1f4c1}  Select OS Image ", pal.brand, pal.accent)
+        themed_block!(" \u{1f4c1}  Select OS Image ", pal.accent, pal.border)
             .padding(Padding::uniform(1)),
     );
     frame.render_widget(instr, rows[1]);
 
     // Text input field
     let is_editing = app.input_mode == InputMode::Editing;
-    let border_color = if is_editing { pal.brand } else { pal.dim };
+    let border_color = if is_editing { pal.accent } else { pal.muted };
     let mode_label = if is_editing {
         " EDITING "
     } else {
@@ -104,7 +104,7 @@ pub(in crate::ui) fn render_select_image(
     };
 
     let input_para = Paragraph::new(Span::raw(display))
-        .style(Style::default().fg(pal.fg))
+        .style(Style::default().fg(pal.foreground))
         .block(themed_block!(mode_label, border_color, border_color));
     frame.render_widget(input_para, rows[2]);
 }
@@ -113,7 +113,7 @@ pub(in crate::ui) fn render_browse_image(
     app: &mut App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
     theme_name: &str,
 ) {
     let [hdr, bc, body, ftr] = chrome_layout(area);

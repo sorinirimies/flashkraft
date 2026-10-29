@@ -8,7 +8,7 @@ pub(in crate::ui) fn render_app_theme_panel(
     app: &App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     // Panel width: wide enough for theme names + decorations.
     const PANEL_W: u16 = 36;
@@ -35,7 +35,7 @@ pub(in crate::ui) fn render_app_theme_panel(
     let mut lines: Vec<Line> = vec![
         Line::from(Span::styled(
             "  \u{2191}/k prev   \u{2193}/j next",
-            Style::default().fg(pal.dim),
+            Style::default().fg(pal.muted),
         )),
         Line::from(vec![]),
     ];
@@ -46,28 +46,28 @@ pub(in crate::ui) fn render_app_theme_panel(
         let indicator = if is_cursor { " \u{25b6} " } else { "   " };
         let style = if is_cursor && is_active {
             Style::default()
-                .fg(pal.brand)
+                .fg(pal.accent)
                 .add_modifier(Modifier::BOLD | Modifier::REVERSED)
         } else if is_cursor {
             Style::default()
-                .fg(pal.accent)
+                .fg(pal.border)
                 .add_modifier(Modifier::REVERSED)
         } else if is_active {
-            Style::default().fg(pal.brand).add_modifier(Modifier::BOLD)
+            Style::default().fg(pal.accent).add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(pal.dim)
+            Style::default().fg(pal.muted)
         };
 
         lines.push(Line::from(vec![
             Span::styled(indicator, style),
-            Span::styled(format!("{:>2}. ", i + 1), Style::default().fg(pal.accent)),
+            Span::styled(format!("{:>2}. ", i + 1), Style::default().fg(pal.border)),
             Span::styled(name.clone(), style),
         ]));
     }
 
     frame.render_widget(Clear, split[0]);
     let panel = Paragraph::new(lines).scroll((scroll_y, 0)).block(
-        themed_block!(" \u{1f3a8} Themes ", pal.brand, pal.accent)
+        themed_block!(" \u{1f3a8} Themes ", pal.accent, pal.border)
             .title_alignment(Alignment::Center),
     );
     frame.render_widget(panel, split[0]);
@@ -78,18 +78,18 @@ pub(in crate::ui) fn render_app_theme_panel(
     let footer_lines = vec![
         Line::from(Span::styled(
             format!("  \u{25cf} {cursor_name}"),
-            Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
+            Style::default().fg(pal.border).add_modifier(Modifier::BOLD),
         )),
         Line::from(vec![
-            Span::styled("  Active: ", Style::default().fg(pal.dim)),
+            Span::styled("  Active: ", Style::default().fg(pal.muted)),
             Span::styled(
                 active_name.clone(),
-                Style::default().fg(pal.brand).add_modifier(Modifier::BOLD),
+                Style::default().fg(pal.accent).add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(Span::styled(
             "  [Enter] apply  [T/Esc] close",
-            Style::default().fg(pal.dim),
+            Style::default().fg(pal.muted),
         )),
     ];
     frame.render_widget(Clear, split[1]);
@@ -97,7 +97,7 @@ pub(in crate::ui) fn render_app_theme_panel(
         Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(pal.dim)),
+            .border_style(Style::default().fg(pal.muted)),
     );
     frame.render_widget(footer, split[1]);
 }

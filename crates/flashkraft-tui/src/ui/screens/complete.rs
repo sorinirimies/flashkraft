@@ -4,7 +4,7 @@ pub(in crate::ui) fn render_complete(
     app: &mut App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
     theme_name: &str,
 ) {
     let [hdr, _bc, body, ftr] = chrome_layout(area);
@@ -45,7 +45,7 @@ pub(in crate::ui) fn render_complete(
                 .fg(pal.success)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(drive_name, Style::default().fg(pal.dim)),
+        Span::styled(drive_name, Style::default().fg(pal.muted)),
     ]))
     .alignment(Alignment::Center)
     .block(
@@ -64,15 +64,17 @@ pub(in crate::ui) fn render_complete(
                 Span::styled("  \u{2713} ", Style::default().fg(pal.success)),
                 Span::styled(
                     t.device.clone(),
-                    Style::default().fg(pal.fg).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(pal.foreground)
+                        .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("  written and verified", Style::default().fg(pal.dim)),
+                Span::styled("  written and verified", Style::default().fg(pal.muted)),
             ]));
         }
         frame.render_widget(
             Paragraph::new(lines).block(themed_block!(
                 format!(" \u{1f4be}  {} drives flashed ", batch.targets.len()),
-                pal.brand,
+                pal.accent,
                 pal.success
             )),
             rows[1],
@@ -91,7 +93,7 @@ pub(in crate::ui) fn render_usb_contents(
     app: &App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     let inner_h = area.height.saturating_sub(2) as usize;
     let entries = &app.usb_contents;
@@ -99,7 +101,7 @@ pub(in crate::ui) fn render_usb_contents(
     let items: Vec<ListItem> = if entries.is_empty() {
         vec![ListItem::new(Line::from(Span::styled(
             "  (no contents to display)",
-            Style::default().fg(pal.dim),
+            Style::default().fg(pal.muted),
         )))]
     } else {
         entries
@@ -119,16 +121,18 @@ pub(in crate::ui) fn render_usb_contents(
                     String::new()
                 };
                 let name_style = if e.is_dir {
-                    Style::default().fg(pal.dir).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(pal.secondary)
+                        .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(pal.fg)
+                    Style::default().fg(pal.foreground)
                 };
                 ListItem::new(Line::from(vec![
                     Span::raw(indent),
                     Span::raw(icon),
                     Span::raw(" "),
                     Span::styled(e.name.clone(), name_style),
-                    Span::styled(size_str, Style::default().fg(pal.dim)),
+                    Span::styled(size_str, Style::default().fg(pal.muted)),
                 ]))
             })
             .collect()
@@ -146,7 +150,7 @@ pub(in crate::ui) fn render_usb_contents(
 
     let list = List::new(items).block(themed_block!(
         format!(" \u{1f4cb}  USB Contents{scroll_info}"),
-        pal.brand,
+        pal.accent,
         pal.success
     ));
 
@@ -157,20 +161,20 @@ pub(in crate::ui) fn render_contents_piechart(
     app: &App,
     frame: &mut Frame,
     area: Rect,
-    pal: &TuiPalette,
+    pal: &tui_nuances::Theme,
 ) {
     let (slices, legend_lines) = build_filetype_piechart(&app.usb_contents);
 
     if slices.is_empty() {
         let placeholder = Paragraph::new(Span::styled(
             "No files found on drive",
-            Style::default().fg(pal.dim),
+            Style::default().fg(pal.muted),
         ))
         .alignment(Alignment::Center)
         .block(themed_block!(
             " \u{1f967}  Contents Breakdown ",
-            pal.brand,
-            pal.dim
+            pal.accent,
+            pal.muted
         ));
         frame.render_widget(placeholder, area);
         return;
@@ -190,7 +194,7 @@ pub(in crate::ui) fn render_contents_piechart(
         .high_resolution(true)
         .block(themed_block!(
             " \u{1f967}  Contents Breakdown ",
-            pal.brand,
+            pal.accent,
             pal.success
         ));
 
