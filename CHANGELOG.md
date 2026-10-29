@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2.3.0 - 2026-10-29
+### ♻️ Refactor
+- refactor(tui): drop TuiPalette; UI reads tui-nuances Theme directly (fixes Gruvbox Dark / Atom One Dark lookups)
+### 🔧 Chores
+- chore(deps): bump tui-nuances to 0.1.10
+- chore(deps): tui-file-explorer 4.0 (tui-nuances-only themes)
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.3...v2.3.0
 ## 2.2.3 - 2026-10-26
 ### ✨ Features
 - feat(tui): derive app palettes from tui-nuances
@@ -18,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - chore(fuzz): bump rustls in fuzz lockfile to 0.23.46 (fixes cargo audit)
 - chore(justfile): skip unconfigured remotes in *-all recipes
 - chore(justfile): push/pull current branch instead of hardcoded main
+- chore: bump version to 2.2.3
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.2...v2.2.3
 ## 2.2.2 - 2026-10-14
 ### ✨ Features
