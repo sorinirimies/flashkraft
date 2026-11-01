@@ -37,12 +37,14 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
-      - name: Fuzz each target for 60s (core, web guards, TUI keys, GUI reducer)
+      - name: Install Nushell
         run: |
-          cargo +nightly fuzz list | while read -r t; do
-            mkdir -p "$RUNNER_TEMP/corpus/$t"
-            cargo +nightly fuzz run "$t" "$RUNNER_TEMP/corpus/$t" -- -max_total_time=60 < /dev/null
-          done
+          V=0.116.1
+          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
+          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || { mkdir -p $HOME/.cargo/bin; install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu; }
+          nu --version
+      - name: Fuzz each target for 60s
+        run: nu scripts/ci/fuzz_all.nu --secs 60 --corpus $RUNNER_TEMP/corpus
       - name: Upload crashes
         if: failure()
         uses: actions/upload-artifact@v3
