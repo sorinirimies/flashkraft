@@ -1,4 +1,4 @@
-# rules.md — Development Guidelines for FlashKraft
+# AGENTS.md — Development Guidelines for FlashKraft
 
 This file is the single source of truth for conventions, patterns, and
 architectural decisions across the FlashKraft workspace.
@@ -28,7 +28,7 @@ flashkraft/
 ├── Cargo.toml                    # Workspace manifest — all shared dep versions pinned here
 ├── justfile                      # Developer task runner
 ├── cliff.toml                    # git-cliff changelog config
-└── .zed/rules.md                 # This file
+└── AGENTS.md                      # This file
 ```
 
 **Rules:**

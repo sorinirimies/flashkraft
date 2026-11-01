@@ -94,8 +94,7 @@ Session.vim
 .netrwhist
 
 # ZED — ignore workspace settings but keep the shared rules file
-.zed/*
-!.zed/rules.md
+.zed/
 
 # Emacs
 *#
