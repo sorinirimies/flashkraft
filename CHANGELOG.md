@@ -2,12 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2.3.1 - 2026-11-01
+### 📚 Documentation
+- docs: move agent rules from .zed/rules.md to AGENTS.md
+### 🔄 CI
+- ci(fuzz): fall back to an older nightly when the latest cannot build
+### 🔧 Chores
+- chore: remove AGENTS.md
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.3.0...v2.3.1
 ## 2.3.0 - 2026-10-29
 ### ♻️ Refactor
 - refactor(tui): drop TuiPalette; UI reads tui-nuances Theme directly (fixes Gruvbox Dark / Atom One Dark lookups)
 ### 🔧 Chores
 - chore(deps): bump tui-nuances to 0.1.10
 - chore(deps): tui-file-explorer 4.0 (tui-nuances-only themes)
+- chore: bump version to 2.3.0
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.3...v2.3.0
 ## 2.2.3 - 2026-10-26
 ### ✨ Features
