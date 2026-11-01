@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - ci(fuzz): fall back to an older nightly when the latest cannot build
 ### 🔧 Chores
 - chore: remove AGENTS.md
+- chore: bump version to 2.3.1
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.3.0...v2.3.1
 ## 2.3.0 - 2026-10-29
 ### ♻️ Refactor
