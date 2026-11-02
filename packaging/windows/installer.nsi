@@ -1,4 +1,4 @@
-; Generic NSIS installer. Build with (see packaging/windows/build_installer.sh):
+; Generic NSIS installer. Built by scripts/ci/package_windows.nu (see scripts/ci/package_windows.nu):
 ;   makensis -DAPP_NAME=.. -DSLUG=.. -DVERSION=1.2.3 -DROOT=C:\repo \
 ;            -DBINDIR=target\release -DCLI_EXE=x.exe [-DGUI_EXE=y.exe]
 Unicode true
