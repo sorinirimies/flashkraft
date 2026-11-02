@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2.3.3 - 2026-11-02
+### ♻️ Refactor
+- refactor(ci): package macOS DMG and Windows installer with tested Nushell scripts
+### 📚 Documentation
+- docs: this repo's agent rules as a project skill in .agents/skills
+- docs: drop the per-repo agent rules skill; the shared skills cover it
+- docs(ci): point NSIS header at the Nushell script
+### 🔄 CI
+- ci(release): ship macOS universal DMGflashkraft
+- ci(release): Windows NSIS setup.exe installer
+### 🔧 Chores
+- chore: ignore .codegraph index
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.3.2...v2.3.3
+## 2.3.2 - 2026-11-01
+### 🔧 Chores
+- chore: bump version to 2.3.2
+**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.3.1...v2.3.2
 ## 2.3.1 - 2026-11-01
 ### 📚 Documentation
 - docs: move agent rules from .zed/rules.md to AGENTS.md
@@ -155,6 +172,7 @@ All notable changes to this project will be documented in this file.
 ### ✨ Features
 - feat: restore automatic sudo/pkexec escalation on Linux
 ### 🐛 Bug Fixes
+- fix(justfile): correct Gitea remote names (gitea, gitea_starscream)
 - fix(nix): support setuid-root installs for Nix users
 ### 📚 Documentation
 - docs(justfile): warn that release-* recipes always bump version
@@ -169,8 +187,6 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 1.3.3
 **Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.2...v1.3.3
 ## 1.3.2 - 2026-09-09
-### 🐛 Bug Fixes
-- fix(justfile): correct Gitea remote names (gitea, gitea_starscream)
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-09
 - chore: bump version to 1.3.2
