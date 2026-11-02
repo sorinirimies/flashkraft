@@ -256,6 +256,13 @@ jobs:
         if: matrix.gui_binary != ''
         run: cp target/${{ matrix.target }}/release/flashkraft${{ matrix.suffix }} dist/flashkraft-gui-${{ matrix.target }}${{ matrix.suffix }}
 
+      - name: Build Windows installer (NSIS)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          choco install nsis -y --no-progress
+          bash packaging/windows/build_installer.sh ${{ needs.validate.outputs.version }} target/${{ matrix.target }}/release flashkraft.exe
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
