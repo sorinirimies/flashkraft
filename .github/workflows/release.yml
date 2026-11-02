@@ -188,6 +188,21 @@ jobs:
             suffix: ".exe"
             install_gui_libs: false
 
+          # ── macOS (Intel + Apple Silicon; merged into a universal DMG below) ─
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            gui_binary: flashkraft
+            tui_binary: flashkraft-tui
+            suffix: ""
+            install_gui_libs: false
+
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            gui_binary: flashkraft
+            tui_binary: flashkraft-tui
+            suffix: ""
+            install_gui_libs: false
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -248,10 +263,47 @@ jobs:
           path: dist/
           retention-days: 1
 
+  # ── 3b. macOS universal DMG ──────────────────────────────────────────────────
+  macos-dmg:
+    name: macOS universal DMG
+    needs: [validate, build]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Download macOS binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: binaries-*-apple-darwin
+          merge-multiple: true
+
+      - name: Reconstruct target dirs
+        run: |
+          for t in aarch64-apple-darwin x86_64-apple-darwin; do
+            mkdir -p target/$t/release
+            cp artifacts/flashkraft-gui-$t target/$t/release/flashkraft
+            cp artifacts/flashkraft-tui-$t target/$t/release/flashkraft-tui
+          done
+
+      - name: Build DMG
+        run: bash packaging/macos/create_dmg.sh ${{ needs.validate.outputs.version }}
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-macos-universal
+          path: |
+            dist/*.dmg
+            dist/*.tar.gz
+          retention-days: 1
+
   # ── 4. GitHub Release ────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [validate, build]
+    needs: [validate, build, macos-dmg]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
