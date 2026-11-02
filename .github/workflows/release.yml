@@ -256,12 +256,17 @@ jobs:
         if: matrix.gui_binary != ''
         run: cp target/${{ matrix.target }}/release/flashkraft${{ matrix.suffix }} dist/flashkraft-gui-${{ matrix.target }}${{ matrix.suffix }}
 
+      - name: Install Nushell
+        uses: hustcer/setup-nu@v3
+        if: runner.os == 'Windows'
+        with:
+          version: "*"
+
       - name: Build Windows installer (NSIS)
         if: runner.os == 'Windows'
-        shell: bash
         run: |
           choco install nsis -y --no-progress
-          bash packaging/windows/build_installer.sh ${{ needs.validate.outputs.version }} target/${{ matrix.target }}/release flashkraft.exe
+          nu scripts/ci/package_windows.nu ${{ needs.validate.outputs.version }} target/${{ matrix.target }}/release --gui flashkraft.exe
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -287,16 +292,13 @@ jobs:
           pattern: binaries-*-apple-darwin
           merge-multiple: true
 
-      - name: Reconstruct target dirs
-        run: |
-          for t in aarch64-apple-darwin x86_64-apple-darwin; do
-            mkdir -p target/$t/release
-            cp artifacts/flashkraft-gui-$t target/$t/release/flashkraft
-            cp artifacts/flashkraft-tui-$t target/$t/release/flashkraft-tui
-          done
+      - name: Install Nushell
+        uses: hustcer/setup-nu@v3
+        with:
+          version: "*"
 
       - name: Build DMG
-        run: bash packaging/macos/create_dmg.sh ${{ needs.validate.outputs.version }}
+        run: nu scripts/ci/package_macos.nu ${{ needs.validate.outputs.version }} --from-artifacts artifacts
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
