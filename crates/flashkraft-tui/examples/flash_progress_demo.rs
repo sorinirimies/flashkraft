@@ -23,22 +23,23 @@
 
 use std::io;
 use std::panic;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{Arc, atomic::AtomicBool};
 use std::time::Duration;
 
 use anyhow::Result;
 use crossterm::{
     event::{self, Event},
     execute,
-    terminal::{enable_raw_mode, EnterAlternateScreen},
+    terminal::{EnterAlternateScreen, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 use flashkraft_tui::{
+    App, AppScreen, FlashEvent,
     domain::{DriveInfo, ImageInfo},
-    render, restore_terminal, App, AppScreen, FlashEvent,
+    render, restore_terminal,
 };
 
 // ---------------------------------------------------------------------------
@@ -97,14 +98,14 @@ where
         }
 
         // Allow Esc / q to abort early.
-        if event::poll(Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                use crossterm::event::{KeyCode, KeyModifiers};
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => break,
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
-                    _ => {}
-                }
+        if event::poll(Duration::from_millis(50))?
+            && let Event::Key(key) = event::read()?
+        {
+            use crossterm::event::{KeyCode, KeyModifiers};
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => break,
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
+                _ => {}
             }
         }
     }

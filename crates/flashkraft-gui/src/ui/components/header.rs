@@ -3,11 +3,11 @@
 //! Left-aligned brand (`⚡ Flash`**Kraft** + version chip) and the theme picker
 //! on the right — the same title-bar layout as the TUI and web front-ends.
 
-use iced::widget::{container, row, text, Space};
+use iced::widget::{Space, container, row, text};
 use iced::{Alignment, Element, Length, Theme};
 
-use crate::core::message::Message;
 use crate::core::FlashKraft;
+use crate::core::message::Message;
 use crate::ui::components::theme_selector;
 use crate::ui::theme as style;
 use crate::utils::icons;

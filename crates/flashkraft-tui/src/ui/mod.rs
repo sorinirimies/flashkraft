@@ -12,13 +12,13 @@
 //!   and confirmation checklist (ConfirmFlash screen)
 
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap,
     },
-    Frame,
 };
 
 use tui_checkbox::Checkbox;
@@ -32,7 +32,7 @@ use tui_file_explorer::render_themed;
 
 /// Build a [`Block`] with a bold styled title, rounded borders, and coloured border.
 macro_rules! themed_block {
-    ($title:expr, $title_color:expr, $border_color:expr) => {
+    ($title:expr_2021, $title_color:expr_2021, $border_color:expr_2021) => {
         Block::default()
             .title(Span::styled(
                 $title,
@@ -48,19 +48,19 @@ macro_rules! themed_block {
 
 /// Build a key-value [`Line`] with a dim label and a styled value.
 macro_rules! kv_line {
-    ($label:expr, $value:expr, $pal:expr) => {
+    ($label:expr_2021, $value:expr_2021, $pal:expr_2021) => {
         Line::from(vec![
             Span::styled($label, Style::default().fg($pal.muted)),
             Span::styled($value, Style::default().fg($pal.foreground)),
         ])
     };
-    ($label:expr, $value:expr, $pal:expr, $color:expr) => {
+    ($label:expr_2021, $value:expr_2021, $pal:expr_2021, $color:expr_2021) => {
         Line::from(vec![
             Span::styled($label, Style::default().fg($pal.muted)),
             Span::styled($value, Style::default().fg($color)),
         ])
     };
-    ($label:expr, $value:expr, $pal:expr, bold $color:expr) => {
+    ($label:expr_2021, $value:expr_2021, $pal:expr_2021, bold $color:expr_2021) => {
         Line::from(vec![
             Span::styled($label, Style::default().fg($pal.muted)),
             Span::styled(
@@ -73,14 +73,14 @@ macro_rules! kv_line {
 
 /// Build a palette-styled [`Checkbox`].
 macro_rules! themed_checkbox {
-    ($label:expr, $checked:expr, $color:expr, $pal:expr) => {
+    ($label:expr_2021, $checked:expr_2021, $color:expr_2021, $pal:expr_2021) => {
         Checkbox::new($label, $checked)
             .checkbox_style(Style::default().fg($color).add_modifier(Modifier::BOLD))
             .label_style(Style::default().fg($pal.muted))
             .checked_symbol("☑ ")
             .unchecked_symbol("☐ ")
     };
-    ($label:expr, $checked:expr, $color:expr, $pal:expr, $check_sym:expr, $uncheck_sym:expr) => {
+    ($label:expr_2021, $checked:expr_2021, $color:expr_2021, $pal:expr_2021, $check_sym:expr_2021, $uncheck_sym:expr_2021) => {
         Checkbox::new($label, $checked)
             .checkbox_style(Style::default().fg($color).add_modifier(Modifier::BOLD))
             .label_style(Style::default().fg($pal.muted))
@@ -223,7 +223,7 @@ fn render_update_banner(
 #[cfg(test)]
 mod responsive_tests {
     use super::*;
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     const SCREENS: [AppScreen; 8] = [
         AppScreen::SelectImage,

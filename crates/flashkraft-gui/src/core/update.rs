@@ -11,7 +11,7 @@ use iced::Task;
 use crate::core::commands;
 use crate::core::message::Message;
 use crate::core::state::FlashKraft;
-use crate::domain::{constraints, ImageInfo};
+use crate::domain::{ImageInfo, constraints};
 
 /// Update the application state based on a message
 ///
@@ -197,10 +197,10 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             state.selected_image = Some(ImageInfo::from_path(path.clone()));
             state.error_message = None;
 
-            if let Some(dir) = path.parent().map(|p| p.to_path_buf()) {
-                if let Some(storage) = state.storage.as_mut() {
-                    let _ = storage.save_last_image_dir(dir);
-                }
+            if let Some(dir) = path.parent().map(|p| p.to_path_buf())
+                && let Some(storage) = state.storage.as_mut()
+            {
+                let _ = storage.save_last_image_dir(dir);
             }
 
             constraints::mark_invalid_drives(
@@ -286,10 +286,10 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             // Auto-hide the "update available" banner once it has been
             // visible long enough — piggy-backs on the existing per-frame
             // tick rather than adding a dedicated subscription/timer.
-            if let Some(banner) = &state.update_banner {
-                if banner.shown_at.elapsed() >= crate::core::state::UPDATE_BANNER_DURATION {
-                    state.update_banner = None;
-                }
+            if let Some(banner) = &state.update_banner
+                && banner.shown_at.elapsed() >= crate::core::state::UPDATE_BANNER_DURATION
+            {
+                state.update_banner = None;
             }
 
             Task::none()
@@ -423,20 +423,20 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             state.animated_progress.set_theme(theme.clone());
 
             // Save theme to persistent storage
-            if let Some(storage) = &mut state.storage {
-                if let Err(e) = storage.save_theme(&theme) {
-                    eprintln!("Failed to save theme preference: {}", e);
-                }
+            if let Some(storage) = &mut state.storage
+                && let Err(e) = storage.save_theme(&theme)
+            {
+                eprintln!("Failed to save theme preference: {}", e);
             }
 
             Task::none()
         }
 
         Message::UpdateCheckCompleted(maybe_version) => {
-            if let Some(storage) = state.storage.as_mut() {
-                if let Err(e) = storage.record_update_check() {
-                    eprintln!("Failed to persist update-check timestamp: {e}");
-                }
+            if let Some(storage) = state.storage.as_mut()
+                && let Err(e) = storage.record_update_check()
+            {
+                eprintln!("Failed to persist update-check timestamp: {e}");
             }
 
             if let Some(latest_version) = maybe_version {

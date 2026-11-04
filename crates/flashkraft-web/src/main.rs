@@ -43,8 +43,7 @@ fn main() -> std::io::Result<()> {
         return Ok(());
     }
     if args.demo {
-        // SAFETY: single-threaded at this point — before the server starts.
-        unsafe { std::env::set_var(flashkraft_core::commands::demo::DEMO_ENV, "1") };
+        flashkraft_core::commands::demo::enable();
     }
     // Same privilege model as the TUI: drop root now, regain it only inside
     // the flash pipeline. Before the runtime starts any threads.

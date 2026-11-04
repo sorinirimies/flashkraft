@@ -5,6 +5,7 @@ use topcoat::router::query_params;
 /// Raw, optional query-string values. Anything unknown is ignored instead of
 /// failing the request, so a stale bookmark never 400s.
 #[query_params(error = redirect("?"))]
+#[derive(Debug)]
 pub struct PageParams {
     /// Path of the image to check against every drive.
     pub image: Option<String>,
@@ -14,6 +15,7 @@ pub struct PageParams {
 
 /// `?path=` for the file browser.
 #[query_params(error = redirect("?"))]
+#[derive(Debug)]
 pub struct BrowseParams {
     pub path: Option<String>,
 }

@@ -17,8 +17,8 @@
 //!
 //! No root privileges are required — this is a read-only scan.
 
-use flashkraft_core::commands::load_drives;
 use flashkraft_core::DriveInfo;
+use flashkraft_core::commands::load_drives;
 
 // ── ANSI colour helpers (no external dep) ─────────────────────────────────────
 

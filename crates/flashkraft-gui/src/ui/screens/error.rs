@@ -4,11 +4,11 @@
 //! split into a short headline and optional detail / command lines
 //! which are rendered in a styled card.
 
-use iced::widget::{button, column, container, row, text, Space};
+use iced::widget::{Space, button, column, container, row, text};
 use iced::{Alignment, Border, Color, Element, Length, Theme};
 
-use crate::core::message::Message;
 use crate::core::FlashKraft;
+use crate::core::message::Message;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
 

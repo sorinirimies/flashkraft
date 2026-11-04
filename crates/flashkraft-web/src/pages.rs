@@ -18,7 +18,7 @@ use crate::{
 
 /// HTML shell shared by every page.
 #[component]
-pub async fn document(
+pub(crate) async fn document(
     interactive: bool,
     theme: usize,
     title: String,

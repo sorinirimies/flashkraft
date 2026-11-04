@@ -5,14 +5,25 @@
 //! the flash pipeline still refuses anything that is not a real, writable
 //! device, so demo mode can never write to a disk.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::domain::drive_info::{DriveInfo, UsbInfo};
 
 /// Environment variable that switches demo mode on (`1`, `true`, `yes`, `on`).
 pub const DEMO_ENV: &str = "FLASHKRAFT_DEMO";
 
-/// `true` when [`DEMO_ENV`] is set to a truthy value.
+/// Set by [`enable`]; demo mode then stays on for the rest of the process.
+static ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Turns demo mode on for this process, as if [`DEMO_ENV`] were set (e.g. for
+/// a `--demo` flag). It cannot be turned off again.
+pub fn enable() {
+    ENABLED.store(true, Ordering::Relaxed);
+}
+
+/// `true` after [`enable`], or when [`DEMO_ENV`] is set to a truthy value.
 pub fn is_demo() -> bool {
-    parse_flag(std::env::var(DEMO_ENV).ok().as_deref())
+    ENABLED.load(Ordering::Relaxed) || parse_flag(std::env::var(DEMO_ENV).ok().as_deref())
 }
 
 fn parse_flag(v: Option<&str>) -> bool {

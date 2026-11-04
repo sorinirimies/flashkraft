@@ -37,7 +37,7 @@ pub fn theme_selector(current_theme: &Theme, compact: bool) -> Element<'static, 
 ///
 /// An Element containing the right-aligned theme picker
 pub fn theme_selector_right(current_theme: &Theme) -> Element<'static, Message> {
-    use iced::widget::{row, Space};
+    use iced::widget::{Space, row};
 
     container(
         row![

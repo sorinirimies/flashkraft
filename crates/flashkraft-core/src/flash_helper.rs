@@ -45,8 +45,9 @@ use nix::libc;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::{
+    Arc, OnceLock,
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc, OnceLock,
+    mpsc,
 };
 use std::time::{Duration, Instant};
 
@@ -211,12 +212,11 @@ pub fn initialize_privileges(allow_transparent_escalation: bool) -> Result<(), S
 #[cfg(target_os = "linux")]
 fn escalation_drop_uid() -> Option<u32> {
     for var in ["FLASHKRAFT_DROP_UID", "SUDO_UID", "PKEXEC_UID"] {
-        if let Ok(value) = std::env::var(var) {
-            if let Ok(uid) = value.parse::<u32>() {
-                if uid != 0 {
-                    return Some(uid);
-                }
-            }
+        if let Ok(value) = std::env::var(var)
+            && let Ok(uid) = value.parse::<u32>()
+            && uid != 0
+        {
+            return Some(uid);
         }
     }
     None
@@ -228,8 +228,9 @@ fn escalation_drop_uid() -> Option<u32> {
 /// as the saved-set-UID is 0, an unprivileged process may always `seteuid(0)`
 /// to briefly reacquire root, then `seteuid(caller)` to drop back down.
 #[cfg(target_os = "linux")]
+#[allow(unsafe_code, reason = "clears the escalation variables at startup")]
 fn drop_to_uid_keeping_saved_root(uid: u32) -> Result<(), String> {
-    use nix::unistd::{geteuid, getuid, setresuid, Uid};
+    use nix::unistd::{Uid, geteuid, getuid, setresuid};
 
     let target = Uid::from_raw(uid);
     setresuid(target, target, Uid::from_raw(0))
@@ -240,8 +241,11 @@ fn drop_to_uid_keeping_saved_root(uid: u32) -> Result<(), String> {
     }
 
     set_real_uid(uid);
-    std::env::remove_var("FLASHKRAFT_ESCALATED");
-    std::env::remove_var("FLASHKRAFT_DROP_UID");
+    // SAFETY: runs at startup, before any other thread exists.
+    unsafe {
+        std::env::remove_var("FLASHKRAFT_ESCALATED");
+        std::env::remove_var("FLASHKRAFT_DROP_UID");
+    }
     Ok(())
 }
 
@@ -256,6 +260,10 @@ fn drop_to_uid_keeping_saved_root(uid: u32) -> Result<(), String> {
 /// at root; `FLASHKRAFT_ESCALATED` guards against a re-exec loop if the
 /// escalation tool is present but keeps failing.
 #[cfg(all(target_os = "linux", not(test)))]
+#[allow(
+    unsafe_code,
+    reason = "sets the escalation variables the re-exec'd process reads"
+)]
 fn try_reexec_as_root(original_uid: u32) {
     use std::ffi::CString;
 
@@ -270,8 +278,11 @@ fn try_reexec_as_root(original_uid: u32) {
 
     let extra_args: Vec<String> = std::env::args().skip(1).collect();
 
-    std::env::set_var("FLASHKRAFT_ESCALATED", "1");
-    std::env::set_var("FLASHKRAFT_DROP_UID", original_uid.to_string());
+    // SAFETY: runs at startup, before any other thread exists.
+    unsafe {
+        std::env::set_var("FLASHKRAFT_ESCALATED", "1");
+        std::env::set_var("FLASHKRAFT_DROP_UID", original_uid.to_string());
+    }
 
     if which_exists("sudo") {
         let mut argv: Vec<CString> = vec![c_str("sudo"), c_str("-E"), c_str(&self_exe_str)];
@@ -287,15 +298,19 @@ fn try_reexec_as_root(original_uid: u32) {
 
     // Neither helper available (or both failed to exec) — unset the guards
     // so a later manual retry isn't mistaken for an already-attempted one.
-    std::env::remove_var("FLASHKRAFT_ESCALATED");
-    std::env::remove_var("FLASHKRAFT_DROP_UID");
+    // SAFETY: still at startup, before any other thread exists.
+    unsafe {
+        std::env::remove_var("FLASHKRAFT_ESCALATED");
+        std::env::remove_var("FLASHKRAFT_DROP_UID");
+    }
 }
 
 /// Build a `CString`, replacing interior NULs with `?` rather than panicking.
 #[cfg(all(target_os = "linux", not(test)))]
 fn c_str(s: &str) -> std::ffi::CString {
     let sanitised: Vec<u8> = s.bytes().map(|b| if b == 0 { b'?' } else { b }).collect();
-    std::ffi::CString::new(sanitised).unwrap_or_else(|_| std::ffi::CString::new("?").unwrap())
+    // No NUL is left, so `new` cannot fail.
+    std::ffi::CString::new(sanitised).unwrap_or_default()
 }
 
 /// Return `true` if `name` is an executable file reachable via `PATH`.
@@ -335,7 +350,7 @@ fn real_uid() -> nix::unistd::Uid {
 /// operation in-process.
 #[cfg(unix)]
 pub fn can_escalate_in_process() -> bool {
-    use nix::unistd::{geteuid, seteuid, Uid};
+    use nix::unistd::{Uid, geteuid, seteuid};
 
     if geteuid().is_root() {
         return true;
@@ -361,7 +376,7 @@ pub fn can_escalate_in_process() -> bool {
 
 #[cfg(unix)]
 fn with_effective_root<T>(operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
-    use nix::unistd::{geteuid, seteuid, Uid};
+    use nix::unistd::{Uid, geteuid, seteuid};
 
     let caller = real_uid();
     let already_root = geteuid().is_root();
@@ -777,15 +792,15 @@ fn check_device_not_busy_with<F>(device_path: &str, open_fn: F) -> Result<(), St
 where
     F: FnOnce(&str) -> std::io::Result<()>,
 {
-    if let Err(e) = open_fn(device_path) {
-        if e.raw_os_error() == Some(libc::EBUSY) {
-            return Err(format!(
-                "Device '{device_path}' is already in use by another process.\n\
+    if let Err(e) = open_fn(device_path)
+        && e.raw_os_error() == Some(libc::EBUSY)
+    {
+        return Err(format!(
+            "Device '{device_path}' is already in use by another process.\n\
                  Is another flash operation already running?"
-            ));
-        }
-        // Any other error (EPERM, EACCES) is fine — handled when opening for writing.
+        ));
     }
+    // Any other error (EPERM, EACCES) is fine — handled when opening for writing.
     Ok(())
 }
 
@@ -947,6 +962,7 @@ fn validate_target_capacity(image_size: u64, capacity: u64) -> Result<(), String
 }
 
 #[cfg(target_os = "linux")]
+#[allow(unsafe_code, reason = "BLKGETSIZE64 ioctl on an open block device")]
 fn linux_block_capacity(file: &std::fs::File, device_path: &str) -> Result<u64, String> {
     use nix::ioctl_read;
     use std::os::unix::io::AsRawFd;
@@ -1032,13 +1048,13 @@ fn is_partition_of(dev: &str, device_name: &str) -> bool {
         return false;
     }
     let suffix = &dev_base[device_name.len()..];
-    if suffix.is_empty() {
+    let Some(first) = suffix.chars().next() else {
         return false;
-    }
-    let first = suffix.chars().next().unwrap();
+    };
     first.is_ascii_digit() || (first == 'p' && suffix.len() > 1)
 }
 
+#[allow(unsafe_code, reason = "umount2 from libc")]
 fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
     #[cfg(target_os = "linux")]
     {
@@ -1131,13 +1147,13 @@ fn do_unmount(partition: &str, tx: &mpsc::Sender<FlashEvent>) {
         let out = std::process::Command::new("diskutil")
             .args(["unmount", partition])
             .output();
-        if let Ok(o) = out {
-            if !o.status.success() {
-                send(
-                    tx,
-                    FlashEvent::Log(format!("Warning — diskutil unmount {partition} failed")),
-                );
-            }
+        if let Ok(o) = out
+            && !o.status.success()
+        {
+            send(
+                tx,
+                FlashEvent::Log(format!("Warning — diskutil unmount {partition} failed")),
+            );
         }
     }
 
@@ -1273,6 +1289,7 @@ fn write_image_files(
 // Step 3 – Sync
 // ---------------------------------------------------------------------------
 
+#[allow(unsafe_code, reason = "libc::sync after the device flush")]
 fn sync_device(
     target: &std::fs::File,
     device_path: &str,
@@ -1298,6 +1315,7 @@ fn sync_device(
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]
+#[allow(unsafe_code, reason = "BLKRRPART ioctl on the target device")]
 fn reread_partition_table(
     target: &std::fs::File,
     _device_path: &str,
@@ -1557,6 +1575,7 @@ fn sha256_reader_with_progress(
 /// - **Volume (drive letter)**: `\\.\C:`, `\\.\D:`, …
 ///   Used for locking and dismounting before we write.
 #[cfg(target_os = "windows")]
+#[allow(unsafe_code, reason = "the Win32 volume and device API is FFI")]
 mod windows {
     // ── Win32 type aliases ────────────────────────────────────────────────────
     // windows-sys uses raw C types; give them readable names.
@@ -1568,11 +1587,11 @@ mod windows {
             CreateFileW, FILE_FLAG_WRITE_THROUGH, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
         },
         System::{
+            IO::DeviceIoControl,
             Ioctl::{
                 FSCTL_DISMOUNT_VOLUME, FSCTL_LOCK_VOLUME, GET_LENGTH_INFORMATION,
                 IOCTL_DISK_GET_LENGTH_INFO, IOCTL_DISK_UPDATE_PROPERTIES,
             },
-            IO::DeviceIoControl,
         },
     };
 
@@ -1653,7 +1672,7 @@ mod windows {
     /// 3. For each letter, open the volume and call `IOCTL_STORAGE_GET_DEVICE_NUMBER`
     ///    to get its physical drive number.
     /// 4. Collect those whose number matches.
-    pub fn find_volumes_on_physical_drive(physical_drive: &str) -> Vec<String> {
+    pub(super) fn find_volumes_on_physical_drive(physical_drive: &str) -> Vec<String> {
         use windows_sys::Win32::{
             Storage::FileSystem::GetLogicalDriveStringsW,
             System::Ioctl::{IOCTL_STORAGE_GET_DEVICE_NUMBER, STORAGE_DEVICE_NUMBER},
@@ -1747,7 +1766,7 @@ mod windows {
     /// The lock is held for the lifetime of the handle.  Because we close the
     /// handle immediately after dismounting, the volume is automatically
     /// unlocked (`FSCTL_UNLOCK_VOLUME` is implicit on handle close).
-    pub fn lock_and_dismount_volume(volume_path: &str) -> Result<(), String> {
+    pub(super) fn lock_and_dismount_volume(volume_path: &str) -> Result<(), String> {
         let handle = open_device_handle(volume_path, GENERIC_READ | GENERIC_WRITE)?;
 
         // Lock — exclusive; if this fails (files open) we still try to
@@ -1775,7 +1794,7 @@ mod windows {
     }
 
     /// Query the exact byte length of the retained physical-drive handle.
-    pub fn disk_capacity(file: &std::fs::File) -> Result<u64, String> {
+    pub(super) fn disk_capacity(file: &std::fs::File) -> Result<u64, String> {
         let mut length = GET_LENGTH_INFORMATION { Length: 0 };
         let mut bytes_returned = 0u32;
         let ok = unsafe {
@@ -1798,7 +1817,7 @@ mod windows {
     }
 
     /// Send `IOCTL_DISK_UPDATE_PROPERTIES` through the retained drive handle.
-    pub fn update_disk_properties(file: &std::fs::File) -> Result<(), String> {
+    pub(super) fn update_disk_properties(file: &std::fs::File) -> Result<(), String> {
         device_ioctl(file_handle(file), IOCTL_DISK_UPDATE_PROPERTIES)
     }
 
@@ -1920,8 +1939,10 @@ mod tests {
         // Under a normal (non-root, non-setuid) test runner this should be
         // `false`; under CI running as root it may be `true`. Either way it
         // must never panic and must leave the effective UID unchanged.
+        #[cfg(unix)]
         let before = nix::unistd::geteuid();
         let _ = can_escalate_in_process();
+        #[cfg(unix)]
         assert_eq!(nix::unistd::geteuid(), before);
     }
 
@@ -2533,9 +2554,11 @@ mod tests {
         assert!(FlashStage::Writing.to_string().contains("Writing"));
         assert!(FlashStage::Syncing.to_string().contains("Flushing"));
         assert!(FlashStage::Done.to_string().contains("complete"));
-        assert!(FlashStage::Failed("oops".into())
-            .to_string()
-            .contains("oops"));
+        assert!(
+            FlashStage::Failed("oops".into())
+                .to_string()
+                .contains("oops")
+        );
     }
 
     // ── FlashStage equality ──────────────────────────────────────────────────
@@ -2602,6 +2625,7 @@ mod tests {
 
     /// On Windows the caller never passes Unix-style paths, so these should
     /// all return false (no false positives from the partition-suffix logic).
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_is_partition_of_windows_style_paths() {
         // Windows physical drive paths have no numeric suffix after the name.
@@ -2613,7 +2637,7 @@ mod tests {
 
     /// Run a pipeline on temp files and return the collected events.
     macro_rules! pipeline_test_events {
-        ($img_name:literal, $dev_name:literal, $data:expr) => {{
+        ($img_name:literal, $dev_name:literal, $data:expr_2021) => {{
             let dir = std::env::temp_dir();
             let img = dir.join($img_name);
             let dev = dir.join($dev_name);
@@ -2631,7 +2655,7 @@ mod tests {
 
     /// Generate a test asserting the pipeline emits a specific stage.
     macro_rules! assert_pipeline_emits_stage {
-        ($name:ident, $img:literal, $dev:literal, $stage:expr) => {
+        ($name:ident, $img:literal, $dev:literal, $stage:expr_2021) => {
             #[test]
             fn $name() {
                 let data: Vec<u8> = (0u8..=255).cycle().take(256 * 1024).collect();
@@ -2865,14 +2889,14 @@ mod tests {
         if !content.is_empty() {
             // Parse first real /dev/ device from /proc/mounts and verify
             // find_mounted_partitions does not panic on it.
-            if let Some(line) = content.lines().find(|l| l.starts_with("/dev/")) {
-                if let Some(dev) = line.split_whitespace().next() {
-                    let name = std::path::Path::new(dev)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    let _ = find_mounted_partitions(&name, dev);
-                }
+            if let Some(line) = content.lines().find(|l| l.starts_with("/dev/"))
+                && let Some(dev) = line.split_whitespace().next()
+            {
+                let name = std::path::Path::new(dev)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let _ = find_mounted_partitions(&name, dev);
             }
         }
     }
@@ -3099,7 +3123,7 @@ mod tests {
 
     /// Generate a `check_device_not_busy_with` test for a given errno.
     macro_rules! busy_check_test {
-        ($name:ident, errno: $errno:expr, expect_ok: $ok:expr) => {
+        ($name:ident, errno: $errno:expr_2021, expect_ok: $ok:expr_2021) => {
             #[test]
             #[cfg(target_os = "linux")]
             fn $name() {

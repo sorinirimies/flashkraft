@@ -21,15 +21,15 @@
 
 use crate::core::flash_runner::FlashProgress;
 use crate::core::storage::Storage;
-use crate::core::{update, Message};
+use crate::core::{Message, update};
 use crate::domain::{DriveInfo, ImageInfo};
 use crate::ui;
 use crate::ui::components::animated_progress::AnimatedProgress;
 use flashkraft_core::commands::watch_usb_events;
 use futures::StreamExt as _;
 use iced::Color;
-use iced::{stream, Element, Subscription, Task, Theme};
-use std::sync::{atomic::AtomicBool, Arc};
+use iced::{Element, Subscription, Task, Theme, stream};
+use std::sync::{Arc, atomic::AtomicBool};
 
 /// The main application state
 ///
@@ -443,39 +443,39 @@ impl FlashKraft {
                     .map(Message::BatchUpdate),
                 );
             }
-        } else if self.flashing_active {
-            if let (Some(image), Some(target)) = (&self.selected_image, &self.selected_target) {
-                let flash_sub = crate::core::flash_runner::flash_progress(
-                    image.path.clone(),
-                    target.device_path.clone().into(),
-                    self.flash_cancel_token.clone(),
-                    self.flash_run_id,
-                )
-                .map(|progress| match progress {
-                    FlashProgress::Progress {
-                        progress,
-                        bytes_written,
-                        speed_mb_s,
-                    } => Message::FlashProgressUpdate(progress, bytes_written, speed_mb_s),
-                    FlashProgress::VerifyProgress {
-                        phase,
-                        overall,
-                        bytes_read,
-                        total_bytes,
-                        speed_mb_s,
-                    } => Message::VerifyProgressUpdate(
-                        overall,
-                        phase,
-                        bytes_read,
-                        total_bytes,
-                        speed_mb_s,
-                    ),
-                    FlashProgress::Message(msg) => Message::Status(msg),
-                    FlashProgress::Completed => Message::FlashCompleted(Ok(())),
-                    FlashProgress::Failed(err) => Message::FlashCompleted(Err(err)),
-                });
-                subscriptions.push(flash_sub);
-            }
+        } else if self.flashing_active
+            && let (Some(image), Some(target)) = (&self.selected_image, &self.selected_target)
+        {
+            let flash_sub = crate::core::flash_runner::flash_progress(
+                image.path.clone(),
+                target.device_path.clone().into(),
+                self.flash_cancel_token.clone(),
+                self.flash_run_id,
+            )
+            .map(|progress| match progress {
+                FlashProgress::Progress {
+                    progress,
+                    bytes_written,
+                    speed_mb_s,
+                } => Message::FlashProgressUpdate(progress, bytes_written, speed_mb_s),
+                FlashProgress::VerifyProgress {
+                    phase,
+                    overall,
+                    bytes_read,
+                    total_bytes,
+                    speed_mb_s,
+                } => Message::VerifyProgressUpdate(
+                    overall,
+                    phase,
+                    bytes_read,
+                    total_bytes,
+                    speed_mb_s,
+                ),
+                FlashProgress::Message(msg) => Message::Status(msg),
+                FlashProgress::Completed => Message::FlashCompleted(Ok(())),
+                FlashProgress::Failed(err) => Message::FlashCompleted(Err(err)),
+            });
+            subscriptions.push(flash_sub);
         }
 
         // Animation tick — always active for progress-line glow and spinner effects

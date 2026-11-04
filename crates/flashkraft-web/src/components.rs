@@ -11,7 +11,7 @@ use crate::theme;
 
 /// Title with the version, plus the Drives / History / About tabs.
 #[component]
-pub async fn brand(active: String) -> Result<impl View> {
+pub(crate) async fn brand(active: String) -> Result<impl View> {
     let pick = |name: &str| if active == name { "tab active" } else { "tab" };
     let (c_drives, c_hist, c_about) = (pick("drives"), pick("history"), pick("about"));
     Ok(view! {
@@ -28,7 +28,7 @@ pub async fn brand(active: String) -> Result<impl View> {
 
 /// Three step cards (image → drive → flash) that light up as each is satisfied.
 #[component]
-pub async fn steps(s: &Snapshot) -> Result<impl View> {
+pub(crate) async fn steps(s: &Snapshot) -> Result<impl View> {
     let has_image = s.image.is_some();
     let has_drive = has_image
         && s.drives
@@ -64,7 +64,7 @@ pub async fn steps(s: &Snapshot) -> Result<impl View> {
 
 /// Row of headline totals.
 #[component]
-pub async fn summary_cards(s: &Snapshot) -> Result<impl View> {
+pub(crate) async fn summary_cards(s: &Snapshot) -> Result<impl View> {
     let (image_value, image_label) = match &s.image {
         Some(i) => (i.size_label.clone(), format!("image · {}", i.name)),
         None => ("—".to_string(), "image".to_string()),
@@ -82,14 +82,14 @@ pub async fn summary_cards(s: &Snapshot) -> Result<impl View> {
 
 /// Theme `<style>` element for the active palette.
 #[component]
-pub async fn theme_style(index: usize) -> Result<impl View> {
+pub(crate) async fn theme_style(index: usize) -> Result<impl View> {
     let css = theme::css(index);
     Ok(view! { <style>(css)</style> })
 }
 
 /// GET form that drives the query string (static mode).
 #[component]
-pub async fn filters(image: String, theme: usize) -> Result<impl View> {
+pub(crate) async fn filters(image: String, theme: usize) -> Result<impl View> {
     Ok(view! {
         <form class="filters" method="get" action="/">
             <label class="grow">"image "
@@ -109,7 +109,10 @@ pub async fn filters(image: String, theme: usize) -> Result<impl View> {
 
 /// Inputs bound to signals: changing one re-renders the enclosing shard.
 #[component]
-pub async fn live_filters(image: &Signal<String>, theme: &Signal<String>) -> Result<impl View> {
+pub(crate) async fn live_filters(
+    image: &Signal<String>,
+    theme: &Signal<String>,
+) -> Result<impl View> {
     let (img, th) = (image.get_untracked(), theme.get_untracked());
     Ok(view! {
         <div class="filters">
@@ -130,14 +133,14 @@ pub async fn live_filters(image: &Signal<String>, theme: &Signal<String>) -> Res
 
 /// One status chip: `ready` / `check` / `blocked` / `—`.
 #[component]
-pub async fn fit_chip(fit: Fit) -> Result<impl View> {
+pub(crate) async fn fit_chip(fit: Fit) -> Result<impl View> {
     let class = format!("chip {}", fit.css());
     Ok(view! { <span class=(class)>(fit.label())</span> })
 }
 
 /// The drive table: capacity bar, USB info, and fit against the chosen image.
 #[component]
-pub async fn drives_table(
+pub(crate) async fn drives_table(
     drives: &[DriveRow],
     has_image: bool,
     image: String,
@@ -197,7 +200,7 @@ pub async fn drives_table(
 
 /// Flash history table.
 #[component]
-pub async fn history_table(history: &[HistoryRow]) -> Result<impl View> {
+pub(crate) async fn history_table(history: &[HistoryRow]) -> Result<impl View> {
     Ok(view! {
         <div class="table-wrap"><table>
             <thead>
@@ -224,7 +227,7 @@ pub async fn history_table(history: &[HistoryRow]) -> Result<impl View> {
 
 /// Cards and the drive table for one [`Snapshot`].
 #[component]
-pub async fn dashboard_body(s: &Snapshot, live: bool) -> Result<impl View> {
+pub(crate) async fn dashboard_body(s: &Snapshot, live: bool) -> Result<impl View> {
     Ok(view! {
         if s.demo {
             <div class="warn">"Demo mode — these are fake drives. Nothing here can be written."</div>

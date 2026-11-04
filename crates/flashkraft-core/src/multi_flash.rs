@@ -16,12 +16,13 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc, Mutex,
+    mpsc,
 };
 
 use crate::flash_helper::FlashUpdate;
-use crate::flash_worker::{is_terminal, spawn_flash_worker, CANCELLED_MSG};
+use crate::flash_worker::{CANCELLED_MSG, is_terminal, spawn_flash_worker};
 
 /// Default number of devices written simultaneously.
 pub const DEFAULT_MAX_PARALLEL: usize = 4;
@@ -100,10 +101,12 @@ pub fn spawn_multi_flash(
             );
             std::thread::Builder::new()
                 .name(format!("flashkraft-lane-{lane}"))
-                .spawn(move || loop {
-                    let next = queue.lock().ok().and_then(|mut q| q.pop_front());
-                    let Some((index, device)) = next else { break };
-                    run_target(&image, index, &device, &cancel, &tx, &summary);
+                .spawn(move || {
+                    loop {
+                        let next = queue.lock().ok().and_then(|mut q| q.pop_front());
+                        let Some((index, device)) = next else { break };
+                        run_target(&image, index, &device, &cancel, &tx, &summary);
+                    }
                 })
                 .ok()
         })

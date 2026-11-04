@@ -2,6 +2,7 @@
 name = "flashkraft-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -11,14 +12,11 @@ categories = ["command-line-utilities", "filesystem"]
 keywords = ["imager", "disk", "usb", "iso", "flash"]
 
 [dependencies]
-# ── System / hardware ─────────────────────────────────────────────────────────
-sysinfo       = { workspace = true }
 nix           = { workspace = true }
 notify        = { workspace = true }
 
 # ── Async utilities ───────────────────────────────────────────────────────────
 futures       = { workspace = true }
-futures-timer = { workspace = true }
 tokio         = { workspace = true }
 
 # ── Config directory resolution ──────────────────────────────────────────────
@@ -37,3 +35,6 @@ windows-sys   = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -3,18 +3,18 @@
 //! This module contains the device selector overlay that allows users
 //! to choose a target drive for flashing.
 
-use iced::widget::{button, column, container, row, scrollable, text, Space};
+use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Alignment, Color, Element, Length};
 
 use crate::core::message::Message;
-use crate::domain::{constraints, DriveInfo, ImageInfo};
+use crate::domain::{DriveInfo, ImageInfo, constraints};
 use crate::ui::theme as style;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
 
 /// Build an [`iced::widget::Text`] that is dimmed when disabled.
 macro_rules! styled_text {
-    ($content:expr, $size:expr, $disabled:expr) => {{
+    ($content:expr_2021, $size:expr_2021, $disabled:expr_2021) => {{
         let t = text($content).size($size);
         if $disabled {
             t.color(Color::from_rgb(0.5, 0.5, 0.5))

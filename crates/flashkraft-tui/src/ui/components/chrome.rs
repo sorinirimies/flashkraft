@@ -247,7 +247,7 @@ pub(in crate::ui) fn chrome_layout(area: Rect) -> [Rect; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     fn draw(w: u16, h: u16, f: impl FnOnce(&mut Frame, Rect)) -> String {
         let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();

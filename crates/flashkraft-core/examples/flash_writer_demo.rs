@@ -14,10 +14,11 @@
 //! cargo run -p flashkraft-core --example flash_writer_demo
 //! ```
 
-use flashkraft_core::flash_helper::{run_pipeline, FlashEvent, FlashStage};
+use flashkraft_core::flash_helper::{FlashEvent, FlashStage, run_pipeline};
 use std::sync::{
+    Arc,
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc,
+    mpsc,
 };
 
 // ── Colour helpers (ANSI, no external dep) ───────────────────────────────────

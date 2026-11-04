@@ -293,9 +293,11 @@ mod tests {
         let statuses = get_drive_image_compatibility_statuses(&drive, Some(&image));
 
         assert!(!statuses.is_empty());
-        assert!(statuses
-            .iter()
-            .any(|s| s.status_type == CompatibilityStatusType::Error));
+        assert!(
+            statuses
+                .iter()
+                .any(|s| s.status_type == CompatibilityStatusType::Error)
+        );
         assert!(!is_drive_valid(&drive, Some(&image)));
     }
 
@@ -325,9 +327,11 @@ mod tests {
         let statuses = get_drive_image_compatibility_statuses(&drive, Some(&image));
 
         assert!(!statuses.is_empty());
-        assert!(statuses
-            .iter()
-            .any(|s| s.status_type == CompatibilityStatusType::Error));
+        assert!(
+            statuses
+                .iter()
+                .any(|s| s.status_type == CompatibilityStatusType::Error)
+        );
     }
 
     #[test]

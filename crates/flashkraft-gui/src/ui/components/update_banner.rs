@@ -6,7 +6,7 @@
 //! (ticked from `Message::AnimationTick` in `update.rs`) — the user can also
 //! dismiss it immediately.
 
-use iced::widget::{button, container, row, text, Space};
+use iced::widget::{Space, button, container, row, text};
 use iced::{Alignment, Element, Length, Theme};
 
 use crate::core::message::Message;

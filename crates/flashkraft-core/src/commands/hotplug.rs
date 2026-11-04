@@ -340,7 +340,7 @@ mod tests {
     }
 
     macro_rules! translate_event_test {
-        ($name:ident, $kind:expr, $expected:expr) => {
+        ($name:ident, $kind:expr_2021, $expected:expr_2021) => {
             #[test]
             fn $name() {
                 let e = make_event($kind);

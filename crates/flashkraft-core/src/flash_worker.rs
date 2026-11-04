@@ -27,11 +27,12 @@
 
 use std::path::Path;
 use std::sync::{
+    Arc,
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc,
+    mpsc,
 };
 
-use crate::flash_helper::{run_pipeline, FlashEvent, FlashUpdate};
+use crate::flash_helper::{FlashEvent, FlashUpdate, run_pipeline};
 
 /// Message reported when the user cancelled the flash.
 pub const CANCELLED_MSG: &str = "Flash operation cancelled by user";
@@ -333,9 +334,11 @@ mod tests {
     fn preflight_rejects_missing_empty_and_directory() {
         let dir = tempfile::tempdir().unwrap();
         let dev = dir.path().join("dev");
-        assert!(preflight(&dir.path().join("nope"), &dev)
-            .unwrap_err()
-            .contains("Cannot read image"));
+        assert!(
+            preflight(&dir.path().join("nope"), &dev)
+                .unwrap_err()
+                .contains("Cannot read image")
+        );
         let empty = dir.path().join("empty.img");
         std::fs::write(&empty, b"").unwrap();
         assert!(preflight(&empty, &dev).unwrap_err().contains("empty"));
@@ -368,9 +371,10 @@ mod tests {
 
         let rx = spawn_flash_worker(&img, &dev, Arc::new(AtomicBool::new(false)));
         let all = collect(rx);
-        assert!(all
-            .iter()
-            .any(|u| matches!(u, FlashUpdate::Progress { .. })));
+        assert!(
+            all.iter()
+                .any(|u| matches!(u, FlashUpdate::Progress { .. }))
+        );
         let terminals = all.iter().filter(|u| is_terminal(u)).count();
         assert_eq!(terminals, 1, "exactly one terminal update: {all:?}");
         assert!(is_terminal(all.last().unwrap()), "terminal is last");

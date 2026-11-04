@@ -17,7 +17,7 @@ use tui_file_explorer::ExplorerOutcome;
 
 /// Try `$call`; on error set the error message and transition to the Error screen.
 macro_rules! try_or_error_screen {
-    ($app:expr, $call:expr) => {
+    ($app:expr_2021, $call:expr_2021) => {
         match $call {
             Ok(()) => {}
             Err(msg) => {

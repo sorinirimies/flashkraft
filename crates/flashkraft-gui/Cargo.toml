@@ -2,6 +2,7 @@
 name = "flashkraft"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -24,13 +25,11 @@ flashkraft-core = { workspace = true }
 
 # ── GUI framework ─────────────────────────────────────────────────────────────
 iced       = { workspace = true }
-iced_aw    = { workspace = true }
 iced_fonts = { workspace = true }
 rfd        = { workspace = true }
 
 # ── Async utilities ───────────────────────────────────────────────────────────
 futures       = { workspace = true }
-futures-timer = { workspace = true }
 
 # ── Spinner glyphs (frame constants only — no TUI rendering) ─────────────────
 tui-spinner   = { workspace = true }
@@ -73,3 +72,6 @@ test = false
 [[example]]
 name = "custom_theme"
 test = false
+
+[lints]
+workspace = true

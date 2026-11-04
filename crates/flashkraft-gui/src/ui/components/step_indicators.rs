@@ -6,15 +6,15 @@
 use iced::widget::{column, container, row, text};
 use iced::{Alignment, Element, Length};
 
-use crate::core::message::Message;
 use crate::core::FlashKraft;
+use crate::core::message::Message;
 use crate::ui::components::progress_line;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
 
 /// Build a step-indicator column: icon + label, centred in 220px.
 macro_rules! step_indicator {
-    ($icon_widget:expr, $label:expr, $active:expr, $w:expr) => {
+    ($icon_widget:expr_2021, $label:expr_2021, $active:expr_2021, $w:expr_2021) => {
         container(
             column![icons::icon($icon_widget, 28.0), text($label).size(13)]
                 .spacing(8)

@@ -17,7 +17,7 @@
 //!
 //! This crate intentionally has **no** GUI or TUI dependencies (no `iced`,
 //! no `ratatui`, no `crossterm`).  It may only depend on:
-//! - OS / system crates (`sysinfo`, `nix`, `sha2`, …)
+//! - OS / system crates (`nix`, `sha2`, …)
 //! - Async utilities (`tokio`, `futures`, `futures-timer`)
 //! - Config directory resolution (`dirs`)
 
@@ -39,16 +39,16 @@ pub mod update_check;
 
 pub use domain::push_history_entry;
 pub use domain::{DriveInfo, FlashHistoryEntry, ImageInfo, MAX_HISTORY_ENTRIES};
-pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
+pub use theme::{AppTheme, Rgb, THEME_COUNT, THEME_NAMES, theme_by_index, theme_index_by_name};
 pub use utils::fmt_bytes;
 
 /// Re-export the flash pipeline event types so consumers only need to import
 /// from `flashkraft_core` rather than the sub-module path.
-pub use flash_helper::{verify_overall_progress, FlashEvent, FlashStage, FlashUpdate};
+pub use flash_helper::{FlashEvent, FlashStage, FlashUpdate, verify_overall_progress};
 
 /// Re-export the update-check comparison helpers at the crate root. The
 /// actual network fetch lives in each frontend crate (see module docs).
 pub use flash_worker::{forward_events, spawn_flash_worker};
-pub use multi_flash::{spawn_multi_flash, MultiState, MultiSummary, MultiUpdate};
+pub use multi_flash::{MultiState, MultiSummary, MultiUpdate, spawn_multi_flash};
 
-pub use update_check::{is_newer, now_unix, should_check, CHECK_INTERVAL_SECS};
+pub use update_check::{CHECK_INTERVAL_SECS, is_newer, now_unix, should_check};

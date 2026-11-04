@@ -20,4 +20,4 @@ pub mod hotplug;
 // ── Convenience re-exports ────────────────────────────────────────────────────
 
 pub use drive_detection::{load_drives, load_drives_sync};
-pub use hotplug::{watch_usb_events, UsbHotplugEvent};
+pub use hotplug::{UsbHotplugEvent, watch_usb_events};

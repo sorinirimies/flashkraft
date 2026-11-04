@@ -120,7 +120,9 @@ fn main() {
         }
         Ok(()) => {
             // The file happened to exist — that is fine; just note it.
-            println!("  {YELLOW}Note: {test_path} exists on this system — confirm_image succeeded.{RESET}");
+            println!(
+                "  {YELLOW}Note: {test_path} exists on this system — confirm_image succeeded.{RESET}"
+            );
         }
     }
 

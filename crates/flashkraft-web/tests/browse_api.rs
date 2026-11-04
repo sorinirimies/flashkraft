@@ -20,8 +20,9 @@ fn http(
     headers: &[(&str, &str)],
     body: &str,
 ) -> (u16, String) {
-    let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
-    s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect to the test server");
+    s.set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("set a read timeout");
     let mut req = format!("{method} {target} HTTP/1.1\r\nConnection: close\r\n");
     if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("host")) {
         req += &format!("Host: 127.0.0.1:{port}\r\n");
@@ -30,7 +31,7 @@ fn http(
         req += &format!("{k}: {v}\r\n");
     }
     req += &format!("Content-Length: {}\r\n\r\n{body}", body.len());
-    s.write_all(req.as_bytes()).unwrap();
+    s.write_all(req.as_bytes()).expect("send the request");
     let mut out = String::new();
     let _ = s.read_to_string(&mut out);
     let status = out
@@ -46,9 +47,9 @@ fn http(
 
 fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
+        .expect("bind a free port")
         .local_addr()
-        .unwrap()
+        .expect("read the bound address")
         .port()
 }
 

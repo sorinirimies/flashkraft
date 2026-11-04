@@ -10,7 +10,7 @@
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __debug_log_impl {
-    ($tag:expr, $($arg:tt)*) => {
+    ($tag:expr_2021, $($arg:tt)*) => {
         #[cfg(debug_assertions)]
         eprintln!(concat!("[", $tag, "] {}"), format!($($arg)*));
     };
@@ -74,7 +74,7 @@ macro_rules! status_log {
 /// ```
 #[macro_export]
 macro_rules! debug_if {
-    ($condition:expr, $($arg:tt)*) => {
+    ($condition:expr_2021, $($arg:tt)*) => {
         #[cfg(debug_assertions)]
         if $condition {
             eprintln!("[DEBUG] {}", format!($($arg)*));

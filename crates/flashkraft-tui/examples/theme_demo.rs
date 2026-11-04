@@ -30,11 +30,11 @@ use anyhow::Result;
 use crossterm::{
     event::{self, Event},
     execute,
-    terminal::{enable_raw_mode, EnterAlternateScreen},
+    terminal::{EnterAlternateScreen, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
-use flashkraft_tui::{handle_key, render, restore_terminal, App, AppScreen};
+use flashkraft_tui::{App, AppScreen, handle_key, render, restore_terminal};
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -80,18 +80,18 @@ where
             break;
         }
 
-        if event::poll(Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                handle_key(&mut app, key);
+        if event::poll(Duration::from_millis(50))?
+            && let Event::Key(key) = event::read()?
+        {
+            handle_key(&mut app, key);
 
-                // If the explorer dismissed us back to SelectImage, re-open it
-                // so the demo stays focused on the theme switcher.
-                if app.screen == AppScreen::SelectImage {
-                    if app.should_quit {
-                        break;
-                    }
-                    app.open_file_explorer();
+            // If the explorer dismissed us back to SelectImage, re-open it
+            // so the demo stays focused on the theme switcher.
+            if app.screen == AppScreen::SelectImage {
+                if app.should_quit {
+                    break;
                 }
+                app.open_file_explorer();
             }
         }
     }

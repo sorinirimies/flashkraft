@@ -28,7 +28,7 @@ pub(in crate::ui) fn render_app_theme_panel(
 
     // Scroll so the cursor row is always visible.
     let inner_h = split[0].height.saturating_sub(2) as usize; // subtract borders
-                                                              // +2 accounts for the two header lines inside the list block
+    // +2 accounts for the two header lines inside the list block
     let row = app.app_theme_panel_cursor + 2;
     let scroll_y = (row + 1).saturating_sub(inner_h) as u16;
 

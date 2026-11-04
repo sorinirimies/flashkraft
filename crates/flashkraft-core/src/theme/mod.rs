@@ -7,5 +7,5 @@
 pub mod presets;
 pub mod types;
 
-pub use presets::{theme_by_index, theme_index_by_name, THEME_COUNT, THEME_NAMES};
+pub use presets::{THEME_COUNT, THEME_NAMES, theme_by_index, theme_index_by_name};
 pub use types::{AppTheme, Rgb};

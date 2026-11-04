@@ -36,14 +36,14 @@
 //! no live cancel signal plumbed through pkexec, so a cancelled flash simply
 //! terminates the helper.
 
-use flashkraft_core::flash_helper::FlashEvent;
 use flashkraft_core::FlashUpdate;
+use flashkraft_core::flash_helper::FlashEvent;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
 const HELPER_FLAG: &str = "--flash-write-helper";
 
@@ -265,16 +265,18 @@ pub fn spawn(
 /// Kills the helper process shortly after `cancel` becomes `true`, or exits
 /// quietly once the child has already terminated on its own.
 fn spawn_cancel_watcher(child: Arc<Mutex<std::process::Child>>, cancel: Arc<AtomicBool>) {
-    std::thread::spawn(move || loop {
-        if cancel.load(Ordering::SeqCst) {
-            if let Ok(mut guard) = child.lock() {
-                let _ = guard.kill();
+    std::thread::spawn(move || {
+        loop {
+            if cancel.load(Ordering::SeqCst) {
+                if let Ok(mut guard) = child.lock() {
+                    let _ = guard.kill();
+                }
+                return;
             }
-            return;
-        }
-        match child.lock().ok().and_then(|mut g| g.try_wait().ok()) {
-            Some(Some(_)) => return, // already exited
-            _ => std::thread::sleep(std::time::Duration::from_millis(150)),
+            match child.lock().ok().and_then(|mut g| g.try_wait().ok()) {
+                Some(Some(_)) => return, // already exited
+                _ => std::thread::sleep(std::time::Duration::from_millis(150)),
+            }
         }
     });
 }

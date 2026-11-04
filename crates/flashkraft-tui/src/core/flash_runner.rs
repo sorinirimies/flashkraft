@@ -26,7 +26,7 @@
 
 use std::{
     path::PathBuf,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
 };
 
 use tokio::sync::mpsc;
@@ -240,9 +240,11 @@ mod tests {
 
         let events = drain(&mut rx);
         only_terminal_is_last(&events);
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, FlashEvent::Progress { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, FlashEvent::Progress { .. }))
+        );
         if matches!(events.last(), Some(FlashEvent::Completed)) {
             assert_eq!(std::fs::read(&dev).unwrap(), data);
         }

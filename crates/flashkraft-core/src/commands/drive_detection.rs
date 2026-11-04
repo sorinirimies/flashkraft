@@ -95,7 +95,7 @@ mod linux {
     use std::path::{Path, PathBuf};
 
     /// Enumerate all USB block devices via sysfs. No elevated privileges required.
-    pub fn enumerate() -> Vec<DriveInfo> {
+    pub(super) fn enumerate() -> Vec<DriveInfo> {
         let block_root = Path::new("/sys/block");
         let Ok(entries) = std::fs::read_dir(block_root) else {
             return Vec::new();
@@ -373,7 +373,7 @@ mod macos_parse {
     use super::*;
 
     /// Find the best-matching system_profiler device by VID + PID + serial.
-    pub fn find_sp_device<'a>(
+    pub(super) fn find_sp_device<'a>(
         devices: &'a [SpUsbDevice],
         vid: Option<u16>,
         pid: Option<u16>,
@@ -382,14 +382,14 @@ mod macos_parse {
         let (v, p) = (vid?, pid?);
 
         // 1. VID + PID + serial (most specific).
-        if let Some(s) = serial {
-            if let Some(dev) = devices.iter().find(|dev| {
+        if let Some(s) = serial
+            && let Some(dev) = devices.iter().find(|dev| {
                 dev.vendor_id == Some(v)
                     && dev.product_id == Some(p)
                     && dev.serial.as_deref() == Some(s)
-            }) {
-                return Some(dev);
-            }
+            })
+        {
+            return Some(dev);
         }
 
         // 2. VID + PID only.
@@ -404,7 +404,7 @@ mod macos_parse {
     /// array element that looks like a USB device (has `vendor_id` or
     /// `product_id`). Hub/controller wrapper objects that only contain
     /// `_items` sub-arrays are not emitted as devices themselves.
-    pub fn parse_system_profiler_json(json: &str) -> Vec<SpUsbDevice> {
+    pub(super) fn parse_system_profiler_json(json: &str) -> Vec<SpUsbDevice> {
         let mut devices = Vec::new();
         collect_items_arrays(json, &mut devices);
         devices
@@ -486,7 +486,7 @@ mod macos_parse {
     }
 
     /// Parse a single USB device JSON object block (content between `{` and `}`).
-    pub fn parse_sp_device_block(block: &str) -> SpUsbDevice {
+    pub(super) fn parse_sp_device_block(block: &str) -> SpUsbDevice {
         SpUsbDevice {
             vendor_id: json_str_value(block, "vendor_id").and_then(|s| parse_sp_hex_id(&s)),
             product_id: json_str_value(block, "product_id").and_then(|s| parse_sp_hex_id(&s)),
@@ -498,7 +498,7 @@ mod macos_parse {
     }
 
     /// Extract the string value for a JSON key from a raw JSON object block.
-    pub fn json_str_value(block: &str, key: &str) -> Option<String> {
+    pub(super) fn json_str_value(block: &str, key: &str) -> Option<String> {
         let needle = format!("\"{key}\"");
         let pos = block.find(&needle)?;
         let after_key = &block[pos + needle.len()..];
@@ -513,12 +513,12 @@ mod macos_parse {
     }
 
     /// Parse a system_profiler hex ID string like `"0x0781"` or `"0781"` to u16.
-    pub fn parse_sp_hex_id(s: &str) -> Option<u16> {
+    pub(super) fn parse_sp_hex_id(s: &str) -> Option<u16> {
         u16::from_str_radix(s.trim().trim_start_matches("0x"), 16).ok()
     }
 
     /// Convert a system_profiler speed string to a human-readable label.
-    pub fn sp_speed_string(raw: &str) -> String {
+    pub(super) fn sp_speed_string(raw: &str) -> String {
         match raw.trim() {
             "low_speed" => "Low Speed (1.5 Mbps)".to_string(),
             "full_speed" => "Full Speed (12 Mbps)".to_string(),
@@ -530,7 +530,7 @@ mod macos_parse {
     }
 
     /// Extract a string array value for `key` from an Apple XML plist.
-    pub fn parse_plist_string_array(plist: &str, key: &str) -> Vec<String> {
+    pub(super) fn parse_plist_string_array(plist: &str, key: &str) -> Vec<String> {
         let key_tag = format!("<key>{key}</key>");
         let Some(key_pos) = plist.find(&key_tag) else {
             return Vec::new();
@@ -560,7 +560,7 @@ mod macos_parse {
     }
 
     /// Parse `diskutil info -plist` output for a single disk.
-    pub fn parse_disk_info_plist(plist: &str, _bsd_name: &str) -> Option<MacDiskInfo> {
+    pub(super) fn parse_disk_info_plist(plist: &str, _bsd_name: &str) -> Option<MacDiskInfo> {
         let mut info = MacDiskInfo::default();
         let mut cursor = plist;
 
@@ -591,10 +591,10 @@ mod macos_parse {
                     }
                 }
                 "MountPoint" => {
-                    if let Some(v) = extract_string(value_section) {
-                        if !v.is_empty() {
-                            info.mount_point = Some(v);
-                        }
+                    if let Some(v) = extract_string(value_section)
+                        && !v.is_empty()
+                    {
+                        info.mount_point = Some(v);
                     }
                 }
                 "USBVendorID" => {
@@ -608,10 +608,10 @@ mod macos_parse {
                     }
                 }
                 "USBSerialNumber" => {
-                    if let Some(v) = extract_string(value_section) {
-                        if !v.is_empty() {
-                            info.usb_serial = Some(v);
-                        }
+                    if let Some(v) = extract_string(value_section)
+                        && !v.is_empty()
+                    {
+                        info.usb_serial = Some(v);
                     }
                 }
                 _ => {}
@@ -628,11 +628,11 @@ mod macos_parse {
 
     fn advance_past_value(cursor: &str) -> &str {
         let s = cursor.trim_start();
-        if s.starts_with("<true/>") {
-            return &cursor[cursor.find("<true/>").unwrap() + "<true/>".len()..];
-        }
-        if s.starts_with("<false/>") {
-            return &cursor[cursor.find("<false/>").unwrap() + "<false/>".len()..];
+        if let Some(rest) = s
+            .strip_prefix("<true/>")
+            .or_else(|| s.strip_prefix("<false/>"))
+        {
+            return rest;
         }
         let tag_end = match s.find('>') {
             Some(p) => p,
@@ -654,7 +654,7 @@ mod macos_parse {
         }
     }
 
-    pub fn extract_integer(s: &str) -> Option<u64> {
+    pub(super) fn extract_integer(s: &str) -> Option<u64> {
         for tag in &["<integer>", "<real>"] {
             if let Some(start) = s.find(tag) {
                 let after = &s[start + tag.len()..];
@@ -671,7 +671,7 @@ mod macos_parse {
         None
     }
 
-    pub fn extract_string(s: &str) -> Option<String> {
+    pub(super) fn extract_string(s: &str) -> Option<String> {
         let start = s.find("<string>")? + "<string>".len();
         let end = s[start..].find("</string>")?;
         Some(s[start..start + end].trim().to_string())
@@ -688,7 +688,7 @@ mod macos {
     use super::macos_parse::*;
     use super::*;
 
-    pub fn enumerate() -> Vec<DriveInfo> {
+    pub(super) fn enumerate() -> Vec<DriveInfo> {
         let whole_disks = list_external_disks();
         if whole_disks.is_empty() {
             return Vec::new();
@@ -809,7 +809,7 @@ mod windows_parse {
     /// HOSTNAME,\\.\PhysicalDrive1,SanDisk Ultra,USB\VID_0781&PID_5581\AA0123,AA0123,32012804608
     /// ```
     #[allow(dead_code)]
-    pub fn parse_wmic_csv(csv: &str) -> Vec<WmicDisk> {
+    pub(super) fn parse_wmic_csv(csv: &str) -> Vec<WmicDisk> {
         let mut lines = csv.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
 
         let header = loop {
@@ -865,7 +865,7 @@ mod windows_parse {
     ///
     /// Format: `USB\VID_0781&PID_5581\AA01234567890`
     #[allow(dead_code)]
-    pub fn parse_vid_pid_from_pnp(pnp: &str) -> (Option<u16>, Option<u16>) {
+    pub(super) fn parse_vid_pid_from_pnp(pnp: &str) -> (Option<u16>, Option<u16>) {
         let upper = pnp.to_uppercase();
 
         let vid = upper.find("VID_").and_then(|pos| {
@@ -898,7 +898,7 @@ mod windows {
     use super::windows_parse::*;
     use super::*;
 
-    pub fn enumerate() -> Vec<DriveInfo> {
+    pub(super) fn enumerate() -> Vec<DriveInfo> {
         let wmic_disks = query_wmic_usb_disks();
         if wmic_disks.is_empty() {
             return Vec::new();

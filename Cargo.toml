@@ -11,7 +11,8 @@ resolver = "2"
 
 [workspace.package]
 version      = "2.3.3"
-edition      = "2021"
+edition      = "2024"
+rust-version = "1.90"
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
 license      = "MIT"
 repository   = "https://github.com/sorinirimies/flashkraft"
@@ -21,8 +22,6 @@ repository   = "https://github.com/sorinirimies/flashkraft"
 # `{ workspace = true }` so there is a single source of truth.
 
 [workspace.dependencies]
-# Core / shared
-sysinfo      = "0.39"
 windows-sys  = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
@@ -34,7 +33,6 @@ nix          = { version = "0.31", features = ["fs", "ioctl", "mount", "process"
 notify       = { version = "8.2.0", features = [] }
 
 futures      = "0.3"
-futures-timer = "3.0"
 dirs         = "7.0"
 serde        = { version = "1", features = ["derive"] }
 serde_json   = "1"
@@ -46,7 +44,6 @@ reqwest      = { version = "0.12", default-features = false, features = ["json",
 
 # GUI (Iced)
 iced         = { version = "0.14.0", features = ["advanced", "canvas"] }
-iced_aw      = "0.14.1"
 iced_fonts   = { version = "0.3.0", features = ["bootstrap"] }
 rfd          = "0.17"
 
@@ -68,6 +65,18 @@ topcoat      = "0.10"
 
 # Internal crates
 flashkraft-core = { path = "crates/flashkraft-core", version = "2.3.3" }
+
+[workspace.lints.rust]
+# Block-device ioctls and the Win32 API need unsafe: each use allows it with a reason.
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+# `pub` only for what another crate uses; then dead_code finds the rest.
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
 
 [profile.dev]
 opt-level = 0

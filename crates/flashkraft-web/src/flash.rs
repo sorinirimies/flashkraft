@@ -236,6 +236,7 @@ pub fn validate(
 // Job manager
 // ---------------------------------------------------------------------------
 
+#[derive(Debug)]
 struct Job {
     image: String,
     /// `device → "Name (size)"` for history labels and the UI.
@@ -245,7 +246,7 @@ struct Job {
 }
 
 /// Holds the one flash job the server allows at a time.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Manager {
     job: Mutex<Option<Job>>,
 }

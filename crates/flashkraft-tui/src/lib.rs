@@ -53,9 +53,9 @@ use anyhow::Result;
 use crossterm::{
     event::{self, Event},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 /// Set up the terminal, run the application event loop, then restore the
 /// terminal on exit (or on panic).
@@ -178,10 +178,10 @@ where
         terminal.draw(|frame| render(&mut app, frame))?;
 
         // ── Keyboard events (100 ms timeout) ──────────────────────────────────
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                handle_key(&mut app, key);
-            }
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+        {
+            handle_key(&mut app, key);
         }
 
         // ── Quit guard ────────────────────────────────────────────────────────

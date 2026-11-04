@@ -399,7 +399,7 @@ mod tests {
     use crate::core::message::AppScreen;
     use crate::core::state::App;
     use flashkraft_core::{FlashUpdate, MultiState, MultiUpdate};
-    use ratatui::{backend::TestBackend, Terminal};
+    use ratatui::{Terminal, backend::TestBackend};
 
     fn screen_text(app: &mut App, w: u16, h: u16) -> String {
         let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();

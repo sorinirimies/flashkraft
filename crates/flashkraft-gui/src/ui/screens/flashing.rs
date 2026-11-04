@@ -3,11 +3,11 @@
 //! Shows the animated progress bar, speed, ETA, and cancel button
 //! while the flash (and optional verification) pipeline is running.
 
-use iced::widget::{button, column, row, text, Space};
+use iced::widget::{Space, button, column, row, text};
 use iced::{Alignment, Element};
 
-use crate::core::message::Message;
 use crate::core::FlashKraft;
+use crate::core::message::Message;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
 

@@ -3,11 +3,11 @@
 //! Shown when the flash (and optional verification) pipeline finishes
 //! successfully.
 
-use iced::widget::{button, column, text, Space};
+use iced::widget::{Space, button, column, text};
 use iced::{Alignment, Element};
 
-use crate::core::message::Message;
 use crate::core::FlashKraft;
+use crate::core::message::Message;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
 

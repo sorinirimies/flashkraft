@@ -73,6 +73,7 @@ impl Default for TuiSettings {
 ///
 /// All operations are infallible from the caller's perspective: errors are
 /// silently swallowed so a missing or corrupt file never crashes the app.
+#[derive(Debug)]
 pub struct TuiStorage {
     /// `None` when the settings path could not be determined.
     path: Option<PathBuf>,

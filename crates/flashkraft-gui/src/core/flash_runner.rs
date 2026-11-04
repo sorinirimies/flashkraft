@@ -48,18 +48,18 @@
 
 use crate::flash_debug;
 use crate::privileged_helper;
+use flashkraft_core::FlashUpdate;
 use flashkraft_core::flash_helper::can_escalate_in_process;
 use flashkraft_core::flash_worker::spawn_flash_worker;
-use flashkraft_core::FlashUpdate;
-use futures::channel::mpsc as futures_mpsc;
 use futures::StreamExt;
-use iced::stream;
+use futures::channel::mpsc as futures_mpsc;
 use iced::Subscription;
+use iced::stream;
 use std::hash::Hash;
 use std::path::PathBuf;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 // ---------------------------------------------------------------------------
@@ -132,7 +132,7 @@ pub fn flash_progress(
 /// and returns an async stream that drives the flash pipeline.
 fn build_flash_stream(
     data: &FlashSubData,
-) -> impl futures::Stream<Item = FlashProgress> + Send + 'static {
+) -> impl futures::Stream<Item = FlashProgress> + Send + 'static + use<> {
     let image_path = data.image_path.clone();
     let device_path = data.device_path.clone();
     let cancel_token = data.cancel_token.clone();
@@ -347,7 +347,7 @@ pub fn multi_flash_progress(
 
 fn build_multi_stream(
     data: &MultiSubData,
-) -> impl futures::Stream<Item = flashkraft_core::MultiUpdate> + Send + 'static {
+) -> impl futures::Stream<Item = flashkraft_core::MultiUpdate> + Send + 'static + use<> {
     let data = data.clone();
     stream::channel(64, async move |mut output| {
         use futures::SinkExt as _;

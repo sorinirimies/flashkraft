@@ -11,8 +11,8 @@ pub mod select_image;
 use iced::widget::{column, container};
 use iced::{Element, Length};
 
-use crate::core::message::Message;
 use crate::core::FlashKraft;
+use crate::core::message::Message;
 use crate::ui::components::theme_selector;
 
 /// Wrap inner content in the standard status-page layout:

@@ -7,14 +7,14 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 
 use tokio::sync::mpsc;
 
-use crate::domain::{constraints, CompatibilityStatusType, DriveInfo, ImageInfo};
+use crate::domain::{CompatibilityStatusType, DriveInfo, ImageInfo, constraints};
 use tui_file_explorer::{FileExplorer, Theme};
 
 use super::storage::TuiStorage;
@@ -29,6 +29,7 @@ use super::message::{
 // Main application state
 // ---------------------------------------------------------------------------
 
+#[derive(Debug)]
 pub struct App {
     // ── Screen ───────────────────────────────────────────────────────────────
     /// Active screen.
@@ -158,6 +159,7 @@ pub struct App {
 }
 
 /// State backing the auto-hiding "a new version is available" banner.
+#[derive(Debug)]
 pub struct UpdateBanner {
     /// Version string reported by crates.io (e.g. `"1.6.0"`).
     pub latest_version: String,
@@ -417,10 +419,10 @@ impl App {
     /// longer than [`UPDATE_BANNER_DURATION`]. Called every tick alongside
     /// the other `poll_*` methods.
     pub fn poll_update_banner_expiry(&mut self) {
-        if let Some(banner) = &self.update_banner {
-            if banner.shown_at.elapsed() >= UPDATE_BANNER_DURATION {
-                self.update_banner = None;
-            }
+        if let Some(banner) = &self.update_banner
+            && banner.shown_at.elapsed() >= UPDATE_BANNER_DURATION
+        {
+            self.update_banner = None;
         }
     }
 
@@ -1884,18 +1886,20 @@ mod tests {
             "Writing image to device\u{2026}".to_string(),
         ));
         assert_eq!(app.flash_stage, "Writing image to device\u{2026}");
-        assert!(app
-            .flash_log
-            .contains(&"Writing image to device\u{2026}".to_string()));
+        assert!(
+            app.flash_log
+                .contains(&"Writing image to device\u{2026}".to_string())
+        );
     }
 
     #[test]
     fn test_apply_flash_event_log_appends_to_log() {
         let mut app = App::new();
         app.apply_flash_event(FlashEvent::Message("SHA-256 verified \u{2713}".to_string()));
-        assert!(app
-            .flash_log
-            .contains(&"SHA-256 verified \u{2713}".to_string()));
+        assert!(
+            app.flash_log
+                .contains(&"SHA-256 verified \u{2713}".to_string())
+        );
     }
 
     #[test]
@@ -1917,10 +1921,11 @@ mod tests {
         assert_eq!(app.screen, AppScreen::Complete);
         // A completion message should have been logged
         assert!(!app.flash_log.is_empty());
-        assert!(app
-            .flash_log
-            .iter()
-            .any(|l| l.contains("complet") || l.contains("success")));
+        assert!(
+            app.flash_log
+                .iter()
+                .any(|l| l.contains("complet") || l.contains("success"))
+        );
     }
 
     #[test]
