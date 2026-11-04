@@ -10,8 +10,7 @@
 # run falls back to an older nightly (FALLBACK_DAYS ago) and says so. A crash
 # while fuzzing still fails the run.
 #
-# Usage: nu scripts/ci/fuzz_all.nu [--secs 60] [--corpus <dir>]
-#   --corpus: keep each target's corpus in <dir>/<target> instead of fuzz/corpus.
+# Usage: nu scripts/ci/fuzz_all.nu [--secs 60]
 # ──────────────────────────────────────────────────────────────────────────────
 
 # How many days back the fallback nightlies are.
@@ -22,9 +21,8 @@ export def toolchains [today: datetime] {
     ["nightly" ...($FALLBACK_DAYS | each {|d| $"nightly-(($today - ($d * 1day)) | format date '%Y-%m-%d')" })]
 }
 
-export def fuzz_args [toolchain: string, target: string, secs: int, corpus?: string] {
-    let dir = if $corpus == null { [] } else { [($corpus | path join $target)] }
-    [$"+($toolchain)" fuzz run $target ...$dir -- $"-max_total_time=($secs)"]
+export def fuzz_args [toolchain: string, target: string, secs: int] {
+    [$"+($toolchain)" fuzz run $target -- $"-max_total_time=($secs)"]
 }
 
 # The first toolchain that builds every fuzz target, installing dated ones on demand.
@@ -42,14 +40,13 @@ def pick_toolchain [] {
     exit 1
 }
 
-def main [--secs: int = 60, --corpus: string] {
+def main [--secs: int = 60] {
     let tc = pick_toolchain
     print $"toolchain=($tc)"
     let targets = ^cargo $"+($tc)" fuzz list | lines | where {|l| $l | is-not-empty }
     if ($targets | is-empty) { print -e "no fuzz targets"; exit 1 }
     for t in $targets {
         print -e $"(ansi cyan)▶(ansi reset) ($t) for ($secs)s on ($tc)"
-        if $corpus != null { mkdir ($corpus | path join $t) }
-        ^cargo ...(fuzz_args $tc $t $secs $corpus)
+        ^cargo ...(fuzz_args $tc $t $secs)
     }
 }

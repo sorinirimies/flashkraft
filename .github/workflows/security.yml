@@ -5,10 +5,13 @@ on:
     - cron: "0 3 * * *"
   push:
     branches: [main]
-    paths: ["Cargo.lock", "Cargo.toml", "**/Cargo.toml", "deny.toml", ".cargo/audit.toml", "fuzz/**", "crates/flashkraft-core/src/**"]
+    paths: ["Cargo.lock", "Cargo.toml", "**/Cargo.toml", ".cargo/audit.toml", "deny.toml", "fuzz/**"]
   pull_request:
-    paths: ["Cargo.lock", "Cargo.toml", "**/Cargo.toml", "deny.toml", ".cargo/audit.toml", "fuzz/**", "crates/flashkraft-core/src/**"]
+    paths: ["Cargo.lock", "Cargo.toml", "**/Cargo.toml", ".cargo/audit.toml", "deny.toml", "fuzz/**"]
   workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   audit:
@@ -22,8 +25,6 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
-      - name: Generate lockfile (if absent)
-        run: '[ -f Cargo.lock ] || cargo generate-lockfile'
       - name: Audit dependencies
         run: cargo audit
 
@@ -31,7 +32,7 @@ jobs:
     name: cargo deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust stable
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable

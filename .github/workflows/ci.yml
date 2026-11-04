@@ -3,278 +3,98 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - main
-      - master
-      - develop
+    branches: [main, master, develop]
+  workflow_dispatch:
+    inputs:
+      full_matrix:
+        description: Also test on macOS and Windows (automatic on public repos)
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
-  # Targets used in the cross-compile check job.
-  # cargo check only — no linker or system libraries needed on the runner.
-  WINDOWS_TARGET: x86_64-pc-windows-gnu
-  MACOS_X86_TARGET: x86_64-apple-darwin
-  MACOS_ARM_TARGET: aarch64-apple-darwin
 
-# Cancel in-progress runs on the same branch/PR so we never queue up stale
-# jobs after a force-push.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# ── Shared setup ───────────────────────────────────────────────────────────────
-# Most jobs need the native GUI libraries that Iced links against on Linux.
-# We install them once here and reference the step from each job.
-# TUI jobs (ratatui/crossterm) are pure-Rust and need no extra system deps.
-
 jobs:
-  # ── 1. Formatting ────────────────────────────────────────────────────────────
-  fmt:
-    name: fmt
+  # fmt + clippy + tests + versions + nu tests —
+  # the same script `just check-all` runs.
+  gate:
+    name: quality gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust stable + rustfmt
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Check formatting (workspace)
-        run: cargo fmt --all -- --check
-
-  # ── 2. Clippy ────────────────────────────────────────────────────────────────
-  clippy:
-    name: clippy
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
-      - name: Install Rust stable + clippy
-        uses: dtolnay/rust-toolchain@stable
+          components: rustfmt,clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
         with:
-          components: clippy
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      - name: Quality gate
+        run: nu scripts/ci/quality_gate.nu
 
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Run clippy (workspace)
-        uses: clechasseur/rs-clippy-check@v4
-        with:
-          args: --workspace --all-targets --all-features -- -D warnings -A deprecated
-
-  # ── 3. Tests ─────────────────────────────────────────────────────────────────
+  # The binary ships for all three systems: paths, line endings and process
+  # handling differ there.
   test:
-    name: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Generate lockfile (if absent)
-        if: hashFiles('Cargo.lock') == ''
-        run: cargo generate-lockfile
-
-      # Run the full test suite.  GUI rendering tests are compile-only on a
-      # headless runner (they never open a window), so they pass fine.
-      - name: cargo test --workspace
-        run: cargo test --workspace --all-features --all-targets
-
-  # ── 4. Build (dev) ───────────────────────────────────────────────────────────
-  build:
-    name: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build core (dev)
-        run: cargo build -p flashkraft-core
-
-      - name: Build GUI (dev)
-        run: cargo build -p flashkraft
-
-      - name: Build TUI (dev)
-        run: cargo build -p flashkraft-tui
-
-  # ── 5. Docs ──────────────────────────────────────────────────────────────
-  doc:
-    name: doc
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      # Treat all rustdoc warnings as errors — same flag used in release.
-      - name: cargo doc (workspace, no deps)
-        env:
-          RUSTDOCFLAGS: "-D warnings"
-        run: cargo doc --workspace --no-deps
-
-  # ── 6. Cross-compile check (Windows + macOS from Linux runner) ───────────────
-  #
-  # Runs `cargo check` against three foreign targets entirely on the Linux
-  # runner — no Windows or macOS runner needed.
-  #
-  # What this catches:
-  #   • Wrong windows-sys import paths / feature gates (e.g. CreateFileW)
-  #   • #[cfg] branches that only compile on Windows or macOS
-  #   • Type mismatches in platform-specific unsafe blocks
-  #   • Missing feature flags in Cargo.toml
-  #
-  # What it does NOT do:
-  #   • Run Windows/macOS tests (no OS APIs available on the Linux runner)
-  #   • Produce runnable binaries (cargo check stops before codegen)
-  #
-  # Only flashkraft-core is checked because it contains all platform-specific
-  # code (flash pipeline, Windows DeviceIoControl, macOS diskutil integration).
-  # The GUI and TUI crates depend on Iced/Ratatui which require native system
-  # libraries that cannot be cross-checked without a matching sysroot.
-  cross-check:
-    name: cross-check (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }})
+    # A private repo pays 10x for macOS and 2x for Windows minutes: there this
+    # runs only when dispatched with full_matrix.
+    if: ${{ !github.event.repository.private || inputs.full_matrix }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-pc-windows-gnu # Windows x86_64 — exercises mod windows {}
-          - x86_64-apple-darwin # macOS Intel    — exercises mod macos {}
-          - aarch64-apple-darwin # macOS Apple Silicon
+        os: [macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo test --workspace
+        run: cargo test --workspace --all-features
 
-      # mingw-w64 provides the Windows import libraries that the GNU linker
-      # stubs need even during cargo check (extern "system" symbols are
-      # resolved by the linker driver even without full codegen).
-      - name: Install mingw-w64 (Windows target only)
-        if: matrix.target == 'x86_64-pc-windows-gnu'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends mingw-w64
-
-      - name: Install Rust stable + cross-check target
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: cross-${{ matrix.target }}
-
-      # cargo check runs the full type-checker and borrow-checker but skips
-      # LLVM codegen and linking — fast and sufficient to catch API mismatches.
-      - name: cargo check flashkraft-core (${{ matrix.target }})
-        run: cargo check -p flashkraft-core --target ${{ matrix.target }}
-
-  # ── 7. Nu script tests ───────────────────────────────────────────────────────
-  test-nu:
-    name: test-nu
+  # The Linux release binaries are static musl ones (any distro); skipped when
+  # scripts/project.nu sets LINUX to "gnu".
+  musl:
+    name: musl (static)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Generate lockfile (if absent)
-        if: hashFiles('Cargo.lock') == ''
-        run: cargo generate-lockfile
-
-      - name: Install Nushell
+      - uses: actions/checkout@v7
+      - name: Install musl tools
         run: |
-          V=0.116.1
-          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || { mkdir -p $HOME/.cargo/bin; install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu; }
-          nu --version
+          sudo apt-get -o Acquire::Retries=5 update -qq
+          sudo apt-get -o Acquire::Retries=5 install -y --no-install-recommends musl-tools
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      - name: Build, statically linked and runs
+        run: nu scripts/ci/check_static.nu x86_64-unknown-linux-musl --build
 
-      - name: Run Nu script tests
-        run: nu scripts/tests/run_all.nu
+  msrv:
+    name: MSRV (1.90)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # @master + toolchain, not @1.90: Dependabot would bump a version ref.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      # flashkraft-web is left out: it needs Rust 1.98 (Topcoat).
+      - name: cargo check
+        run: cargo check --workspace --exclude flashkraft-web --locked

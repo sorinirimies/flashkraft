@@ -1,293 +1,66 @@
-name: Nightly Dependency Upgrade
+name: Nightly dependency update
+
+# `cargo update` within the semver ranges (and in fuzz/), then the full gate; if
+# it is green, commit the lockfiles straight to main as `chore(deps)`. Nothing
+# changed ⇒ nothing happens. Releases stay manual (`just release X.Y.Z`).
 
 on:
   schedule:
-    # Runs at 02:00 UTC every day (03:00 CET)
-    - cron: "0 2 * * *"
+    - cron: "0 2 * * *" # 02:00 UTC (Gitea runs at 02:30)
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
 
-permissions:
-  contents: write
-  pull-requests: write
-  actions: write
-
+# Never cancel mid-run: a half-finished push would leave main inconsistent.
 concurrency:
   group: deps-update
   cancel-in-progress: false
 
 jobs:
-  upgrade-deps:
-    name: Upgrade Dependencies
+  update:
     runs-on: ubuntu-latest
-    env:
-      HAS_PAT: ${{ secrets.GH_PAT != '' }}
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      # ── System libraries (required by the Iced GUI crate) ────────────────────
-      - name: Install Linux GUI system libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
-      # ── mingw-w64 (needed for the Windows cross-compile check) ───────────────
-      - name: Install mingw-w64
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends mingw-w64
-
-      # ── Rust toolchain ────────────────────────────────────────────────────────
-      - name: Install Rust stable (rustfmt + clippy + cross targets)
-        uses: dtolnay/rust-toolchain@stable
+          token: ${{ secrets.GH_PAT || github.token }}
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-          targets: x86_64-pc-windows-gnu,x86_64-apple-darwin,aarch64-apple-darwin
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      # ── cargo-edit (provides `cargo upgrade`) ────────────────────────────────
-      - name: Install cargo-edit
-        run: cargo install cargo-edit --locked
-
-      # ── Pre-warm cargo registry ───────────────────────────────────────────────
-      # `cargo upgrade`'s recursive-dep resolver runs in offline mode and only
-      # considers package sources that are physically present in the local cache.
-      # If a previously-cached version has since been yanked (e.g.
-      # unicode-segmentation 1.13.1) the offline resolver finds no valid
-      # candidate and aborts.  Running `cargo update` first refreshes the
-      # registry index and rewrites Cargo.lock to non-yanked versions; `cargo
-      # fetch` then downloads those sources so the offline phase has at least
-      # one valid, non-yanked candidate for every transitive dependency.
-      - name: Pre-warm cargo registry (refresh index + fetch sources)
-        run: cargo update && cargo fetch
-
-      # ── Upgrade all dependency pins ──────────────────────────────────────────
-      # `cargo upgrade --incompatible allow` rewrites version constraints in
-      # [workspace.dependencies] so pinned libs like `dirs = "5.0"` can advance
-      # to "6.0", `nix = "0.29"` to "0.31", etc.
-      # `cargo update` then resolves the new constraints into Cargo.lock.
-      # Snapshot dependency requirements as data: a patch release is cut ONLY when
-      # `cargo upgrade` really changed one (it also reformats manifests, which must not count).
-      - name: Snapshot dependency requirements (before)
-        run: cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-before.json"
-
-      - name: Upgrade workspace dependency pins
-        run: cargo upgrade --incompatible allow
-
-      - name: Sync Cargo.lock
-        run: cargo update
-
-      # ── Check for changes ────────────────────────────────────────────────────
-      # `cargo update` can rewrite Cargo.lock (checksum/source reordering,
-      # registry-index metadata refresh) even when no package's resolved
-      # version actually changed. A raw `git diff --quiet` on Cargo.lock is
-      # therefore a false positive trigger. Compare the set of `name`/`version`
-      # pairs before vs. after instead — that's the only thing that signals a
-      # real dependency upgrade.
-      #
-      # Note: `cargo upgrade` (cargo-edit) also reserializes the whole
-      # Cargo.toml via toml_edit, reordering/reformatting keys even when no
-      # pin actually changed — so a raw `git diff --quiet Cargo.toml` check
-      # is equally unreliable and is deliberately NOT part of this gate.
-      # Cargo.lock's name/version pairs are the ground truth.
-      - name: Check for changes
-        id: check
-        run: |
-          extract() { grep -E '^(name|version) = ' | paste -d' ' - - | sort; }
-
-          OLD_LOCK=$(git show HEAD:Cargo.lock | extract)
-          NEW_LOCK=$(extract < Cargo.lock)
-
-          if [ "$OLD_LOCK" = "$NEW_LOCK" ]; then
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check for dependency requirement changes
-        id: reqs
-        run: |
-          cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-after.json"
-          if cmp -s "$RUNNER_TEMP/reqs-before.json" "$RUNNER_TEMP/reqs-after.json"; then
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            # Lock-only: drop cosmetic manifest reformatting from cargo-edit.
-            git ls-files -m -- '*Cargo.toml' | xargs -r git checkout --
-          else
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "Cargo.toml dependency requirements changed -> patch release."
-          fi
-
-      # ── Generate upgrade summary for the PR body ─────────────────────────────
-      - name: Generate upgrade summary
-        if: steps.check.outputs.has_changes == 'true'
-        id: summary
-        run: |
-          {
-            echo 'diff<<EOF'
-
-            TOML_DIFF=$(git diff Cargo.toml)
-            if [ -n "$TOML_DIFF" ]; then
-              echo '### `Cargo.toml` pin changes'
-              echo ''
-              echo '```diff'
-              echo "$TOML_DIFF" | head -200
-              echo '```'
-              echo ''
-            fi
-
-            echo '### `Cargo.lock` changes (truncated)'
-            echo ''
-            echo '```diff'
-            git diff --stat Cargo.lock
-            echo '```'
-
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-
-      # ── Quality gate ─────────────────────────────────────────────────────────
-      - name: Check formatting
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
-
-      - name: Run tests
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo test --workspace --all-features --all-targets
-
-      - name: Cross-check — x86_64-pc-windows-gnu
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo check -p flashkraft-core --target x86_64-pc-windows-gnu
-
-      - name: Cross-check — x86_64-apple-darwin
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo check -p flashkraft-core --target x86_64-apple-darwin
-
-      - name: Cross-check — aarch64-apple-darwin
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo check -p flashkraft-core --target aarch64-apple-darwin
-
-      # ── Create Pull Request ──────────────────────────────────────────────────
-      - name: Create Pull Request
-        if: steps.check.outputs.has_changes == 'true'
-        id: create-pr
-        uses: peter-evans/create-pull-request@v6
+          components: rustfmt,clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
         with:
-          commit-message: "chore(deps): nightly dependency upgrade"
-          title: "chore(deps): nightly dependency upgrade"
-          body: |
-            ## Automated Nightly Dependency Upgrade
-
-            This PR was automatically created by the **Nightly Dependency Upgrade** workflow.
-
-            `cargo upgrade --incompatible allow` + `cargo update` were run to
-            upgrade all dependencies — including major-version bumps for workspace pins
-            in `[workspace.dependencies]`.
-
-            ### What was updated
-
-            ${{ steps.summary.outputs.diff }}
-
-            ---
-
-            > ✅ All quality checks passed: **fmt**, **clippy**, **tests**, and
-            > **cross-compile checks** (Windows x86_64, macOS x86_64, macOS ARM).
-          branch: deps/nightly-dependency-upgrade
-          labels: dependencies
-          delete-branch: true
-
-      # ── Auto-merge the PR ────────────────────────────────────────────────────
-      # The full quality gate (fmt, clippy, tests, cross-checks) already passed
-      # above, so merging is safe.  Try --auto first (honours branch protection
-      # rules and waits for any required status checks triggered by the PR);
-      # fall back to immediate merge if auto-merge is not enabled in the repo.
-      - name: Merge Pull Request
-        id: merge
-        if: steps.create-pr.outputs.pull-request-number
-        run: |
-          PR="${{ steps.create-pr.outputs.pull-request-number }}"
-          echo "Merging PR #${PR}..."
-          gh pr merge "$PR" --merge --delete-branch 2>/dev/null \
-            || gh pr merge "$PR" --auto --merge --delete-branch
-          # Wait until the PR is really MERGED: a release must be cut from merged main.
-          for _ in $(seq 1 60); do
-            STATE=$(gh pr view "$PR" --json state -q .state)
-            if [ "$STATE" = "MERGED" ]; then
-              echo "merged=true" >> "$GITHUB_OUTPUT"
-              echo "✅ PR #${PR} merged."
-              exit 0
-            fi
-            sleep 30
-          done
-          echo "PR #${PR} not merged after 30 min - no release cut." >&2
-          exit 1
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      # AUTO_RELEASE in scripts/project.nu: upgrade the requirements and release.
+      - name: Mode
+        id: mode
+        run: nu scripts/project.nu auto-release >> "$GITHUB_OUTPUT"
+      - name: cargo update
+        if: steps.mode.outputs.auto_release != 'true'
+        run: nu scripts/ci/deps_update.nu update
+      - name: Install cargo-edit, git-cliff
+        if: steps.mode.outputs.auto_release == 'true'
+        run: cargo install cargo-edit git-cliff --locked
+      - name: cargo upgrade + update
+        if: steps.mode.outputs.auto_release == 'true'
+        run: nu scripts/ci/deps_update.nu upgrade
+      - name: Anything to do?
+        id: diff
+        run: nu scripts/ci/deps_update.nu changed >> "$GITHUB_OUTPUT"
+      - name: Quality gate
+        if: steps.diff.outputs.changed == 'true'
+        run: nu scripts/ci/quality_gate.nu
+      - name: Commit
+        if: steps.diff.outputs.changed == 'true' && steps.diff.outputs.release != 'true'
+        run: nu scripts/ci/deps_update.nu commit "github-actions[bot]" "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Patch release
+        if: steps.diff.outputs.release == 'true'
+        run: nu scripts/ci/deps_update.nu release "github-actions[bot]" "41898282+github-actions[bot]@users.noreply.github.com"
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-      # ── Patch release: ONLY when a Cargo.toml dependency requirement changed ─────
-      # A lockfile-only upgrade was merged above WITHOUT a version bump.
-      - name: Install nushell
-        if: steps.merge.outputs.merged == 'true' && steps.reqs.outputs.release == 'true'
-        uses: hustcer/setup-nu@v3
-        with:
-          version: "0.111.0"
-
-      - name: Install git-cliff
-        if: steps.merge.outputs.merged == 'true' && steps.reqs.outputs.release == 'true'
-        run: command -v git-cliff >/dev/null || cargo install git-cliff --locked
-
-      - name: Bump patch version, tag and push
-        id: release
-        if: steps.merge.outputs.merged == 'true' && steps.reqs.outputs.release == 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout -B main origin/main
-          current=$(nu scripts/version.nu)
-          IFS='.' read -r major minor patch <<< "$current"
-          next="$major.$minor.$((patch + 1))"
-          while git rev-parse -q --verify "refs/tags/v$next" >/dev/null; do
-            patch=$((patch + 1))
-            next="$major.$minor.$((patch + 1))"
-          done
-          echo "Releasing $current -> $next"
-          nu scripts/bump_version.nu --yes --skip-checks "$next"
-          git push origin HEAD:main
-          git push origin "v$next"
-          echo "tag=v$next" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-      # Pushes made with the default GITHUB_TOKEN do not trigger workflows: dispatch.
-      - name: Trigger Release workflow
-        if: steps.release.outputs.tag != '' && env.HAS_PAT != 'true'
-        run: gh workflow run release.yml -f tag="${{ steps.release.outputs.tag }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Nothing to update
-        if: steps.check.outputs.has_changes == 'false'
-        run: echo "✅ All dependencies already up to date — nothing to upgrade."
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          HAS_PAT: ${{ secrets.GH_PAT != '' }}

@@ -1,60 +1,49 @@
 #!/usr/bin/env nu
-
-# ──────────────────────────────────────────────────────────────
-#  FlashKraft – CI Release Notes Generator
-# ──────────────────────────────────────────────────────────────
-#  Called by the release workflow AFTER the tag has been pushed.
-#  The version is already bumped in Cargo.toml — this script
-#  only generates CHANGELOG.md and RELEASE_NOTES.md.
+# ──────────────────────────────────────────────────────────────────────────────
+# FlashKraft — Release notes
+# ──────────────────────────────────────────────────────────────────────────────
+# Writes RELEASE_NOTES.md for a tag: install instructions plus this release's
+# section of the changelog (git-cliff --latest; the workflow runs at the tag, so
+# --unreleased would be empty).
 #
-#  Usage:
-#    nu scripts/ci/release_notes.nu v1.0.3
-# ──────────────────────────────────────────────────────────────
+# Usage:
+#   nu scripts/ci/release_notes.nu v0.2.0
+# ──────────────────────────────────────────────────────────────────────────────
+
+use ../project.nu [PUBLISH bin_crates]
+
+# `cargo install` lines for the published crates that ship a binary.
+export def install_lines []: nothing -> list<string> {
+    bin_crates | where {|c| $c in $PUBLISH } | each {|c| $"cargo install ($c)" }
+}
+
+# The notes text for `version` with the changelog section `changes`.
+export def notes [version: string, changes: string]: nothing -> string {
+    [
+        $"# FlashKraft ($version)"
+        ""
+        "Download the archive for your platform below \(binary at the archive root\),"
+        "or install from crates.io:"
+        ""
+        "```sh"
+        ...(install_lines)
+        "```"
+        ""
+        "## Changes"
+        ""
+        $changes
+        ""
+    ] | str join "\n"
+}
 
 def main [raw_tag: string] {
     let version = ($raw_tag | str replace --regex '^v' '')
-
-    print $"Generating release artifacts for v($version)…"
-
-    # ── Generate CHANGELOG.md ─────────────────────────────────
-    if (which git-cliff | is-not-empty) {
-        print "  Generating CHANGELOG.md…"
-        try {
-            git-cliff --tag $"v($version)" --output CHANGELOG.md
-            print "  ✔ CHANGELOG.md updated"
-        } catch {
-            print "  ⚠ git-cliff failed — skipping changelog"
-        }
+    let changes = if (which git-cliff | is-not-empty) {
+        let r = (do { ^git-cliff --latest --strip header } | complete)
+        if $r.exit_code == 0 and ($r.stdout | str trim | is-not-empty) { $r.stdout | str trim } else { "- See the commit history." }
     } else {
-        print "  ⚠ git-cliff not found — skipping changelog"
+        "- See the commit history."
     }
-
-    # ── Generate RELEASE_NOTES.md ─────────────────────────────
-    print "  Generating RELEASE_NOTES.md…"
-
-    mut notes = $"# FlashKraft v($version)\n\n"
-    $notes = $notes + "## Installation\n\n"
-    $notes = $notes + "```sh\n"
-    $notes = $notes + "# Desktop GUI\n"
-    $notes = $notes + "cargo install flashkraft\n\n"
-    $notes = $notes + "# Terminal UI\n"
-    $notes = $notes + "cargo install flashkraft-tui\n"
-    $notes = $notes + "```\n\n"
-    $notes = $notes + $"Or download pre-built binaries from this release.\n\n"
-
-    # Append changelog for this version
-    if (which git-cliff | is-not-empty) {
-        try {
-            let cliff_notes = (git-cliff --tag $"v($version)" --unreleased --strip header | str trim)
-            if ($cliff_notes | is-not-empty) {
-                $notes = $notes + "## What's Changed\n\n"
-                $notes = $notes + $cliff_notes
-                $notes = $notes + "\n"
-            }
-        }
-    }
-
-    $notes | save --force RELEASE_NOTES.md
-    print "  ✔ RELEASE_NOTES.md generated"
-    print $"✅ Release artifacts ready for v($version)"
+    notes $version $changes | save --force RELEASE_NOTES.md
+    print $"(ansi green)✅ RELEASE_NOTES.md for ($version)(ansi reset)"
 }

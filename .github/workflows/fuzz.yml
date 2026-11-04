@@ -5,46 +5,33 @@ on:
     - cron: "0 4 * * *"
   push:
     branches: [main]
-    tags: ["v*"]
     paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock"]
   pull_request:
     paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock"]
   workflow_dispatch:
-
-concurrency:
-  group: fuzz-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   fuzz:
-    name: cargo fuzz (nightly)
+    name: cargo fuzz (smoke)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install GUI system libraries (the GUI fuzz target links iced)
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libwayland-dev libgl1-mesa-dev \
-            libfontconfig1-dev libssl-dev
       - name: Install Rust nightly
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
-      - name: Install Nushell
-        run: |
-          V=0.116.1
-          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || { mkdir -p $HOME/.cargo/bin; install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu; }
-          nu --version
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
       - name: Fuzz each target for 60s
-        run: nu scripts/ci/fuzz_all.nu --secs 60 --corpus $RUNNER_TEMP/corpus
+        run: nu scripts/ci/fuzz_all.nu --secs 60
       - name: Upload crashes
         if: failure()
         uses: actions/upload-artifact@v7

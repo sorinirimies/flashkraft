@@ -9,7 +9,7 @@ use runner.nu *
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 # Extract the [workspace.package] version from a Cargo.toml string.
-# Mirrors the exact logic used in bump_version.nu / release_prepare.nu.
+# Mirrors the logic of bump_version.nu.
 def parse_workspace_version [cargo_toml: string] {
     $cargo_toml
     | lines

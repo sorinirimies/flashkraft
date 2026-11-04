@@ -1,15 +1,15 @@
 # VHS tape: select image → mark three drives → flash them all at once (demo mode, simulated writes)
 Output docs/media/tui-workflow.gif
-Set Shell "bash"
+Set Shell "nu"
 Set FontSize 14
 Set Width 1400
 Set Height 850
 Set Theme "TokyoNight"
 
 Hide
-Type "source examples/vhs/setup.sh && clear"
+Type "use examples/vhs/setup.nu demo-env; demo-env; clear"
 Enter
-Type "target/debug/flashkraft-tui"
+Type "./target/debug/flashkraft-tui"
 Enter
 Sleep 2s
 Show

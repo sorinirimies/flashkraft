@@ -276,7 +276,7 @@ flashkraft/
 │   ├── flashkraft-tui/      Ratatui app  (core/ state+update, ui/ screens+chrome)
 │   ├── flashkraft-gui/      Iced app     (core/ Elm architecture, ui/ screens+components)
 │   └── flashkraft-web/      Topcoat app  (pages, components, data, api, style, theme)
-├── examples/vhs/            VHS tapes + the demo environment (setup.sh)
+├── examples/vhs/            VHS tapes + the demo environment (setup.nu)
 ├── examples/capture/        GUI / web screenshot scripts
 └── docs/media/              generated GIFs and screenshots (GIFs via Git LFS)
 ```

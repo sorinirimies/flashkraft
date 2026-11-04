@@ -1,0 +1,2 @@
+# fuzz/fuzz_targets/web_host.rs: a fixed test token for the web auth fuzz target, not a secret.
+1ef989b01482ca251323c3effb9a95a93222ee56:fuzz/fuzz_targets/web_host.rs:generic-api-key:19

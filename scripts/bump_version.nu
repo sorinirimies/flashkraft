@@ -1,298 +1,201 @@
 #!/usr/bin/env nu
-# Automated version bump script for FlashKraft workspace
-# Usage: nu scripts/bump_version.nu [--yes] <new_version>
-# Example: nu scripts/bump_version.nu 0.9.0
-#          nu scripts/bump_version.nu --yes 0.9.0   # skip confirmation
+# ──────────────────────────────────────────────────────────────────────────────
+# FlashKraft — Bump the version
+# ──────────────────────────────────────────────────────────────────────────────
+# Usage:
+#   nu scripts/bump_version.nu <new_version> [--yes] [--skip-checks] [--check]
 #
-# Updates:
-#   • [workspace.package] version in Cargo.toml
-#   • flashkraft-core workspace dependency version in Cargo.toml
-#   • Cargo.lock (cargo update --workspace)
-#   • CHANGELOG.md (via git-cliff)
-# Then commits and tags locally.  Use `just push-release-all` to push.
+# One version, everywhere (the release workflow checks it):
+#   * the version in Cargo.toml: `[workspace.package]` (every crate inherits it),
+#     or `[package]` for a single crate at the root
+#   * the top-level `version` of each file in check_versions.nu's EXTRA_MANIFESTS
+#     (e.g. a Zed extension.toml, a package.json)
+#   * Cargo.lock
+#
+# Order: validate (cheap) → quality gate on the untouched tree → edit, changelog,
+# commit and tag. Any failure after the first edit is rolled back, so a failed
+# bump never leaves a half-bumped tree behind.
+#
+# Flags:
+#   --check        only validate (well-formed, strictly newer), then exit
+#   --yes          non-interactive
+#   --skip-checks  the caller already ran the gate (`just bump` runs check-all)
+# ──────────────────────────────────────────────────────────────────────────────
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-# Read the current [workspace.package] version from a Cargo.toml string.
-def read_workspace_version [content: string] {
-    $content
-    | lines
-    | reduce --fold { in_wp: false, version: "" } { |line, acc|
-        let new_in_wp = if ($line =~ '^\[workspace\.package\]') {
-            true
-        } else if ($acc.in_wp and ($line =~ '^\[')) {
-            false
-        } else {
-            $acc.in_wp
-        }
-
-        let new_version = if ($acc.in_wp and ($line =~ '^version\s*=\s*"[^"]*"')) {
-            $line
-            | parse --regex 'version\s*=\s*"(?P<v>[^"]+)"'
-            | get v
-            | first
-        } else {
-            $acc.version
-        }
-
-        { in_wp: $new_in_wp, version: $new_version }
-    }
-    | get version
+# Is `version` MAJOR.MINOR.PATCH with an optional pre-release?
+export def is_semver [version: string]: nothing -> bool {
+    $version =~ '^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$'
 }
 
-# Replace the version line inside [workspace.package] only.
-def update_workspace_package_version [lines: list<string>, new_version: string] {
-    let result = $lines | reduce --fold { in_wp: false, lines: [] } { |line, acc|
-        let new_in_wp = if ($line =~ '^\[workspace\.package\]') {
-            true
-        } else if ($acc.in_wp and ($line =~ '^\[')) {
-            false
-        } else {
-            $acc.in_wp
-        }
-
-        let new_line = if ($acc.in_wp and ($line =~ '^version\s*=\s*"[^"]*"')) {
-            $'version      = "($new_version)"'
-        } else {
-            $line
-        }
-
-        { in_wp: $new_in_wp, lines: ($acc.lines | append $new_line) }
+# Compare two semvers: 1 if a > b, -1 if a < b, 0 if equal (pre-releases sort
+# below their release, identifiers compare numerically when both are numbers).
+export def compare_versions [a: string, b: string]: nothing -> int {
+    let core = {|v| $v | split row "-" | first | split row "." | each {|x| $x | into int } }
+    let pa = (do $core $a)
+    let pb = (do $core $b)
+    for i in 0..2 {
+        if ($pa | get $i) > ($pb | get $i) { return 1 }
+        if ($pa | get $i) < ($pb | get $i) { return (-1) }
     }
-    $result.lines
+    let ra = ($a | split row "-" | skip 1 | str join "-")
+    let rb = ($b | split row "-" | skip 1 | str join "-")
+    if $ra == $rb { return 0 }
+    if ($ra | is-empty) { return 1 }
+    if ($rb | is-empty) { return (-1) }
+    let ia = ($ra | split row ".")
+    let ib = ($rb | split row ".")
+    let n = ([($ia | length) ($ib | length)] | math min)
+    for i in 0..<$n {
+        let x = ($ia | get $i)
+        let y = ($ib | get $i)
+        if $x == $y { continue }
+        let xn = ($x =~ '^\d+$')
+        let yn = ($y =~ '^\d+$')
+        if $xn and $yn { return (if ($x | into int) > ($y | into int) { 1 } else { -1 }) }
+        if $xn { return (-1) }
+        if $yn { return 1 }
+        return (if $x > $y { 1 } else { -1 })
+    }
+    if ($ia | length) > ($ib | length) { 1 } else if ($ia | length) < ($ib | length) { -1 } else { 0 }
 }
 
-# Update the version = "…" field on the flashkraft-core workspace dep line.
-def update_core_dep_version [lines: list<string>, new_version: string] {
-    $lines | each { |line|
-        if ($line =~ '^flashkraft-core\s*=') {
-            $line | str replace --regex 'version\s*=\s*"[^"]+"' $"version = \"($new_version)\""
+# Set `version` inside `[workspace.package]` of a Cargo.toml text, or inside
+# `[package]` when there is no workspace version. Other dependency versions are
+# left alone, except workspace crates: a `[workspace.dependencies]` entry with a
+# `path` gets the new version too, or publishing its dependents fails.
+export def set_workspace_version [text: string, version: string]: nothing -> string {
+    let section = if ($text | lines | any {|l| ($l | str trim) == "[workspace.package]" }) { "[workspace.package]" } else { "[package]" }
+    mut current = ""
+    mut out = []
+    for line in ($text | lines) {
+        let trimmed = ($line | str trim)
+        if ($trimmed | str starts-with "[") { $current = $trimmed }
+        let internal = $current == "[workspace.dependencies]" and ($trimmed =~ '\bpath\s*=') and ($trimmed =~ '\bversion\s*=')
+        if $current == $section and ($trimmed =~ '^version\s*=') {
+            $out = ($out | append ($line | str replace --regex '"[^"]*"' $'"($version)"'))
+        } else if $internal {
+            $out = ($out | append ($line | str replace --regex '\bversion(\s*)=(\s*)"[^"]*"' $'version${1}=${2}"($version)"'))
         } else {
-            $line
+            $out = ($out | append $line)
         }
     }
+    ($out | str join "\n") + "\n"
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# Set the first top-level `version = "…"` of a TOML text (extension.toml & co).
+export def set_extension_version [text: string, version: string]: nothing -> string {
+    mut done = false
+    mut out = []
+    for line in ($text | lines) {
+        if (not $done) and ($line =~ '^version\s*=') {
+            $out = ($out | append $'version = "($version)"')
+            $done = true
+        } else {
+            $out = ($out | append $line)
+        }
+    }
+    ($out | str join "\n") + "\n"
+}
+
+use ci/check_versions.nu [EXTRA_MANIFESTS]
+use version.nu [cargo_version]
+
+const TOUCHED = ["Cargo.toml" "Cargo.lock" "fuzz/Cargo.lock" "CHANGELOG.md"]
+
+def run_checks [] {
+    print $"(ansi cyan)── quality gate: nothing is bumped until it is green ──(ansi reset)"
+    nu scripts/ci/quality_gate.nu
+}
+
+def roll_back [start: string, tag: string] {
+    print $"(ansi red)✗ Bump failed — rolling back.(ansi reset)"
+    do --ignore-errors { ^git tag -d $tag | ignore }
+    ^git reset --hard $start
+}
 
 def main [
-    new_version: string,  # New version in X.Y.Z format
-    --yes (-y),           # Skip confirmation prompt (non-interactive)
+    new_version: string,  # New version, X.Y.Z
+    --yes (-y),           # Non-interactive
+    --skip-checks,        # The caller already ran the quality gate
+    --check,              # Only validate, then exit
 ] {
-    let red    = (ansi red)
-    let green  = (ansi green)
-    let yellow = (ansi yellow)
-    let cyan   = (ansi cyan)
-    let reset  = (ansi reset)
+    let current = (cargo_version (open Cargo.toml))
+    let tag = $"v($new_version)"
+    print $"  Current version : (ansi yellow)($current)(ansi reset)"
+    print $"  New version     : (ansi green)($new_version)(ansi reset)"
 
-    # ── Validate version format ───────────────────────────────────────────────
-    if not ($new_version =~ '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$') {
-        error make { msg: $"($red)Error: Invalid version format($reset)
-Version must be in format: X.Y.Z or X.Y.Z-suffix \(e.g., 0.9.0 or 0.9.0-beta.1\)" }
+    if not (is_semver $new_version) {
+        print $"(ansi red)Error:(ansi reset) '($new_version)' is not a valid semantic version."
+        exit 1
     }
-
-    print $"($cyan)════════════════════════════════════════($reset)"
-    print $"($cyan)  FlashKraft Workspace Version Bump($reset)"
-    print $"($cyan)════════════════════════════════════════($reset)"
-    print ""
-
-    # ── Read current version from [workspace.package] ─────────────────────────
-    let cargo_content = (open Cargo.toml --raw)
-    let cargo_lines   = ($cargo_content | lines)
-
-    let current_version = (read_workspace_version $cargo_content)
-
-    if ($current_version | is-empty) {
-        error make { msg: $"($red)Error: Could not read [workspace.package] version from Cargo.toml($reset)" }
+    let cmp = (compare_versions $new_version $current)
+    if $cmp == 0 {
+        print $"(ansi red)Error:(ansi reset) ($new_version) is already the current version."
+        exit 1
     }
-
-    print $"Current version: ($yellow)($current_version)($reset)"
-    print $"New version:     ($green)($new_version)($reset)"
-    print ""
-
-    # ── Guard: already at requested version ──────────────────────────────────
-    if $current_version == $new_version {
-        error make { msg: $"($red)Error: Cargo.toml is already at version ($new_version).($reset)
-($yellow)  Bump to the next version, or delete the tag if you need to re-release:($reset)
-      git tag -d v($new_version) && git push origin :refs/tags/v($new_version)" }
+    if $cmp < 0 {
+        print $"(ansi red)Error:(ansi reset) ($new_version) is older than ($current); a bump must go up."
+        exit 1
     }
+    print $"(ansi green)✓(ansi reset) ($new_version) is valid and newer than ($current)."
+    if $check { return }
 
-    # ── Guard: tag already exists locally ────────────────────────────────────
-    let tag_name = $"v($new_version)"
-    let existing_tags = (git tag | lines)
-    if ($existing_tags | any { |t| $t == $tag_name }) {
-        error make { msg: $"($red)Error: Tag ($tag_name) already exists locally.($reset)
-($yellow)  Delete it first if you really want to recreate it:($reset)
-      git tag -d ($tag_name)" }
+    if (^git tag --list $tag | str trim | is-not-empty) {
+        print $"(ansi red)Error:(ansi reset) tag ($tag) already exists."
+        exit 1
     }
+    # A tag someone else pushed would make our push fail after the commit.
+    let remote = do { ^git ls-remote --tags origin $"refs/tags/($tag)" } | complete
+    if $remote.exit_code == 0 and ($remote.stdout | str trim | is-not-empty) {
+        print $"(ansi red)Error:(ansi reset) tag ($tag) already exists on origin."
+        exit 1
+    }
+    if (^git status --porcelain | str trim | is-not-empty) {
+        print $"(ansi red)Error:(ansi reset) the working tree is dirty — commit or stash first."
+        exit 1
+    }
+    if not $yes {
+        let answer = (input $"Bump to ($new_version), commit and tag ($tag)? [y/N] ")
+        if ($answer | str lowercase) != "y" { print "Aborted."; exit 1 }
+    }
+    let start = (^git rev-parse HEAD | str trim)
 
-    # ── Confirmation ─────────────────────────────────────────────────────────
-    if $yes {
-        print $"($cyan)Running non-interactively \(--yes passed\).($reset)"
+    if $skip_checks {
+        print $"(ansi yellow)⚠(ansi reset) --skip-checks: assuming the gate already ran."
     } else {
-        let reply = (input "Continue with version bump? (y/n) ")
-        if not ($reply =~ '^[Yy]') {
-            print $"($yellow)Aborted($reset)"
-            return
-        }
+        run_checks
     }
 
-    print ""
-
-    # ── Step 1: Update [workspace.package] version ────────────────────────────
-    print $"($cyan)Step 1/8: Updating [workspace.package] version in Cargo.toml...($reset)"
-
-    let after_wp = (update_workspace_package_version $cargo_lines $new_version)
-
-    # ── Step 2: Update flashkraft-core workspace dep version ──────────────────
-    print $"($cyan)Step 2/8: Updating flashkraft-core dependency version in Cargo.toml...($reset)"
-
-    let final_lines = (update_core_dep_version $after_wp $new_version)
-    $final_lines | str join "\n" | save --force Cargo.toml
-
-    # Verify workspace.package version took effect
-    let verify_version = (read_workspace_version (open Cargo.toml --raw))
-    if $verify_version != $new_version {
-        error make { msg: $"($red)Failed to update [workspace.package] version \(got ($verify_version)\).($reset)
-($yellow)  Check the version line format in Cargo.toml and update manually.($reset)" }
-    }
-    print $"($green)✓ Cargo.toml updated \(($current_version) → ($new_version)\)($reset)"
-
-    # Verify workspace crates inherit version via version.workspace = true
-    let crate_tomls = (
-        ls crates/*/Cargo.toml
-        | get name
-    )
-    let missing_workspace = (
-        $crate_tomls
-        | where { |f|
-            not (open --raw $f | str contains "version.workspace = true")
+    try {
+        set_workspace_version (open Cargo.toml --raw) $new_version | save --force Cargo.toml
+        for f in $EXTRA_MANIFESTS {
+            set_extension_version (open $f --raw) $new_version | save --force $f
         }
-    )
-    if not ($missing_workspace | is-empty) {
-        print ""
-        for f in $missing_workspace {
-            print $"($yellow)⚠ ($f) does not use version.workspace = true($reset)"
+        print $"(ansi green)✓(ansi reset) Cargo.toml ($EXTRA_MANIFESTS | str join ' ') → ($new_version)"
+
+        ^cargo update --workspace
+        ^cargo metadata --locked --format-version 1 | ignore
+        # fuzz/ is its own workspace and records our crate's version too; resolving
+        # it refreshes the path dependency without upgrading anything else.
+        if ("fuzz/Cargo.toml" | path exists) {
+            do { cd fuzz; ^cargo metadata --format-version 1 | ignore }
         }
-        print $"($yellow)  These crates may not pick up the new version automatically.($reset)"
-    }
+        print $"(ansi green)✓(ansi reset) Cargo.lock updated."
 
-    # ── Step 3: Update README.md badges ──────────────────────────────────────
-    print ""
-    print $"($cyan)Step 3/8: Updating README.md badges...($reset)"
-
-    if ("README.md" | path exists) {
-        let readme = (open README.md --raw)
-        if ($readme =~ 'version-[0-9]+\.[0-9]+\.[0-9]+-blue') {
-            let updated_readme = (
-                $readme
-                | str replace --all --regex 'version-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?-blue' $"version-($new_version)-blue"
-            )
-            $updated_readme | save --force README.md
-            print $"($green)✓ README.md badges updated($reset)"
+        if (which git-cliff | is-not-empty) {
+            ^git-cliff --output CHANGELOG.md --tag $tag
+            print $"(ansi green)✓(ansi reset) CHANGELOG.md regenerated."
         } else {
-            print $"($yellow)⚠ No version badge found in README.md — skipping($reset)"
+            print $"(ansi yellow)⚠(ansi reset) git-cliff not found — CHANGELOG.md unchanged."
         }
-    } else {
-        print $"($yellow)⚠ README.md not found — skipping($reset)"
+
+        ^git add ...($TOUCHED | where {|f| $f | path exists }) ...$EXTRA_MANIFESTS
+        ^git commit -m $"chore: bump version to ($new_version)"
+        ^git tag -a $tag -m $"Release ($tag)"
+        print $"(ansi green)✓(ansi reset) Committed and tagged ($tag)."
+    } catch {|err|
+        roll_back $start $tag
+        error make --unspanned { msg: $"bump to ($new_version) failed and was rolled back: ($err.msg)" }
     }
-
-    # ── Step 4: Update Cargo.lock ─────────────────────────────────────────────
-    print ""
-    print $"($cyan)Step 4/8: Updating Cargo.lock...($reset)"
-    let lock_result = (do { run-external "cargo" "update" "--workspace" } | complete)
-    if $lock_result.exit_code != 0 {
-        # Fallback to generate-lockfile if update --workspace is not available
-        run-external "cargo" "generate-lockfile"
-    }
-    print $"($green)✓ Cargo.lock updated($reset)"
-
-    # ── Step 5: cargo fmt ─────────────────────────────────────────────────────
-    print ""
-    print $"($cyan)Step 5/8: Running cargo fmt...($reset)"
-    run-external "cargo" "fmt" "--all"
-    print $"($green)✓ Code formatted($reset)"
-
-    # ── Step 6: cargo clippy ──────────────────────────────────────────────────
-    print ""
-    print $"($cyan)Step 6/8: Running cargo clippy...($reset)"
-    let clippy = (do {
-        run-external "cargo" "clippy" "--workspace" "--all-targets" "--all-features" "--" "-D" "warnings" "-A" "deprecated"
-    } | complete)
-    if $clippy.exit_code != 0 {
-        error make { msg: $"($red)✗ Clippy found issues. Please fix them before continuing.($reset)" }
-    }
-    print $"($green)✓ Clippy passed($reset)"
-
-    # ── Step 7: cargo test ────────────────────────────────────────────────────
-    print ""
-    print $"($cyan)Step 7/8: Running tests...($reset)"
-    let tests = (do {
-        run-external "cargo" "test" "--workspace" "--all-features" "--all-targets"
-    } | complete)
-    if $tests.exit_code != 0 {
-        error make { msg: $"($red)✗ Tests failed. Please fix them before continuing.($reset)" }
-    }
-    print $"($green)✓ All tests passed($reset)"
-
-    # ── Step 8: Generate CHANGELOG.md + commit + tag ──────────────────────────
-    print ""
-    print $"($cyan)Step 8/8: Generating CHANGELOG.md and creating git commit + tag...($reset)"
-
-    if (which git-cliff | length) > 0 {
-        run-external "git-cliff" "--tag" $tag_name "-o" "CHANGELOG.md"
-        print $"($green)✓ CHANGELOG.md generated($reset)"
-    } else {
-        print $"($yellow)⚠ git-cliff not found — skipping changelog generation($reset)"
-        print $"($yellow)  Install it with: cargo install git-cliff($reset)"
-    }
-
-    # Stage changed files
-    let diff = (do {
-        run-external "git" "diff" "--quiet" "Cargo.toml" "Cargo.lock" "README.md" "CHANGELOG.md"
-    } | complete)
-
-    if $diff.exit_code == 0 {
-        print $"($yellow)⚠ No changes to commit($reset)"
-    } else {
-        run-external "git" "add" "Cargo.toml" "Cargo.lock" "README.md" "CHANGELOG.md"
-        let commit_msg = $"chore: bump version to ($new_version)
-
-- Update [workspace.package] version in Cargo.toml to ($new_version)
-- Update flashkraft-core workspace dependency version
-- All crates inherit version via version.workspace = true
-- Regenerate Cargo.lock
-- Generate updated CHANGELOG.md"
-        run-external "git" "commit" "-m" $commit_msg
-        print $"($green)✓ Changes committed($reset)"
-    }
-
-    let tag_msg = $"Release ($tag_name)
-
-Includes all changes documented in CHANGELOG.md for version ($new_version)."
-    run-external "git" "tag" "-a" $tag_name "-m" $tag_msg
-    print $"($green)✓ Tag ($tag_name) created($reset)"
-
-    # ── Summary ───────────────────────────────────────────────────────────────
-    print ""
-    print $"($cyan)════════════════════════════════════════($reset)"
-    print $"($green)✓ Version bump complete! 🚀($reset)"
-    print $"($cyan)════════════════════════════════════════($reset)"
-    print ""
-    print $"($yellow)Next steps:($reset)"
-    print  "  1. Review the changes:"
-    print $"     ($cyan)git show($reset)"
-    print  ""
-    print  "  2. Push to GitHub (triggers the release workflow):"
-    print $"     ($cyan)git push --follow-tags origin main($reset)"
-    print  ""
-    print  "  3. Push to Gitea as well:"
-    print $"     ($cyan)git push --follow-tags gitea main($reset)"
-    print  ""
-    print  "  4. Or use the just shortcuts:"
-    print $"     ($cyan)just push-release-all($reset)   # push branch + tags to all remotes"
-    print  ""
-    print  "  5. The Release workflow publishes to crates.io automatically"
-    print  "     once CRATES_IO_TOKEN is set in repository secrets."
-    print ""
+    print $"  Next: git push --follow-tags origin main"
 }
