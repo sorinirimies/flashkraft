@@ -10,7 +10,7 @@ resolver = "2"
 
 
 [workspace.package]
-version      = "2.3.3"
+version      = "2.3.4"
 edition      = "2024"
 rust-version = "1.90"
 authors      = ["Sorin Irimies <sorinirimies@gmail.com>"]
@@ -64,7 +64,7 @@ clap         = { version = "4", features = ["derive", "env"] }
 topcoat      = "0.10"
 
 # Internal crates
-flashkraft-core = { path = "crates/flashkraft-core", version = "2.3.3" }
+flashkraft-core = { path = "crates/flashkraft-core", version = "2.3.4" }
 
 [workspace.lints.rust]
 # Block-device ioctls and the Win32 API need unsafe: each use allows it with a reason.

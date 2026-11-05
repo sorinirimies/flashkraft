@@ -1,789 +1,446 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented here. It is generated from
+[Conventional Commits](https://www.conventionalcommits.org) by
+[git-cliff](https://git-cliff.org) — do not edit it by hand.
 
-## 2.3.3 - 2026-11-02
+## [2.3.4](https://github.com/sorinirimies/flashkraft/compare/v2.3.3...v2.3.4) — 2026-11-05
+
+### 🐛 Bug fixes
+
+- **ci:** The nightly downgrade guard compares within a semver series ([`e258083`](https://github.com/sorinirimies/flashkraft/commit/e258083284524b3a99f9fc5102c8b2d545399cf4))
+- **gui:** Name the window on Wayland and X11 (app_id = desktop id) so desktops show its icon ([`b520794`](https://github.com/sorinirimies/flashkraft/commit/b520794d634e7e2be0a147a3cc52da3e7c749a3c))
+
 ### ♻️ Refactor
-- refactor(ci): package macOS DMG and Windows installer with tested Nushell scripts
-### 📚 Documentation
-- docs: this repo's agent rules as a project skill in .agents/skills
-- docs: drop the per-repo agent rules skill; the shared skills cover it
-- docs(ci): point NSIS header at the Nushell script
-### 🔄 CI
-- ci(release): ship macOS universal DMGflashkraft
-- ci(release): Windows NSIS setup.exe installer
-### 🔧 Chores
-- chore: ignore .codegraph index
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.3.2...v2.3.3
-## 2.3.2 - 2026-11-01
-### 🔧 Chores
-- chore: bump version to 2.3.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.3.1...v2.3.2
-## 2.3.1 - 2026-11-01
-### 📚 Documentation
-- docs: move agent rules from .zed/rules.md to AGENTS.md
-### 🔄 CI
-- ci(fuzz): fall back to an older nightly when the latest cannot build
-### 🔧 Chores
-- chore: remove AGENTS.md
-- chore: bump version to 2.3.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.3.0...v2.3.1
-## 2.3.0 - 2026-10-29
+
+- Edition 2024, MSRV 1.90 and the shared lints; demo::enable instead of set_var; unsafe only in the FFI functions, each with a reason; tests that build on Windows; drop unused dependencies ([`d02f032`](https://github.com/sorinirimies/flashkraft/commit/d02f032e2de88bd635f17e754e2d468159968565))
+
+### 📦 Dependencies
+
+- Update the yanked async-executor and clipboard-win; allow NCSA and CDLA-Permissive-2.0; list the Iced stack's unmaintained crates, pin-utils included, in deny.toml ([`d4e3213`](https://github.com/sorinirimies/flashkraft/commit/d4e321311f27cab09fded1c116bf440f06b82572))
+
+### 🔄 CI and release
+
+- **wayland:** Start the desktop app on headless GNOME (mutter) - weston has no seat, which gpui needs - inside one session bus, as nobody when root ([`935ca7b`](https://github.com/sorinirimies/flashkraft/commit/935ca7b1420a0fbee609776d594821acdcdbf5ef))
+- Download archives to a file so curl retries a dropped transfer, instead of piping into tar ([`a3d68e1`](https://github.com/sorinirimies/flashkraft/commit/a3d68e142c617a3e2b8f57a546f40a1cb7b3bd3d))
+- **wayland:** Run the smoke as nobody when the job runs as root; FlashKraft refuses an interactive start as root ([`271eefd`](https://github.com/sorinirimies/flashkraft/commit/271eefdaa9b4d5cf5f3c005b1b87f1c3b3b8d171))
+- Start the desktop app on a headless Wayland compositor; StartupWMClass follows the desktop id ([`120f102`](https://github.com/sorinirimies/flashkraft/commit/120f102ca2545b23d56da78e6eff4950359cbb4a))
+- The Dependabot sweep asks for a rebase on conflicts and keeps going after a failed merge ([`8951a12`](https://github.com/sorinirimies/flashkraft/commit/8951a12a1e901fd0b73b05387ce283b5705dcac5))
+- Merge green Dependabot PRs, majors included, with a nightly sweep; nightly commits skip ignored lockfiles ([`a539209`](https://github.com/sorinirimies/flashkraft/commit/a539209a17544b2ee63618f509c7df6e76beec9f))
+- Create-rust-project --desktop packaging (deb/rpm, AppImage, DMG, installer and AUR from project.nu); demo and screenshot scripts in Nushell; secrets scan, unused-dependency gate ([`b797b4d`](https://github.com/sorinirimies/flashkraft/commit/b797b4d3fd7dc5c12f948f529f67bb803cc5b947))
+
+## [2.3.3](https://github.com/sorinirimies/flashkraft/compare/v2.3.2...v2.3.3) — 2026-11-02
+
 ### ♻️ Refactor
-- refactor(tui): drop TuiPalette; UI reads tui-nuances Theme directly (fixes Gruvbox Dark / Atom One Dark lookups)
-### 🔧 Chores
-- chore(deps): bump tui-nuances to 0.1.10
-- chore(deps): tui-file-explorer 4.0 (tui-nuances-only themes)
-- chore: bump version to 2.3.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.3...v2.3.0
-## 2.2.3 - 2026-10-26
-### ✨ Features
-- feat(tui): derive app palettes from tui-nuances
-### 🐛 Bug Fixes
-- fix(fuzz): tui_keys only emits non-mutating keys so the explorer can't delete the corpus dir
-- fix(deps): bump rustls-webpki and webpki-roots for RUSTSEC-2026-0382/0381
-### 🔄 CI
-- ci: prebuilt Nushell, cargo-deny + cargo-audit security workflow
-- ci: nightly merges lockfile-only updates; bump + release only when a Cargo.toml requirement changes
-- ci: ignore unmaintained zbus/zvariant advisories in cargo-deny
-### 🔧 Chores
-- chore(deps): bump rustls to 0.23.46 (RUSTSEC-2026-0348/0349 and others)
-- chore(deps): cargo update
-- chore(fuzz): bump rustls in fuzz lockfile to 0.23.46 (fixes cargo audit)
-- chore(justfile): skip unconfigured remotes in *-all recipes
-- chore(justfile): push/pull current branch instead of hardcoded main
-- chore: bump version to 2.2.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.2...v2.2.3
-## 2.2.2 - 2026-10-14
-### ✨ Features
-- feat(gui,tui,web): responsive layouts across all front-ends
-### 🔄 CI
-- ci(fuzz): run on release tags, cancel superseded runs, keep a per-target corpus
-- ci(fuzz): shellcheck-clean loop, don't let fuzzers read the target list
-### 🔧 Chores
-- chore: bump version to 2.2.2
-### 🧪 Testing
-- test(web): end-to-end guard test for browse/flash endpoints; web_browse fuzz target
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.1...v2.2.2
-## 2.2.1 - 2026-10-13
-### ✨ Features
-- feat(web): server-side file browser to choose the image (Choose image…)
-### 🐛 Bug Fixes
-- fix(fuzz): stop tui_keys from emitting fs-mutating keys
-- fix(web): static mode no longer reloads away the drive selection
-- fix(web): reset dialog style after browsing
-### 📦 Other Changes
-- Revert "fix(web): static mode no longer reloads away the drive selection"
-### 🔧 Chores
-- chore: bump version to 2.2.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.2.0...v2.2.1
-## 2.2.0 - 2026-10-13
+
+- **ci:** Package macOS DMG and Windows installer with tested Nushell scripts ([`4b55678`](https://github.com/sorinirimies/flashkraft/commit/4b55678b7d09ad7c07dabcd9ac0c80f7cf5cc560))
+
 ### 📚 Documentation
-- docs: web --read-only in quick-start, settings.rs note
+
+- **ci:** Point NSIS header at the Nushell script ([`1f92cb3`](https://github.com/sorinirimies/flashkraft/commit/1f92cb38c63f5c6dc76665406e25ecb1b471eed9))
+- Drop the per-repo agent rules skill; the shared skills cover it ([`e6ab08b`](https://github.com/sorinirimies/flashkraft/commit/e6ab08bff72908ec8da8c2476f538ebae3c460b3))
+- This repo's agent rules as a project skill in .agents/skills ([`ee6f816`](https://github.com/sorinirimies/flashkraft/commit/ee6f816bb0f1a14929b8fc464a2203d31e99ea08))
+
+### 🔄 CI and release
+
+- **release:** Windows NSIS setup.exe installer ([`5256859`](https://github.com/sorinirimies/flashkraft/commit/5256859d7a6e57bb6c633932f90ef14050f0de9b))
+- **release:** Ship macOS universal DMGflashkraft ([`fa13256`](https://github.com/sorinirimies/flashkraft/commit/fa132560edf7c170dc8d842d0dc1072ff3935202))
+
+### 🔧 Chores
+
+- Ignore .codegraph index ([`38e5ed9`](https://github.com/sorinirimies/flashkraft/commit/38e5ed92ca3c6639187a6d1ad1dae9ac2a8d4393))
+
+## [2.3.1](https://github.com/sorinirimies/flashkraft/compare/v2.3.0...v2.3.1) — 2026-11-01
+
+### 📚 Documentation
+
+- Move agent rules from .zed/rules.md to AGENTS.md ([`84b8b84`](https://github.com/sorinirimies/flashkraft/commit/84b8b843e5588820f41eaedaa7767a214fc6499f))
+
+### 🔄 CI and release
+
+- **fuzz:** Fall back to an older nightly when the latest cannot build ([`3802d47`](https://github.com/sorinirimies/flashkraft/commit/3802d4743eaec1ac811cf0bc4d106e2b1e7ad815))
+
+### 🔧 Chores
+
+- Remove AGENTS.md ([`42284dc`](https://github.com/sorinirimies/flashkraft/commit/42284dc26d4e7bb29bb166913c7f69934de94de1))
+
+## [2.3.0](https://github.com/sorinirimies/flashkraft/compare/v2.2.3...v2.3.0) — 2026-10-29
+
+### ♻️ Refactor
+
+- **tui:** Drop TuiPalette; UI reads tui-nuances Theme directly (fixes Gruvbox Dark / Atom One Dark lookups) ([`9157875`](https://github.com/sorinirimies/flashkraft/commit/9157875b1926828a6d056d6e3e5d4ae4cc7d5523))
+
+### 📦 Dependencies
+
+- Tui-file-explorer 4.0 (tui-nuances-only themes) ([`6e90a1e`](https://github.com/sorinirimies/flashkraft/commit/6e90a1ecb8813b2cc6b01e538b627a9383ad48b1))
+- Bump tui-nuances to 0.1.10 ([`c59177b`](https://github.com/sorinirimies/flashkraft/commit/c59177b03a4d01af0972862faa958b91fb71bc43))
+
+## [2.2.3](https://github.com/sorinirimies/flashkraft/compare/v2.2.2...v2.2.3) — 2026-10-26
+
+### ✨ Features
+
+- **tui:** Derive app palettes from tui-nuances ([`a2b53a9`](https://github.com/sorinirimies/flashkraft/commit/a2b53a9de3cb0261d3f1f25e28e40a57377b1c9b))
+
+### 🐛 Bug fixes
+
+- **fuzz:** Tui_keys only emits non-mutating keys so the explorer can't delete the corpus dir ([`49093cf`](https://github.com/sorinirimies/flashkraft/commit/49093cf68b3fc54dc73cf12d54b387ea1b2df0b5))
+
+### 📦 Dependencies
+
+- Bump rustls-webpki and webpki-roots for RUSTSEC-2026-0382/0381 ([`75e9337`](https://github.com/sorinirimies/flashkraft/commit/75e93375c88caf4db1d90aee0ad8135a36e24593))
+- Cargo update ([`88d8368`](https://github.com/sorinirimies/flashkraft/commit/88d83682edd364ffcb187767e549743dcd1b2205))
+- Bump rustls to 0.23.46 (RUSTSEC-2026-0348/0349 and others) ([`3b00e42`](https://github.com/sorinirimies/flashkraft/commit/3b00e426daa636dd428d892ab96cda40081ed576))
+
+### 🔄 CI and release
+
+- Ignore unmaintained zbus/zvariant advisories in cargo-deny ([`344d8ab`](https://github.com/sorinirimies/flashkraft/commit/344d8ab5ab51e2eb0bf1e3844f17dfa0fbd8c0d6))
+- Nightly merges lockfile-only updates; bump + release only when a Cargo.toml requirement changes ([`f545c82`](https://github.com/sorinirimies/flashkraft/commit/f545c8298d91646bfe68269b5ed7b0925ff74ce3))
+- Prebuilt Nushell, cargo-deny + cargo-audit security workflow ([`c606b59`](https://github.com/sorinirimies/flashkraft/commit/c606b59fd554eddc8801a67fa28d1c67f49f91ca))
+
+### 🔧 Chores
+
+- **justfile:** Push/pull current branch instead of hardcoded main ([`06415a0`](https://github.com/sorinirimies/flashkraft/commit/06415a0c330c085cb6f46a8fb838c75959ed28b5))
+- **justfile:** Skip unconfigured remotes in *-all recipes ([`f61652b`](https://github.com/sorinirimies/flashkraft/commit/f61652bfa923bc7690d639b3240018f4e83cbf1b))
+- **fuzz:** Bump rustls in fuzz lockfile to 0.23.46 (fixes cargo audit) ([`59bc948`](https://github.com/sorinirimies/flashkraft/commit/59bc94815ab8deb07b03855e27134eeab55be307))
+
+## [2.2.2](https://github.com/sorinirimies/flashkraft/compare/v2.2.1...v2.2.2) — 2026-10-14
+
+### ✨ Features
+
+- **gui,tui,web:** Responsive layouts across all front-ends ([`2d90d09`](https://github.com/sorinirimies/flashkraft/commit/2d90d0911e9cf502a0668773e224dc2e6fcea281))
+
+### 🧪 Tests
+
+- **web:** End-to-end guard test for browse/flash endpoints; web_browse fuzz target ([`6c6c09c`](https://github.com/sorinirimies/flashkraft/commit/6c6c09ca5b68fded0dec245a5dbe447a0cd45fc8))
+
+### 🔄 CI and release
+
+- **fuzz:** Shellcheck-clean loop, don't let fuzzers read the target list ([`10a4ef4`](https://github.com/sorinirimies/flashkraft/commit/10a4ef423c1f24e175052f0a4cf480133e75513e))
+- **fuzz:** Run on release tags, cancel superseded runs, keep a per-target corpus ([`599ddfb`](https://github.com/sorinirimies/flashkraft/commit/599ddfb537e5d3b36c4ff14da23495c8b5330930))
+
+## [2.2.1](https://github.com/sorinirimies/flashkraft/compare/v2.2.0...v2.2.1) — 2026-10-13
+
+### ✨ Features
+
+- **web:** Server-side file browser to choose the image (Choose image…) ([`5d94a76`](https://github.com/sorinirimies/flashkraft/commit/5d94a76550298d85ba8e12a4fdbe366c3b517bc8))
+
+### 🐛 Bug fixes
+
+- **web:** Reset dialog style after browsing ([`7194195`](https://github.com/sorinirimies/flashkraft/commit/71941957b480ffad787885f2dab9653f4c9f3039))
+- **web:** Static mode no longer reloads away the drive selection ([`f1a58c4`](https://github.com/sorinirimies/flashkraft/commit/f1a58c4eafa8e75a00dda66cb06af9e9ecdcd94b))
+- **fuzz:** Stop tui_keys from emitting fs-mutating keys ([`bfaedd6`](https://github.com/sorinirimies/flashkraft/commit/bfaedd61c161247bc46e76453daf770e7aaebc7c))
+
+## [2.2.0](https://github.com/sorinirimies/flashkraft/compare/v2.1.0...v2.2.0) — 2026-10-13
+
+### 📚 Documentation
+
+- Web --read-only in quick-start, settings.rs note ([`c93c244`](https://github.com/sorinirimies/flashkraft/commit/c93c24470ba230478b1a3f7822fda72d548947d2))
+
+### 🧪 Tests
+
+- **fuzz:** Web guards, TUI key sequences and GUI reducer; fuzz CI installs GUI libs ([`1ef989b`](https://github.com/sorinirimies/flashkraft/commit/1ef989b01482ca251323c3effb9a95a93222ee56))
+
 ### 📦 Build
-- build: require Rust 1.98+ workspace-wide
-- build: Rust 1.98 requirement only for flashkraft-web
-### 🔄 CI
-- ci: split fuzz into own workflow; add audit & fuzz badges to README
-- ci: publish flashkraft-web in release workflows and just publish
-### 🔧 Chores
-- chore: bump version to 2.2.0
-### 🧪 Testing
-- test(fuzz): web guards, TUI key sequences and GUI reducer; fuzz CI installs GUI libs
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.1.0...v2.2.0
-## 2.1.0 - 2026-10-13
-### 🔧 Chores
-- chore: bump version to 2.1.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.0.2...v2.1.0
-## 2.0.2 - 2026-10-13
+
+- Rust 1.98 requirement only for flashkraft-web ([`b7ab24f`](https://github.com/sorinirimies/flashkraft/commit/b7ab24f1fdc351b9febd6d9699361ce008dc9c89))
+- Require Rust 1.98+ workspace-wide ([`aece8dd`](https://github.com/sorinirimies/flashkraft/commit/aece8ddc1311fd24778063a92f7737ee558afc5b))
+
+### 🔄 CI and release
+
+- Publish flashkraft-web in release workflows and just publish ([`0884ea0`](https://github.com/sorinirimies/flashkraft/commit/0884ea0bbaa03e4fa02be8422354ebb809056f20))
+- Split fuzz into own workflow; add audit & fuzz badges to README ([`ade3008`](https://github.com/sorinirimies/flashkraft/commit/ade30084c0271da539b1afdd8ff080c2778c8840))
+
+## [2.0.2](https://github.com/sorinirimies/flashkraft/compare/v2.0.1...v2.0.2) — 2026-10-13
+
 ### ✨ Features
-- feat(web): flash one or many drives from the browser, with layered safety guards
-### 🔧 Chores
-- chore: bump version to 2.0.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.0.1...v2.0.2
-## 2.0.1 - 2026-10-13
-### 🔧 Chores
-- chore: bump version to 2.0.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v2.0.0...v2.0.1
-## 2.0.0 - 2026-10-13
+
+- **web:** Flash one or many drives from the browser, with layered safety guards ([`dabc652`](https://github.com/sorinirimies/flashkraft/commit/dabc652148248e6b1f18b8229e8e610ed3d36b24))
+
+## [2.0.0](https://github.com/sorinirimies/flashkraft/compare/v1.5.1...v2.0.0) — 2026-10-13
+
 ### ✨ Features
-- feat: web dashboard, multi-drive flashing, shared flash worker, TUI/GUI redesign
-### 🐛 Bug Fixes
-- fix(ci): gate deps-update on Cargo.lock only, add permissions, make Gitea commit-only
-- fix(deps): bump quinn-proto 0.11.19 and rustls 0.23.45 (RUSTSEC-2026-0338/0340/0343/0285)
-### 🔄 CI
-- ci(security): add cargo-audit workflow and just audit recipe
+
+- Web dashboard, multi-drive flashing, shared flash worker, TUI/GUI redesign ([`d8b5ccb`](https://github.com/sorinirimies/flashkraft/commit/d8b5ccb79d95b59a47a05fda47cce0b9423bf133))
+
+### 🐛 Bug fixes
+
+- **ci:** Gate deps-update on Cargo.lock only, add permissions, make Gitea commit-only ([`ce770ff`](https://github.com/sorinirimies/flashkraft/commit/ce770ffe41f04927b2a4dbdb1cf0eb887115ae20))
+
+### 🧪 Tests
+
+- Nightly fuzzing (settings, compatibility, version compare, device dedupe) ([`bf2a0df`](https://github.com/sorinirimies/flashkraft/commit/bf2a0df2a05372438491752b0099e38f1ac62111))
+
+### 📦 Dependencies
+
+- Bump quinn-proto 0.11.19 and rustls 0.23.45 (RUSTSEC-2026-0338/0340/0343/0285) ([`c80f91d`](https://github.com/sorinirimies/flashkraft/commit/c80f91de46fca3d22564d5ccfb5bdf0a0a342e37))
+
+### 🔄 CI and release
+
+- **security:** Add cargo-audit workflow and just audit recipe ([`ecb82dd`](https://github.com/sorinirimies/flashkraft/commit/ecb82dd9ef0b91536a758f47e69f6ca03c593e65))
+
 ### 🔧 Chores
-- chore: bump version to 1.5.2
-- chore: bump version to 2.0.0
-- chore(just): setup-gitea-<instance> remote recipes
-### 🧪 Testing
-- test: nightly fuzzing (settings, compatibility, version compare, device dedupe)
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.5.1...v2.0.0
-## 1.5.1 - 2026-09-11
+
+- **just:** Setup-gitea-<instance> remote recipes ([`622fd47`](https://github.com/sorinirimies/flashkraft/commit/622fd4735a653cd8943b119bc4e084a8c2d43f06))
+
+## [1.5.1](https://github.com/sorinirimies/flashkraft/compare/v1.5.0...v1.5.1) — 2026-09-11
+
 ### ✨ Features
-- feat(gui): remember last used image directory
-- feat(tui): remember last used image directory
-- feat: record flash history in persisted settings
-- feat: check crates.io for newer flashkraft releases, banner in GUI + TUI
-### 🐛 Bug Fixes
-- fix(ci): only bump version in nightly deps workflow on real upgrades
-- fix(docs): remove private intra-doc link, add doc-check to release pipeline
-- fix(tui): isolate TuiStorage from real config dir under cfg(test)
-### 📦 Other Changes
-- Bump tui-file-explorer to 2.1.0
-### 🔧 Chores
-- chore: bump version to 1.5.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.5.0...v1.5.1
-## 1.5.0 - 2026-09-10
+
+- Check crates.io for newer flashkraft releases, banner in GUI + TUI ([`7078629`](https://github.com/sorinirimies/flashkraft/commit/7078629d80550e42c48f1b067c580b1d0bc1bbff))
+- Record flash history in persisted settings ([`fb91446`](https://github.com/sorinirimies/flashkraft/commit/fb91446659967f406224f5acc4342953e4030f9f))
+- **tui:** Remember last used image directory ([`ce86cd8`](https://github.com/sorinirimies/flashkraft/commit/ce86cd800afeb0618e60a83f46ada440d7ff31b5))
+- **gui:** Remember last used image directory ([`25c0a76`](https://github.com/sorinirimies/flashkraft/commit/25c0a765348691eed7e770cdcbacdea47e9f4f1e))
+
+### 🐛 Bug fixes
+
+- **tui:** Isolate TuiStorage from real config dir under cfg(test) ([`7f39324`](https://github.com/sorinirimies/flashkraft/commit/7f39324b3f97e951403898eac0431d8c7c592bf3))
+- **docs:** Remove private intra-doc link, add doc-check to release pipeline ([`b8479bc`](https://github.com/sorinirimies/flashkraft/commit/b8479bcec9587c6b9d3474c2eff3d6671c8aef47))
+- **ci:** Only bump version in nightly deps workflow on real upgrades ([`80c452e`](https://github.com/sorinirimies/flashkraft/commit/80c452e6be7652cb40b661530dc2bd250a0dc2da))
+
+## [1.5.0](https://github.com/sorinirimies/flashkraft/compare/v1.4.0...v1.5.0) — 2026-09-10
+
 ### ✨ Features
-- feat(gui): flash raw devices without a setuid install
-### 🔧 Chores
-- chore: bump version to 1.5.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.4.0...v1.5.0
-## 1.4.0 - 2026-09-10
+
+- **gui:** Flash raw devices without a setuid install ([`ef587b6`](https://github.com/sorinirimies/flashkraft/commit/ef587b62dd36fa8d9cafc1f190924901c674a754))
+
+## [1.4.0](https://github.com/sorinirimies/flashkraft/compare/v1.3.7...v1.4.0) — 2026-09-10
+
 ### ✨ Features
-- feat(tui): make the Flashing screen's Log panel focusable/scrollable, and make its layout responsive
-### 🔧 Chores
-- chore: bump version to 1.4.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.7...v1.4.0
-## 1.3.7 - 2026-09-10
+
+- **tui:** Make the Flashing screen's Log panel focusable/scrollable, and make its layout responsive ([`59be025`](https://github.com/sorinirimies/flashkraft/commit/59be02524f275efadba3c19275376a73b9c84d20))
+
+## [1.3.7](https://github.com/sorinirimies/flashkraft/compare/v1.3.6...v1.3.7) — 2026-09-10
+
 ### ✨ Features
-- feat: restore transparent sudo/pkexec escalation for the TUI only
-### 🔧 Chores
-- chore: bump version to 1.3.7
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.6...v1.3.7
-## 1.3.6 - 2026-09-10
-### 📦 Other Changes
-- revert: restore setuid-root-only privilege model (no automatic sudo/pkexec escalation)
-### 🔧 Chores
-- chore: bump version to 1.3.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.5...v1.3.6
-## 1.3.5 - 2026-09-10
-### 🐛 Bug Fixes
-- fix: defer privilege escalation to flash-time so the GUI and its native file dialogs start unprivileged
-- fix: correct gitea-starscream remote name in push/release justfile recipes
-### 📦 Other Changes
-- revert: restore gitea-microlab/gitea-starscream naming convention in justfile
-### 🔧 Chores
-- chore: bump version to 1.3.5
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.4...v1.3.5
-## 1.3.4 - 2026-09-10
+
+- Restore transparent sudo/pkexec escalation for the TUI only ([`9fd2b28`](https://github.com/sorinirimies/flashkraft/commit/9fd2b28e31c4354cd80f50eb03ef2421f8b4c9e0))
+
+## [1.3.5](https://github.com/sorinirimies/flashkraft/compare/v1.3.4...v1.3.5) — 2026-09-10
+
+### 🐛 Bug fixes
+
+- Correct gitea-starscream remote name in push/release justfile recipes ([`17cc48c`](https://github.com/sorinirimies/flashkraft/commit/17cc48c4c9acb6aa02c7a881403c326c11aab621))
+- Defer privilege escalation to flash-time so the GUI and its native file dialogs start unprivileged ([`3930814`](https://github.com/sorinirimies/flashkraft/commit/39308147c0d0855616d83657192cd5ded93a7edb))
+
+## [1.3.4](https://github.com/sorinirimies/flashkraft/compare/v1.3.3...v1.3.4) — 2026-09-10
+
 ### ✨ Features
-- feat: restore automatic sudo/pkexec escalation on Linux
-### 🐛 Bug Fixes
-- fix(justfile): correct Gitea remote names (gitea, gitea_starscream)
-- fix(nix): support setuid-root installs for Nix users
+
+- Restore automatic sudo/pkexec escalation on Linux ([`c064f53`](https://github.com/sorinirimies/flashkraft/commit/c064f53874816704cc35efa8355cf03e7ec43c1a))
+
+### 🐛 Bug fixes
+
+- **nix:** Support setuid-root installs for Nix users ([`8b27f4c`](https://github.com/sorinirimies/flashkraft/commit/8b27f4cbc6bbf25761b87d16f30c43e55683f390))
+- **justfile:** Correct Gitea remote names (gitea, gitea_starscream) ([`ccd123c`](https://github.com/sorinirimies/flashkraft/commit/ccd123c66c5784355f2b420e75f72876ecbd3817))
+
 ### 📚 Documentation
-- docs(justfile): warn that release-* recipes always bump version
-### 📦 Other Changes
-- merge: reconcile with Gitea Starscream nightly dep updates (v1.3.2, v1.3.3)
-### 🔧 Chores
-- chore: bump version to 1.3.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.3...v1.3.4
-## 1.3.3 - 2026-09-10
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-10
-- chore: bump version to 1.3.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.2...v1.3.3
-## 1.3.2 - 2026-09-09
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-09
-- chore: bump version to 1.3.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.1...v1.3.2
-## 1.3.1 - 2026-09-08
-### 🔧 Chores
-- chore: bump version to 1.3.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.3.0...v1.3.1
-## 1.3.0 - 2026-09-08
+
+- **justfile:** Warn that release-* recipes always bump version ([`31b7a1f`](https://github.com/sorinirimies/flashkraft/commit/31b7a1f38d1d6ad22c84c3363fa4a96169502952))
+
+## [1.3.3](https://github.com/sorinirimies/flashkraft/compare/v1.3.2...v1.3.3) — 2026-09-10
+
+### 📦 Dependencies
+
+- Nightly dependency upgrade 2026-09-10 ([`87afcc1`](https://github.com/sorinirimies/flashkraft/commit/87afcc11b26c6eccf6f6d8bf7af9134d0d2295e5))
+
+## [1.3.2](https://github.com/sorinirimies/flashkraft/compare/v1.3.1...v1.3.2) — 2026-09-09
+
+### 📦 Dependencies
+
+- Nightly dependency upgrade 2026-09-09 ([`93dc9cb`](https://github.com/sorinirimies/flashkraft/commit/93dc9cba65c60d19c9e0e44cf382069e9db5d227))
+
+## [1.3.0](https://github.com/sorinirimies/flashkraft/compare/v1.2.2...v1.3.0) — 2026-09-08
+
 ### ✨ Features
-- feat: harden flash safety and update dependencies
-### ➕ Added
-- add codegraph gitignore
-### 🐛 Bug Fixes
-- fix: use configured Starscream remote
-### 📦 Other Changes
-- justfile: add gitea-nexus-lab remote recipes (push/pull/sync/release)
-- justfile: rename gitea -> gitea-microlab; add full gitea-microlab/-starscream/-nexus-lab parity
-- Add/complete nightly dependency-update automation (Gitea): update deps, quality-gate, bump patch version, tag, push to Gitea + GitHub
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-05-05
-- chore(deps): nightly dependency upgrade 2026-05-11
-- chore(deps): nightly dependency upgrade 2026-08-20
-- chore(deps): nightly dependency upgrade 2026-08-21
-- chore: bump version to 1.3.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.2.2...v1.3.0
-## 1.2.2 - 2026-05-04
-### 📦 Other Changes
-- Switch doc builds to Rust stable and unify cargo doc step
-### 🔧 Chores
-- chore: bump version to 1.2.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.2.1...v1.2.2
-## 1.2.1 - 2026-05-04
-### 🔧 Chores
-- chore: bump version to 1.2.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.2.0...v1.2.1
-## 1.2.0 - 2026-05-04
-### 📦 Other Changes
-- Switch TUI and GUI settings persistence from redb to JSON
-### 🔧 Chores
-- chore: bump version to 1.2.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.6...v1.2.0
-## 1.1.6 - 2026-05-04
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-05-04
-- chore: bump version to 1.1.5
-- chore: bump version to 1.1.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.4...v1.1.6
-## 1.1.4 - 2026-05-03
+
+- Harden flash safety and update dependencies ([`acd6a3d`](https://github.com/sorinirimies/flashkraft/commit/acd6a3d252e51ef20de8ad3850d47b4026e84e94))
+
+### 🐛 Bug fixes
+
+- Use configured Starscream remote ([`b1f97d6`](https://github.com/sorinirimies/flashkraft/commit/b1f97d683715473858e0f8bcc57622d17f6ffd8b))
+
+### 📦 Dependencies
+
+- Nightly dependency upgrade 2026-08-21 ([`095cf4c`](https://github.com/sorinirimies/flashkraft/commit/095cf4cd0e984d5621fd14e891166122660079f0))
+- Nightly dependency upgrade 2026-08-20 ([`868d2b6`](https://github.com/sorinirimies/flashkraft/commit/868d2b60a2b9d7a570c05946b82a553069564c1f))
+- Nightly dependency upgrade 2026-05-11 ([`999f250`](https://github.com/sorinirimies/flashkraft/commit/999f250cb655dd96ab5e9a9af240521e73e17c1c))
+- Nightly dependency upgrade 2026-05-05 ([`c5010f0`](https://github.com/sorinirimies/flashkraft/commit/c5010f0e5bdc6e6599a39a6bc841f00e08d25998))
+
+## [1.1.6](https://github.com/sorinirimies/flashkraft/compare/v1.1.4...v1.1.6) — 2026-05-04
+
+### 📦 Dependencies
+
+- Nightly dependency upgrade 2026-05-04 ([`e50a656`](https://github.com/sorinirimies/flashkraft/commit/e50a6567137c38e4023a534bf01c14d4181607bb))
+
+## [1.1.4](https://github.com/sorinirimies/flashkraft/compare/v1.1.2...v1.1.4) — 2026-05-03
+
 ### ♻️ Refactor
-- refactor: align GUI/TUI architecture (core/ + ui/screens/ + ui/components/)
-### ➕ Added
-- Add CI scripts for publish, quality gate, release notes, and artifact
-- Add tui-spinner for animated spinners in GUI and TUI
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-04-28
-- chore(deps): nightly dependency upgrade 2026-04-29
-- chore: bump version to 1.1.3
-- chore: bump version to 1.1.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.2...v1.1.4
-## 1.1.2 - 2026-04-27
-### ♻️ Refactor
-- Refactor release workflow to single build-and-release job
-### 🔧 Chores
-- chore: bump version to 1.1.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.1...v1.1.2
-## 1.1.1 - 2026-04-27
-### 📦 Other Changes
-- Install libc6-dev-arm64-cross in release workflow
-### 🔧 Chores
-- chore: bump version to 1.1.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.1.0...v1.1.1
-## 1.1.0 - 2026-04-27
-### 📦 Other Changes
-- Make toolchain steps conditional on availability in release workflow
-### 🔧 Chores
-- chore: bump version to 1.1.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.9...v1.1.0
-## 1.0.9 - 2026-04-27
-### 🐛 Bug Fixes
-- Fix aarch64 toolchain install order in release workflow
-### 🔧 Chores
-- chore: bump version to 1.0.9
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.8...v1.0.9
-## 1.0.8 - 2026-04-26
-### ♻️ Refactor
-- Refactor update-deps recipe to use POSIX shell and improve error
-### ➕ Added
-- Add push-all-force and sync-all recipes for multi-remote force push/sync
-### 📈 Improvements
-- Improve test robustness by handling tempdir and file errors
-### 📦 Other Changes
-- Handle EPERM error as harmless in do_unmount
-- Make multi-remote push and pull tasks continue on failure
-- Use lowercase hex for SHA256 output formatting
-### 🔄 Updated
-- Update dependencies and migrate to iced_fonts 0.3
-### 🔧 Chores
-- chore: bump version to 1.0.8
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.3...v1.0.8
-## 1.0.3 - 2026-04-19
-### ♻️ Refactor
-- Refactor macOS drive parsing with pattern guards
-### 🔧 Chores
-- chore: bump version to 1.0.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.2...v1.0.3
-## 1.0.2 - 2026-04-19
-### 🔧 Chores
-- chore: bump version to 1.0.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.1...v1.0.2
-## 1.0.1 - 2026-04-19
-### ♻️ Refactor
-- Refactor tests and UI helpers using macros for conciseness
-### ➕ Added
-- Add Gitea Starscream remote support to release workflows
-### 🔧 Chores
-- chore: bump version to 1.0.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v1.0.0...v1.0.1
-## 1.0.0 - 2026-04-12
-### 📦 Other Changes
-- Replace sled with redb for theme persistence
-### 🔧 Chores
-- chore: bump version to 1.0.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.9...v1.0.0
-## 0.8.9 - 2026-03-27
+
+- Align GUI/TUI architecture (core/ + ui/screens/ + ui/components/) ([`8f36b87`](https://github.com/sorinirimies/flashkraft/commit/8f36b8729e862440618a3df249bbea38845b1ac2))
+
+### 📦 Dependencies
+
+- Nightly dependency upgrade 2026-04-29 ([`98333b4`](https://github.com/sorinirimies/flashkraft/commit/98333b455124bea02761464ca5eede6a2b704889))
+- Nightly dependency upgrade 2026-04-28 ([`767b115`](https://github.com/sorinirimies/flashkraft/commit/767b11592284d01dd63aec9c08df23dbe9d0b744))
+
+## [0.8.9](https://github.com/sorinirimies/flashkraft/compare/v0.8.8...v0.8.9) — 2026-03-27
+
 ### ✨ Features
-- feat: add Nix flake for reproducible builds
-### 📦 Other Changes
-- Merge pull request #2 from MartinLoeper/main
-- Pre-warm cargo registry before upgrading dependencies
-### 🔄 Updated
-- Update iced_winit to 0.14 and adjust features on Linux
+
+- Add Nix flake for reproducible builds ([`b01e28c`](https://github.com/sorinirimies/flashkraft/commit/b01e28c6bf3c44409ffd4ae12ff9dd42bfcbc754))
+
+## [0.8.6](https://github.com/sorinirimies/flashkraft/compare/v0.8.5...v0.8.6) — 2026-03-23
+
 ### 🔧 Chores
-- chore: bump version to 0.8.9
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.8...v0.8.9
-## 0.8.8 - 2026-03-25
-### 📦 Other Changes
-- Replace nightly dependency update workflow with improved nightly
+
+- Nightly dependency update 2026-03-23 ([`f4acdcd`](https://github.com/sorinirimies/flashkraft/commit/f4acdcda4ea81cd1f632542551409f480b935846))
+- Nightly dependency update 2026-03-22 ([`b58ac01`](https://github.com/sorinirimies/flashkraft/commit/b58ac01cf477e706d52ccdcc6ca48b9ef3e286d1))
+- Nightly dependency update 2026-03-20 ([`e970ef6`](https://github.com/sorinirimies/flashkraft/commit/e970ef646a57e84819ab43cebbfc1b3fbd67e008))
+- Nightly dependency update 2026-03-19 ([`54b0c31`](https://github.com/sorinirimies/flashkraft/commit/54b0c31c1e17608d2acc8c56211b1a0e8cb096d5))
+- Nightly dependency update 2026-03-18 ([`a05f5ac`](https://github.com/sorinirimies/flashkraft/commit/a05f5ac8a3277da9ab49bf3bd9e23ef82418de5a))
+
+## [0.8.3](https://github.com/sorinirimies/flashkraft/compare/v0.8.2...v0.8.3) — 2026-03-17
+
 ### 🔧 Chores
-- chore: bump version to 0.8.8
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.7...v0.8.8
-## 0.8.7 - 2026-03-24
-### ➕ Added
-- Add nightly dependency upgrade script and tests
+
+- Nightly dependency update 2026-03-17 ([`0fd30ba`](https://github.com/sorinirimies/flashkraft/commit/0fd30ba5f11dccba62614e63dd9dedc318da6032))
+- Nightly dependency update 2026-03-16 ([`343c157`](https://github.com/sorinirimies/flashkraft/commit/343c157f64e5c01c965aedd7e36f3f088ad0bbfe))
+- Nightly dependency update 2026-03-15 ([`5750b23`](https://github.com/sorinirimies/flashkraft/commit/5750b23c41fbfc4dd0ad6f765a5cfbfb3e77914a))
+- Nightly dependency update 2026-03-14 ([`0db25a9`](https://github.com/sorinirimies/flashkraft/commit/0db25a9ea6cb66073438bc30b92ea26bfff99f20))
+
+## [0.8.0](https://github.com/sorinirimies/flashkraft/compare/v0.7.9...v0.8.0) — 2026-03-13
+
 ### 🔧 Chores
-- chore: bump version to 0.8.7
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.6...v0.8.7
-## 0.8.6 - 2026-03-23
-### ➕ Added
-- Add pull, pull-gitea, and pull-all recipes to justfile
-- Add tempfile dependency to Cargo.toml
-### 📦 Other Changes
-- Migrate all release and publish scripts from Bash to Nu, add Nu test
-- Downgrade flashkraft packages and update tui-file-explorer
+
+- Nightly dependency update 2026-03-13 ([`9a0b1e1`](https://github.com/sorinirimies/flashkraft/commit/9a0b1e1363d59003e9112ce1de40d7645c40502d))
+- Nightly dependency update 2026-03-12 ([`3af14ed`](https://github.com/sorinirimies/flashkraft/commit/3af14ed610b5262be09aeda23070db08051fa5e0))
+
+## [0.7.4](https://github.com/sorinirimies/flashkraft/compare/v0.7.3...v0.7.4) — 2026-03-11
+
 ### 🔧 Chores
-- chore: nightly dependency update 2026-03-18
-- chore: nightly dependency update 2026-03-19
-- chore: nightly dependency update 2026-03-20
-- chore: nightly dependency update 2026-03-22
-- chore: nightly dependency update 2026-03-23
-- chore: bump version to 0.8.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.5...v0.8.6
-## 0.8.5 - 2026-03-17
-### ♻️ Refactor
-- Refactor device busy check and add tests for flash pipeline
-### 📦 Other Changes
-- Bump tui-file-explorer and tui-piechart dependencies
+
+- Nightly dependency update 2026-03-05 ([`e20e7ea`](https://github.com/sorinirimies/flashkraft/commit/e20e7eafd13e994cfc6a292496b6361f930edfab))
+
+## [0.7.0](https://github.com/sorinirimies/flashkraft/compare/v0.6.9...v0.7.0) — 2026-03-03
+
 ### 🔧 Chores
-- chore: bump version to 0.8.5
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.4...v0.8.5
-## 0.8.4 - 2026-03-17
-### ➕ Added
-- Add unified FlashUpdate event type for frontend progress
+
+- Nightly dependency update 2026-03-02 ([`75744c2`](https://github.com/sorinirimies/flashkraft/commit/75744c24c74cc2549a10684a512b4d6ff2127706))
+
+## [0.6.7](https://github.com/sorinirimies/flashkraft/compare/v0.6.6...v0.6.7) — 2026-03-02
+
+### 🐛 Bug fixes
+
+- Drop deprecated --token flag and make cargo publish idempotent on already-exists ([`7754bc4`](https://github.com/sorinirimies/flashkraft/commit/7754bc4a0139bc7acfd188f7ed7d504d93be9759))
+- Replace invalid job-level secrets guard with env var gate in publish job ([`d200266`](https://github.com/sorinirimies/flashkraft/commit/d2002660e2ac8f09645e44375fea4a0376c09caa))
+
+## [0.6.4](https://github.com/sorinirimies/flashkraft/compare/v0.6.3...v0.6.4) — 2026-03-01
+
+### 🐛 Bug fixes
+
+- Add --allow-dirty to cargo publish to allow copied README.md ([`56afcd2`](https://github.com/sorinirimies/flashkraft/commit/56afcd2984f2768f1d1eebcc2e7f8d55a4563b48))
+
 ### 🔧 Chores
-- chore: bump version to 0.8.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.3...v0.8.4
-## 0.8.3 - 2026-03-17
-### ➕ Added
-- Add progress_floor and verify_overall_progress helpers
-### 🔄 Updated
-- Update tui-file-explorer to version 0.6.2
-- Update tui-file-explorer to version 0.6.2
-### 🔧 Chores
-- chore: nightly dependency update 2026-03-14
-- chore: nightly dependency update 2026-03-15
-- chore: nightly dependency update 2026-03-16
-- chore: nightly dependency update 2026-03-17
-- chore: bump version to 0.8.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.2...v0.8.3
-## 0.8.2 - 2026-03-13
-### 📦 Other Changes
-- Bump tui-file-explorer to 0.6.1 and tui-slider to 0.3.2
-- Bump tui-file-explorer to 0.6.1
-### 🔧 Chores
-- chore: bump version to 0.8.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.8.0...v0.8.2
-## 0.8.0 - 2026-03-13
-### 📦 Other Changes
-- Handle additional ExplorerOutcome variants in image browser
-### 🔄 Updated
-- Update tui-file-explorer to version 0.6.0
-- Update tui-file-explorer to version 0.6.0
-### 🔧 Chores
-- chore: nightly dependency update 2026-03-12
-- chore: nightly dependency update 2026-03-13
-- chore: bump version to 0.8.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.9...v0.8.0
-## 0.7.9 - 2026-03-12
-### 🔧 Chores
-- chore: bump version to 0.7.9
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.8...v0.7.9
-## 0.7.8 - 2026-03-12
-### ➕ Added
-- Add Zed-style spinner to log panel in flashing UI
-### 📈 Improvements
-- Improve confirm flash dialog layout for long names and labels
-### 📦 Other Changes
-- Log successful udisksctl unmount instead of start
-### 🔧 Chores
-- chore: bump version to 0.7.8
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.7...v0.7.8
-## 0.7.7 - 2026-03-11
-### 📦 Other Changes
-- Reorder Linux-specific dependencies in Cargo.toml
-### 🔧 Chores
-- chore: bump version to 0.7.7
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.6...v0.7.7
-## 0.7.6 - 2026-03-11
-### 📦 Other Changes
-- Move nix dependency to unix-specific section
-### 🔧 Chores
-- chore: bump version to 0.7.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.5...v0.7.6
-## 0.7.5 - 2026-03-11
-### ➕ Added
-- Add example targets to GUI and TUI Cargo.toml files
-### 🔧 Chores
-- chore: bump version to 0.7.5
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.4...v0.7.5
-## 0.7.4 - 2026-03-11
-### ➕ Added
-- Add verification progress reporting to GUI and TUI
-- Add verify progress event handling and simplify thread loops
-- Add runtime test harness detection to reexec_as_root
-### 📦 Other Changes
-- Replace nusb with notify for hotplug and privilege escalation
-- Skip privilege escalation during tests and update progress display
-- Restrict Unix-specific functions to non-test builds
-### 🔧 Chores
-- chore: nightly dependency update 2026-03-05
-- chore: bump version to 0.7.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.3...v0.7.4
-## 0.7.3 - 2026-03-04
-### ➕ Added
-- Add USB hotplug detection via nusb and update error view
-### 📈 Improvements
-- Improve command line detection and clean up comments in status_views
-### 🔧 Chores
-- chore: bump version to 0.7.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.2...v0.7.3
-## 0.7.2 - 2026-03-04
-### 📦 Other Changes
-- Call load_drives_sync directly instead of spawning blocking task
-### 🔧 Chores
-- chore: bump version to 0.7.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.1...v0.7.2
-## 0.7.1 - 2026-03-03
-### 🐛 Bug Fixes
-- Fix macOS parsing helpers to compile under test on all platforms
-### 🔧 Chores
-- chore: bump version to 0.7.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.7.0...v0.7.1
-## 0.7.0 - 2026-03-03
-### ♻️ Refactor
-- Refactor macOS parsing helpers for testability and clarity
-### 📦 Other Changes
-- Remove nusb dependency and switch to native USB detection
-### 🔧 Chores
-- chore: nightly dependency update 2026-03-02
-- chore: bump version to 0.7.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.9...v0.7.0
-## 0.6.9 - 2026-03-02
-### 🔧 Chores
-- chore: bump version to 0.6.9
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.7...v0.6.9
-## 0.6.7 - 2026-03-02
-### 🐛 Bug Fixes
-- fix: replace invalid job-level secrets guard with env var gate in publish job
-- fix: drop deprecated --token flag and make cargo publish idempotent on already-exists
-### 📦 Other Changes
-- Use --follow-tags for push-release-all to trigger workflows reliably
-### 🔧 Chores
-- chore: bump version to 0.6.7
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.6...v0.6.7
-## 0.6.6 - 2026-03-02
-### 🐛 Bug Fixes
-- Fix drive detection to include all USB devices on Linux
-### 🔧 Chores
-- chore: bump version to 0.6.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.5...v0.6.6
-## 0.6.5 - 2026-03-02
-### ➕ Added
-- Add HashMap and Path imports for Linux drive detection
-### 🔧 Chores
-- chore: bump version to 0.6.5
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.4...v0.6.5
-## 0.6.4 - 2026-03-01
-### ♻️ Refactor
-- Refactor flash pipeline to run in-process with setuid-root
-### ➕ Added
-- Add Windows UAC manifest for Administrator elevation
-### 🐛 Bug Fixes
-- fix: add --allow-dirty to cargo publish to allow copied README.md
-### 📦 Other Changes
-- Remove unused display_string method and its test
-### 🔄 Updated
-- Update doc examples to use no_run and fix usage code
-### 🔧 Chores
-- chore: nightly dependency update 2026-02-27
-- chore: nightly dependency update 2026-02-28
-- chore: bump version to 0.6.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.3...v0.6.4
-## 0.6.3 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: use --follow-tags to push branch and tag in one operation, preventing double release trigger
-### 🔧 Chores
-- chore: bump version to 0.6.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.2...v0.6.3
-## 0.6.2 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: copy README.md into all crate dirs before publishing so crates.io shows it
-### 🔧 Chores
-- chore: bump version to 0.6.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.1...v0.6.2
-## 0.6.1 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: remove gh workflow dispatch from just release — tag push triggers it automatically, add release-retrigger as explicit fallback
-### 🔧 Chores
-- chore: bump version to 0.6.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.6.0...v0.6.1
-## 0.6.0 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: use cargo info instead of cargo search for reliable already-published check
-### 🔧 Chores
-- chore: bump version to 0.6.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.9...v0.6.0
-## 0.5.9 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: copy README.md into crates/flashkraft-gui before publishing to crates.io
-### 🔧 Chores
-- chore: bump version to 0.5.9
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.8...v0.5.9
-## 0.5.8 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: replace all -p flashkraft-gui references with -p flashkraft across workflows and justfile
-### 🔧 Chores
-- chore: bump version to 0.5.8
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.7...v0.5.8
-## 0.5.7 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: rename flashkraft-gui package to flashkraft for crates.io publishing
-### 🔧 Chores
-- chore: bump version to 0.5.7
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.6...v0.5.7
-## 0.5.6 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: skip publish if version already exists on crates.io
-### 🔧 Chores
-- chore: bump version to 0.5.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.5...v0.5.6
-## 0.5.5 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: silence unused variable warnings in flash_subscription.rs
-### 🔄 CI
-- ci: add flashkraft-gui to Windows check job — Iced supports Windows natively
-### 🔧 Chores
-- chore: bump version to 0.5.5
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.4...v0.5.5
-## 0.5.4 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: restore flashkraft-core publishing — required by gui and tui on crates.io
-- fix: remove --locked from cargo test in all CI workflows
-### 🔧 Chores
-- chore: bump version to 0.5.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.3...v0.5.4
-## 0.5.3 - 2026-02-26
-### 🔧 Chores
-- chore: bump version to 0.5.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.2...v0.5.3
-## 0.5.2 - 2026-02-26
-### ♻️ Refactor
-- refactor: consolidate to single published flashkraft crate with gui/tui features
-- refactor: publish flashkraft (GUI) and flashkraft-tui, core is internal only
+
+- Nightly dependency update 2026-02-28 ([`ad4dff5`](https://github.com/sorinirimies/flashkraft/commit/ad4dff5696d31fc8bb93475d48393889b7c42c79))
+- Nightly dependency update 2026-02-27 ([`ffb50c4`](https://github.com/sorinirimies/flashkraft/commit/ffb50c43833724e6ffd4c10301249a7bfdc5fe2e))
+
+## [0.6.3](https://github.com/sorinirimies/flashkraft/compare/v0.6.2...v0.6.3) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Use --follow-tags to push branch and tag in one operation, preventing double release trigger ([`f9cc39b`](https://github.com/sorinirimies/flashkraft/commit/f9cc39b1a6c3c3788e50ee29aaf726f296fcfa28))
+
+## [0.6.2](https://github.com/sorinirimies/flashkraft/compare/v0.6.1...v0.6.2) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Copy README.md into all crate dirs before publishing so crates.io shows it ([`52d28c6`](https://github.com/sorinirimies/flashkraft/commit/52d28c64dbd972cda162bb0436ddb61ac94dae12))
+
+## [0.6.1](https://github.com/sorinirimies/flashkraft/compare/v0.6.0...v0.6.1) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Remove gh workflow dispatch from just release — tag push triggers it automatically, add release-retrigger as explicit fallback ([`1e81dcc`](https://github.com/sorinirimies/flashkraft/commit/1e81dcc19780837a769b7062b4a27931cbfaa031))
+
+## [0.6.0](https://github.com/sorinirimies/flashkraft/compare/v0.5.9...v0.6.0) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Use cargo info instead of cargo search for reliable already-published check ([`896b949`](https://github.com/sorinirimies/flashkraft/commit/896b9492b17f3381828b99a1e2ac400ad04564d4))
+
+## [0.5.9](https://github.com/sorinirimies/flashkraft/compare/v0.5.8...v0.5.9) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Copy README.md into crates/flashkraft-gui before publishing to crates.io ([`25ab192`](https://github.com/sorinirimies/flashkraft/commit/25ab1926b1c15c365b70bd343c9356d6e3769a04))
+
+## [0.5.8](https://github.com/sorinirimies/flashkraft/compare/v0.5.7...v0.5.8) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Replace all -p flashkraft-gui references with -p flashkraft across workflows and justfile ([`4797747`](https://github.com/sorinirimies/flashkraft/commit/4797747806d03d4996e0ea5ebd392e1c9c30f8f4))
+
+## [0.5.7](https://github.com/sorinirimies/flashkraft/compare/v0.5.6...v0.5.7) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Rename flashkraft-gui package to flashkraft for crates.io publishing ([`f6a7159`](https://github.com/sorinirimies/flashkraft/commit/f6a7159d1cb90d5564515e4f753c366520befae1))
+
+## [0.5.6](https://github.com/sorinirimies/flashkraft/compare/v0.5.5...v0.5.6) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Skip publish if version already exists on crates.io ([`50e00f5`](https://github.com/sorinirimies/flashkraft/commit/50e00f5de27864702f0f1e384edcf0f078f60fa5))
+
+## [0.5.5](https://github.com/sorinirimies/flashkraft/compare/v0.5.4...v0.5.5) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Silence unused variable warnings in flash_subscription.rs ([`30a2823`](https://github.com/sorinirimies/flashkraft/commit/30a2823b7b1716c36299152fb5ec048cb035691a))
+
+### 🔄 CI and release
+
+- Add flashkraft-gui to Windows check job — Iced supports Windows natively ([`150e079`](https://github.com/sorinirimies/flashkraft/commit/150e079d0a57574b2f494fb937510c5c615a86ed))
+
+## [0.5.4](https://github.com/sorinirimies/flashkraft/compare/v0.5.3...v0.5.4) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Remove --locked from cargo test in all CI workflows ([`e2ea240`](https://github.com/sorinirimies/flashkraft/commit/e2ea240d8ba11f7a985704a50cca42749468f486))
+- Restore flashkraft-core publishing — required by gui and tui on crates.io ([`b13fcea`](https://github.com/sorinirimies/flashkraft/commit/b13fcea7dd5314f6ca8d1a0750eb6a57eadc0dba))
+
+## [0.5.2](https://github.com/sorinirimies/flashkraft/compare/v0.5.1...v0.5.2) — 2026-02-26
+
 ### ✨ Features
-- feat: add update-deps just command and nightly dep update workflows
-### 🐛 Bug Fixes
-- fix: gate nix::libc import behind #[cfg(unix)] for Windows compat
-### 🔄 CI
-- ci: drop aarch64 and musl targets, keep x86_64-unknown-linux-gnu only
-- ci: add Windows x86_64 msvc target, fix cross-platform artifact staging
-- ci: add Windows cargo check job for core and tui
-### 🔧 Chores
-- chore: remove unnecessary sleep between crates.io publishes
-- chore: bump version to 0.5.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.1...v0.5.2
-## 0.5.1 - 2026-02-26
-### 🐛 Bug Fixes
-- fix: remove secrets condition from publish job — breaks workflow_dispatch
-### 🔧 Chores
-- chore: bump version to 0.5.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.5.0...v0.5.1
-## 0.5.0 - 2026-02-26
-### 🔄 Updated
-- Update release flow to always dispatch workflow via gh CLI
-### 🔧 Chores
-- chore: bump version to 0.5.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.4.8...v0.5.0
-## 0.4.8 - 2026-02-26
-### ➕ Added
-- Add TUI theme system, demos, and persistence
-### 🔧 Chores
-- chore: bump version to 0.4.8
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.4.7...v0.4.8
-## 0.4.7 - 2026-02-25
-### 🔧 Chores
-- chore: bump version to 0.4.7
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.4.6...v0.4.7
-## 0.4.6 - 2026-02-24
-### ➕ Added
-- Add manual release trigger and tag validation to workflow
-### 📦 Other Changes
-- Move VHS demos to crate examples, add Git LFS tracking for GIFs
-### 🔧 Chores
-- chore: bump version to 0.4.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.4.5...v0.4.6
-## 0.4.5 - 2026-02-24
-### 🔄 Updated
-- Update docs and release scripts for clarity and workflow
-### 🔧 Chores
-- chore: bump version to 0.4.5
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.4.4...v0.4.5
-## 0.4.4 - 2026-02-24
-### 🔧 Chores
-- chore: bump version to 0.4.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.4.3...v0.4.4
-## 0.4.3 - 2026-02-24
-### ➕ Added
-- Add reusable file-explorer widget for Ratatui
-- Add file explorer integration and tests for image selection
-### 🔧 Chores
-- chore: bump version to 0.4.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.4.2...v0.4.3
-## 0.4.2 - 2026-02-20
-### 📦 Other Changes
-- system showcase
-### 🔧 Chores
-- chore: bump version to 0.4.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.4.1...v0.4.2
-## 0.4.1 - 2026-02-20
+
+- Add update-deps just command and nightly dep update workflows ([`8864cfd`](https://github.com/sorinirimies/flashkraft/commit/8864cfda6647ccde0b7b3cbdb7f66c2b5190c232))
+
+### 🐛 Bug fixes
+
+- Gate nix::libc import behind #[cfg(unix)] for Windows compat ([`bbe194c`](https://github.com/sorinirimies/flashkraft/commit/bbe194ceb59026666195932dc2766421ea7371db))
+
 ### ♻️ Refactor
-- Refactor into workspace with core, GUI, and TUI crates
-### ➕ Added
-- Add drive/image compatibility checks and warnings
-- Add Ratatui-based TUI with async flash support
-### 📦 Other Changes
-- Remove push and release recipes from justfile and backup
-- Simplify is_source_drive mount point check logic
-- Run CI and release workflows only on Ubuntu
-- Release v0.4.0: pure-Rust flash engine, verification, tests
-- Release flashkraft-core 0.4.1 and add example demos
-### 🔄 Updated
-- Update dependencies in Cargo.lock
+
+- Publish flashkraft (GUI) and flashkraft-tui, core is internal only ([`f72b23d`](https://github.com/sorinirimies/flashkraft/commit/f72b23d1c9f5d954fe2cee45a3edf36da58a4e85))
+- Consolidate to single published flashkraft crate with gui/tui features ([`b7f2523`](https://github.com/sorinirimies/flashkraft/commit/b7f2523cbe207a0abcaa8dbe397ac8aecaccc1e5))
+
+### 🔄 CI and release
+
+- Add Windows cargo check job for core and tui ([`b3091bf`](https://github.com/sorinirimies/flashkraft/commit/b3091bf14cb0513ce2aeed8e6e3d46aac282e53a))
+- Add Windows x86_64 msvc target, fix cross-platform artifact staging ([`952d018`](https://github.com/sorinirimies/flashkraft/commit/952d0184134d7c99bc57788dcfe108ddc19ec368))
+- Drop aarch64 and musl targets, keep x86_64-unknown-linux-gnu only ([`3f6a31b`](https://github.com/sorinirimies/flashkraft/commit/3f6a31b0ccee130b3988dae73fdb9b968734740f))
+
 ### 🔧 Chores
-- chore: bump version to 0.3.3
-- chore: bump version to 0.3.4
-- chore: bump version to 0.3.5
-- chore: bump version to 0.3.5
-- chore: bump version to 0.4.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.3.2...v0.4.1
-## 0.3.2 - 2025-10-30
-### ➕ Added
-- Add repository link, categories, and keywords to Cargo.toml
-### 🔧 Chores
-- chore: bump version to 0.3.2
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.3.1...v0.3.2
-## 0.3.1 - 2025-10-27
-### 📦 Other Changes
-- - Fix race condition where flash progress updates continued to display
-- Use theme_selector_right in status views
-### 🔧 Chores
-- chore: bump version to 0.3.1
-- chore: bump version to 0.3.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.3.0...v0.3.1
-## 0.3.0 - 2025-10-27
-### 📦 Other Changes
-- Clarify Electron bloat comparison in features section
-### 🔧 Chores
-- chore: bump version to 0.3.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.2.9...v0.3.0
-## 0.2.9 - 2025-10-26
-### 📦 Other Changes
-- Reduce progress line and glow thickness for sleeker look
-- bump version
-### 🔧 Chores
-- chore: bump version to 0.2.9
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.2.6...v0.2.9
-## 0.2.6 - 2025-10-26
-### ➕ Added
-- Add cancellation support to flash operation
-### 🔧 Chores
-- chore: bump version to 0.2.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.2.5...v0.2.6
-## 0.2.5 - 2025-10-25
-### 🐛 Bug Fixes
-- Fix cargo install command in release changelog generation
-### 🔧 Chores
-- chore: bump version to 0.2.5
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.2.4...v0.2.5
-## 0.2.4 - 2025-10-25
-### 🔧 Chores
-- chore: bump version to 0.2.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.2.3...v0.2.4
-## 0.2.3 - 2025-10-25
-### 🔄 Updated
-- Update README.md
-### 🔧 Chores
-- chore: bump version to 0.2.2
-- chore: bump version to 0.2.3
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.2.1...v0.2.3
-## 0.2.1 - 2025-10-25
-### ➕ Added
-- Add no_run and example variables to doc tests in logger macros
-### 🔧 Chores
-- chore: bump version to 0.2.1
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.2.0...v0.2.1
-## 0.2.0 - 2025-10-25
-### ♻️ Refactor
-- Refactor examples and project structure for FlashKraft library
-### 🔧 Chores
-- chore: bump version to 0.2.0
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.1.9...v0.2.0
-## 0.1.9 - 2025-10-25
-### 🔄 Updated
-- Update README.md
-### 🔧 Chores
-- chore: bump version to 0.1.8
-- chore: bump version to 0.1.8
-- chore: bump version to 0.1.9
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.1.7...v0.1.9
-## 0.1.7 - 2025-10-25
-### 📦 Other Changes
-- Remove Quick Start example from release notes generation
-### 🔧 Chores
-- chore: bump version to 0.1.7
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.1.6...v0.1.7
-## 0.1.6 - 2025-10-25
-### 📦 Other Changes
-- Adds VHS demo for Elm Architecture
-### 🔄 Updated
-- Update README.md
-- Update README.md
-- Update README.md
-- Update README.md, cleanup
-- Update README.md
-### 🔧 Chores
-- chore: bump version to 0.1.6
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.1.5...v0.1.6
-## 0.1.5 - 2025-10-24
-### 📦 Other Changes
-- Scale animation speed based on transfer rate
-### 🔧 Chores
-- chore: bump version to 0.1.5
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.1.4...v0.1.5
-## 0.1.4 - 2025-10-24
-### 📦 Other Changes
-- Remove screenshots section from README and simplify header color
-### 🔧 Chores
-- chore: bump version to 0.1.4
-**Full Changelog**: https://github.com/sorinirimies/flashkraft/compare/v0.1.3...v0.1.4
-## 0.1.3 - 2025-10-24
-### ♻️ Refactor
-- Refactor Elm Architecture methods into core/state.rs
-### ➕ Added
-- Add initial project structure with Elm Architecture and real device
-- Add theme picker and support for dynamic themes Add theme picker and
-- Add CI, release workflow, examples, VHS demos, and docs
-- Add persistent theme storage using sled
-- Add Cargo.lock and update project metadata and .gitignore
-### 📦 Other Changes
-- Initial commit
-- Make device selector height fill available space
-- Remove architecture and UI documentation from docs
-- Show flash speed and ETA during flashing process
-- Restructure codebase into core, domain, components, and utils modules
-- Bump version to 0.1.1 and update bump_version.sh script
-- Replace changelog with release header and add cliff.toml config
-### 🔄 Updated
-- Update README to reflect new project structure and dependencies
-### 🔧 Chores
-- chore: bump version to 0.1.3
+
+- Remove unnecessary sleep between crates.io publishes ([`a782f78`](https://github.com/sorinirimies/flashkraft/commit/a782f783189b72b2ee945adbf9ae43463f423c1b))
+
+## [0.5.1](https://github.com/sorinirimies/flashkraft/compare/v0.5.0...v0.5.1) — 2026-02-26
+
+### 🐛 Bug fixes
+
+- Remove secrets condition from publish job — breaks workflow_dispatch ([`7840550`](https://github.com/sorinirimies/flashkraft/commit/7840550fd73094f5c467f53c1f3a2e35f7d8f47c))
+
+## [0.1.3](https://github.com/sorinirimies/flashkraft/releases/tag/v0.1.3) — 2025-10-24
+
+
