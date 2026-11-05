@@ -81,7 +81,18 @@ pub fn run_gui() -> iced::Result {
         fonts: vec![iced_fonts::BOOTSTRAP_FONT_BYTES.into()],
         ..Default::default()
     })
-    .window(iced::window::Settings {
+    .window(window_settings())
+    .run()
+}
+
+/// Wayland `app_id` and X11 `WM_CLASS` of the window. Desktops match it against the
+/// `.desktop` file name and its `StartupWMClass` for the icon and window grouping.
+pub const APP_ID: &str = "flashkraft";
+
+/// The main window: size, minimum size and, on Linux, [`APP_ID`].
+#[must_use]
+pub fn window_settings() -> iced::window::Settings {
+    iced::window::Settings {
         size: iced::Size::new(ui::layout::DEFAULT_WINDOW.0, ui::layout::DEFAULT_WINDOW.1),
         min_size: Some(iced::Size::new(
             ui::layout::MIN_WINDOW.0,
@@ -89,12 +100,37 @@ pub fn run_gui() -> iced::Result {
         )),
         resizable: true,
         decorations: true,
+        #[cfg(target_os = "linux")]
+        platform_specific: iced::window::settings::PlatformSpecific {
+            application_id: APP_ID.to_string(),
+            ..Default::default()
+        },
         ..Default::default()
-    })
-    .run()
+    }
 }
 
 // Re-export domain types from core so downstream code can do
 // `use flashkraft_gui::{DriveInfo, ImageInfo}` without knowing about
 // flashkraft-core directly.
 pub use flashkraft_core::{DriveInfo, ImageInfo};
+
+#[cfg(test)]
+mod window_tests {
+    use super::*;
+
+    #[test]
+    fn the_window_keeps_its_size_and_frame() {
+        let s = window_settings();
+        assert!(s.resizable && s.decorations);
+        assert!(
+            s.min_size
+                .is_some_and(|m| m.width <= s.size.width && m.height <= s.size.height)
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_window_names_its_desktop_entry_on_linux() {
+        assert_eq!(window_settings().platform_specific.application_id, APP_ID);
+    }
+}
