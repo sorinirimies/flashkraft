@@ -15,6 +15,9 @@ use ../project.nu [BINS]
 # The Wayland socket the headless compositor listens on.
 export const SOCKET = "wayland-smoke"
 
+# The uid and gid of `nobody`, which runs the smoke when the job runs as root.
+const NOBODY = 65534
+
 # The gui rows of `bins` (a BINS table).
 export def gui_bins [bins: table]: nothing -> table {
     $bins | where {|b| ($b.kind? | default "") == "gui" }
@@ -28,6 +31,13 @@ export def app_command [binary: string, runtime: string, seconds: int]: nothing 
         $"WAYLAND_DISPLAY=($SOCKET)" $"XDG_RUNTIME_DIR=($runtime)" "WINIT_UNIX_BACKEND=wayland"
         $binary
     ]
+}
+
+# `cmd` as run by `uid`: as root (Gitea's job container), as `nobody` with HOME at
+# `home` instead, because FlashKraft refuses an interactive start as root.
+export def as_user [cmd: list<string>, uid: int, home: string]: nothing -> list<string> {
+    if $uid != 0 { return $cmd }
+    [setpriv $"--reuid=($NOBODY)" $"--regid=($NOBODY)" --clear-groups env $"HOME=($home)" ...$cmd]
 }
 
 # What `timeout`'s exit code says about the app: 124 means it ran until stopped.
@@ -57,17 +67,20 @@ def main [--build, --seconds: int = 8] {
     if $build { ^cargo build --locked ...($guis | each {|g| [-p $g.crate] } | flatten) }
     let runtime = mktemp -d
     ^chmod 700 $runtime
+    let uid = ^id -u | into int
+    if $uid == 0 { ^chown $"($NOBODY):($NOBODY)" $runtime }
     let log = $runtime | path join weston.log
     let limit = $seconds * ($guis | length) + 30
     let weston = job spawn {
         with-env {XDG_RUNTIME_DIR: $runtime} {
-            ^timeout $"($limit)s" weston --backend=headless --socket=($SOCKET) --idle-time=0 out+err> $log
+            let w = as_user [timeout $"($limit)s" weston --backend=headless $"--socket=($SOCKET)" --idle-time=0] $uid $runtime
+            run-external $w.0 ...($w | skip 1) out+err> $log
         }
     }
     wait_socket ($runtime | path join $SOCKET) 100
     mut failed = []
     for g in $guis {
-        let cmd = app_command $"target/debug/($g.bin)" $runtime $seconds
+        let cmd = as_user (app_command $"target/debug/($g.bin)" $runtime $seconds) $uid $runtime
         let r = run-external $cmd.0 ...($cmd | skip 1) | complete
         let v = verdict $r.exit_code
         print $"($g.bin): ($v) on Wayland \(exit ($r.exit_code)\)"
