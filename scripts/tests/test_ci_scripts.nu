@@ -9,6 +9,7 @@ use ../ci/publish_crate.nu [already_published package_args]
 use ../ci/apt.nu [commands]
 use ../ci/check_static.nu [is_static]
 use ../ci/gitea_release.nu [release_payload]
+use ../ci/auto_merge.nu [decide checks_green]
 use ../ci/actions_update.nu [uses major_of bump PINNED]
 
 def "test deps_update: commit message is a dated chore deps" [] {
@@ -19,6 +20,8 @@ def "test deps_update: only existing lockfiles are touched" [] {
     let root = ($env.CURRENT_FILE | path dirname | path join ".." "..")
     cd $root
     assert equal (present ["Cargo.lock" "no/such/Cargo.lock"]) ["Cargo.lock"]
+    # An ignored lockfile (some repos ignore fuzz/Cargo.lock) is not staged.
+    assert equal (present ["Cargo.lock" "scripts/project.nu"] ["scripts/project.nu"]) ["Cargo.lock"]
 }
 
 def "test deps_update: a raised requirement is a release, formatting is not" [] {
@@ -77,6 +80,25 @@ def "test check_static: both ldd wordings are static" [] {
     assert (is_static "\tnot a dynamic executable")
     assert (is_static "\tstatically linked")
     assert not (is_static "\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6")
+}
+
+const PR = {number: 7, author: {login: "app/dependabot"}, headRefOid: "abc", state: "OPEN"}
+
+def "test auto_merge: a green dependabot pr is merged, majors included" [] {
+    assert (decide ($PR | insert title "ci(deps): bump softprops/action-gh-release from 2 to 3") "abc").merge
+}
+
+def "test auto_merge: others, closed prs and moved branches are left" [] {
+    assert not (decide ($PR | update author {login: "sorinirimies"}) "abc").merge
+    assert not (decide ($PR | update state "MERGED") "abc").merge
+    assert not (decide $PR "def").merge
+}
+
+def "test auto_merge: the sweep needs every check passed" [] {
+    assert (checks_green [{conclusion: "SUCCESS"} {conclusion: "SKIPPED"} {state: "SUCCESS"}])
+    assert not (checks_green [{conclusion: "SUCCESS"} {conclusion: "FAILURE"}])
+    assert not (checks_green [{conclusion: "SUCCESS"} {status: "IN_PROGRESS", conclusion: ""}])
+    assert not (checks_green [])
 }
 
 def "test gitea_release: payload carries tag, title and notes" [] {
