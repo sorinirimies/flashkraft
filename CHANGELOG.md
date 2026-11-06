@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [2.3.7](https://github.com/sorinirimies/flashkraft/compare/v2.3.6...v2.3.7) — 2026-11-06
+
+### 🔄 CI and release
+
+- **packages:** AppImages use the downloaded appimagetool; which also matched the script's own command ([`387fad4`](https://github.com/sorinirimies/flashkraft/commit/387fad4b77f351d533be09eddd2d2128098718e5))
+
 ## [2.3.6](https://github.com/sorinirimies/flashkraft/compare/v2.3.5...v2.3.6) — 2026-11-06
 
 ### 📦 Dependencies
