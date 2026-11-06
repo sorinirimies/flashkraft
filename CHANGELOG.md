@@ -4,6 +4,16 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [2.3.6](https://github.com/sorinirimies/flashkraft/compare/v2.3.5...v2.3.6) — 2026-11-06
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-11-06 ([`10734d7`](https://github.com/sorinirimies/flashkraft/commit/10734d77217f1af8886752470ba869fe46c608ec))
+
+### 🔄 CI and release
+
+- **packages:** Alien gets an absolute .deb path, so the .rpm build finds it ([`1b2180e`](https://github.com/sorinirimies/flashkraft/commit/1b2180e9b1de3966d82396800ea420c7297f01a9))
+
 ## [2.3.4](https://github.com/sorinirimies/flashkraft/compare/v2.3.3...v2.3.4) — 2026-11-05
 
 ### 🐛 Bug fixes
