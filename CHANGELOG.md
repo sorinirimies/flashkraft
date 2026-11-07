@@ -4,6 +4,22 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [2.4.0](https://github.com/sorinirimies/flashkraft/compare/v2.3.7...v2.4.0) — 2026-11-07
+
+### ✨ Features
+
+- New app icon for macOS, Windows and Linux ([`83a6f21`](https://github.com/sorinirimies/flashkraft/commit/83a6f21f4c34f48fdcf33ccf7b4b639e330da53f))
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-11-07 ([`188a3fc`](https://github.com/sorinirimies/flashkraft/commit/188a3fc0b58aa7375ea10ccb3e9b151550b4d402))
+
+### 🔄 CI and release
+
+- **gitea:** Check the MSRV on Gitea too, with the same command as GitHub ([`9091879`](https://github.com/sorinirimies/flashkraft/commit/9091879229d3fd7fbcb8ea3de2f882c06f816c20))
+- **release:** Each install line in the release notes says which binary it is (GUI, TUI, web) ([`43fce49`](https://github.com/sorinirimies/flashkraft/commit/43fce4931db2e96561a35d88364064be30cb79c8))
+- **packages:** .deb and .rpm package names are valid Debian names (no underscores) ([`ec70743`](https://github.com/sorinirimies/flashkraft/commit/ec707433db24fe2a0cd3fc7320f288628febe065))
+
 ## [2.3.7](https://github.com/sorinirimies/flashkraft/compare/v2.3.6...v2.3.7) — 2026-11-06
 
 ### 🔄 CI and release
