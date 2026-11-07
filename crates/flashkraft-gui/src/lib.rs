@@ -89,10 +89,26 @@ pub fn run_gui() -> iced::Result {
 /// `.desktop` file name and its `StartupWMClass` for the icon and window grouping.
 pub const APP_ID: &str = "flashkraft";
 
-/// The main window: size, minimum size and, on Linux, [`APP_ID`].
+/// Side of the embedded window icon, in pixels.
+const ICON_SIZE: u32 = 128;
+
+/// The window icon: the title bar and taskbar on Windows, X11 window managers.
+/// Raw RGBA, written by `just icons` (scripts/icons.nu) from
+/// assets/icons/flashkraft.svg, so no image decoder is linked for it. macOS takes
+/// the Dock icon from the `.app` bundle, Wayland from the `.desktop` entry.
+static ICON_RGBA: &[u8] = include_bytes!("../assets/flashkraft-128.rgba");
+
+/// The window icon, or `None` when the embedded bytes are not 128 × 128 RGBA.
+#[must_use]
+pub fn window_icon() -> Option<iced::window::Icon> {
+    iced::window::icon::from_rgba(ICON_RGBA.to_vec(), ICON_SIZE, ICON_SIZE).ok()
+}
+
+/// The main window: size, minimum size, icon and, on Linux, [`APP_ID`].
 #[must_use]
 pub fn window_settings() -> iced::window::Settings {
     iced::window::Settings {
+        icon: window_icon(),
         size: iced::Size::new(ui::layout::DEFAULT_WINDOW.0, ui::layout::DEFAULT_WINDOW.1),
         min_size: Some(iced::Size::new(
             ui::layout::MIN_WINDOW.0,
@@ -117,6 +133,26 @@ pub use flashkraft_core::{DriveInfo, ImageInfo};
 #[cfg(test)]
 mod window_tests {
     use super::*;
+
+    #[test]
+    fn the_window_icon_is_the_embedded_rgba() {
+        assert_eq!(ICON_RGBA.len(), (ICON_SIZE * ICON_SIZE * 4) as usize);
+        let icon = window_icon().expect("the embedded icon decodes");
+        let (rgba, size) = icon.into_raw();
+        assert_eq!((size.width, size.height), (ICON_SIZE, ICON_SIZE));
+        let alpha = |x: u32, y: u32| rgba[((y * ICON_SIZE + x) * 4 + 3) as usize];
+        assert_eq!(
+            alpha(ICON_SIZE / 2, ICON_SIZE / 2),
+            255,
+            "the tile is opaque"
+        );
+        assert_eq!(alpha(0, 0), 0, "outside the rounded corner is transparent");
+    }
+
+    #[test]
+    fn the_window_carries_the_icon() {
+        assert!(window_settings().icon.is_some());
+    }
 
     #[test]
     fn the_window_keeps_its_size_and_frame() {

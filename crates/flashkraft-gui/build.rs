@@ -1,7 +1,7 @@
 //! build.rs — FlashKraft GUI
 //!
-//! On Windows this script embeds the UAC application manifest into the
-//! compiled PE binary so that Windows shows the Administrator elevation
+//! On Windows this script embeds the UAC application manifest and the app icon
+//! into the compiled PE binary so that Windows shows the Administrator elevation
 //! prompt when the user launches FlashKraft.
 //!
 //! On every other platform this script does nothing — it exists only so the
@@ -32,6 +32,7 @@ fn main() {
 
     // Tell Cargo to re-run this script if the manifest file changes.
     println!("cargo:rerun-if-changed=flashkraft.exe.manifest");
+    println!("cargo:rerun-if-changed=assets/flashkraft.ico");
     println!("cargo:rerun-if-changed=build.rs");
 }
 
@@ -47,9 +48,9 @@ fn embed_manifest() {
     // The path is relative to the crate root (where build.rs lives).
     res.set_manifest_file("flashkraft.exe.manifest");
 
-    // Optional: set the application icon so it appears in Explorer and the
-    // taskbar.  Uncomment and adjust the path when an .ico file is available.
-    // res.set_icon("assets/icon.ico");
+    // The app icon, shown by Explorer, the taskbar and the Start-menu shortcuts.
+    // `just icons` writes it from assets/icons/flashkraft.svg.
+    res.set_icon("assets/flashkraft.ico");
 
     // Compile and emit linker flags.  Any error here is fatal — we want to
     // know immediately if the toolchain can't embed the manifest rather than

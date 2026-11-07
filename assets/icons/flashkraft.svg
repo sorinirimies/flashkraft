@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- FlashKraft app icon: a disc image streams into a drive's sectors, one written, one being written, one empty.
+       Master artwork. `just icons` derives every platform icon from this file:
+       the small sizes drop the construction and detail blocks, macOS adds its margin and shadow. -->
+  <defs>
+    <clipPath id="fk-tile"><rect width="1024" height="1024" rx="228"/></clipPath>
+    <radialGradient id="fk-bg" cx="0.35" cy="0.25" r="1">
+      <stop offset="0" stop-color="#22252d"/>
+      <stop offset="1" stop-color="#0a0b0e"/>
+    </radialGradient>
+    <linearGradient id="fk-rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="fk-ivory" gradientUnits="userSpaceOnUse" x1="0" y1="180" x2="0" y2="850">
+      <stop offset="0" stop-color="#fbf6ec"/>
+      <stop offset="1" stop-color="#d6cab4"/>
+    </linearGradient>
+    <linearGradient id="fk-accent" gradientUnits="userSpaceOnUse" x1="300" y1="250" x2="740" y2="800">
+      <stop offset="0" stop-color="#8be4f4"/>
+      <stop offset="0.5" stop-color="#2fb0d4"/>
+      <stop offset="1" stop-color="#1a76a0"/>
+    </linearGradient>
+    <filter id="fk-lift" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+    <!-- fine grain: dithers the dark gradient so large sizes show no banding -->
+    <filter id="fk-grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 -0.4"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="228" fill="url(#fk-bg)"/>
+  <rect width="1024" height="1024" filter="url(#fk-grain)" clip-path="url(#fk-tile)" opacity="0.06"/>
+
+  <!-- construction:start -->
+  <g clip-path="url(#fk-tile)" fill="none" stroke="#93d3e2" stroke-width="2.5">
+    <circle cx="512" cy="512" r="400" stroke-opacity="0.22"/>
+    <circle cx="512" cy="300" r="190" stroke-opacity="0.14"/>
+    <path d="M512 40 V 984 M300 40 V 984 M724 40 V 984" stroke-opacity="0.13"/>
+    <path d="M40 600 H 984 M40 700 H 984 M40 800 H 984" stroke-opacity="0.13"/>
+    <path d="M40 300 H 984" stroke-opacity="0.22" stroke-dasharray="6 10"/>
+    <g stroke-opacity="0.45">
+      <path d="M300 880 H 724 M300 868 V 892 M724 868 V 892"/>
+      <path d="M580 660 V 740"/><rect x="573" y="693" width="14" height="14"/>
+    </g>
+  <g fill="#93d3e2" fill-opacity="0.5"><circle cx="512" cy="512" r="5"/><circle cx="300" cy="300" r="5"/><circle cx="724" cy="300" r="5"/></g>
+  </g>
+  <!-- construction:end -->
+
+  <!-- mark:start -->
+  <g filter="url(#fk-lift)">
+    <path d="M512 410 V 600" fill="none" stroke="url(#fk-accent)" stroke-width="64" stroke-linecap="round"/>
+    <path d="M300 600 H 724" fill="none" stroke="url(#fk-accent)" stroke-width="64" stroke-linecap="round"/>
+    <path d="M300 700 H 560" fill="none" stroke="url(#fk-accent)" stroke-width="64" stroke-linecap="round"/>
+    <path d="M640 700 H 724" fill="none" stroke="url(#fk-ivory)" stroke-width="64" stroke-linecap="round" stroke-opacity="0.9"/>
+    <path d="M300 800 H 724" fill="none" stroke="url(#fk-ivory)" stroke-width="64" stroke-linecap="round" stroke-opacity="0.9"/>
+    <circle cx="512" cy="300" r="120" fill="url(#fk-ivory)"/>
+  </g>
+  <g fill="#121419">
+    <circle cx="512" cy="300" r="40"/>
+  </g>
+  <!-- mark:end -->
+
+  <!-- rim:start -->
+  <rect x="5" y="5" width="1014" height="1014" rx="223" fill="none" stroke="url(#fk-rim)" stroke-width="10"/>
+  <!-- rim:end -->
+</svg>

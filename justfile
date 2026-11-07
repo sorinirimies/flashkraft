@@ -349,3 +349,9 @@ media: vhs-tui screenshots-gui screenshots-web
 # Pull the GIFs from Git LFS (once after a fresh clone)
 lfs-pull:
     git lfs pull
+
+# ── Icons ─────────────────────────────────────────────────────────────────────
+
+# Regenerate every app icon (PNGs, .icns, .ico, window icon) from the master SVG in assets/icons (needs resvg, magick; iconutil for the .icns)
+icons:
+    nu scripts/icons.nu
