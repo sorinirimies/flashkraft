@@ -1507,7 +1507,7 @@ checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "flashkraft"
-version = "2.5.0"
+version = "2.5.1"
 dependencies = [
  "dirs",
  "flashkraft-core",
@@ -1530,7 +1530,7 @@ dependencies = [
 
 [[package]]
 name = "flashkraft-core"
-version = "2.5.0"
+version = "2.5.1"
 dependencies = [
  "dirs",
  "futures",
@@ -1559,7 +1559,7 @@ dependencies = [
 
 [[package]]
 name = "flashkraft-tui"
-version = "2.5.0"
+version = "2.5.1"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -5991,9 +5991,9 @@ dependencies = [
 
 [[package]]
 name = "tui-nuances"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c4a0e7ec99c630f79977ab650c1a0ef6cc8fccc6077ebee36fc8aa0d329724f"
+checksum = "71a55e1ee7052a2409c91486005043da038bf44f72978a69747986dc64ca6068"
 dependencies = [
  "ratatui",
 ]

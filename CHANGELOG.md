@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [2.5.1](https://github.com/sorinirimies/flashkraft/compare/v2.5.0...v2.5.1) — 2026-11-10
+
+### 📦 Dependencies
+
+- Bump tui-nuances to 0.1.11 ([`897608d`](https://github.com/sorinirimies/flashkraft/commit/897608d9b8b4a3e0b2d48187a23e0a8ec65d5923))
+
 ## [2.5.0](https://github.com/sorinirimies/flashkraft/compare/v2.4.0...v2.5.0) — 2026-11-10
 
 ### ✨ Features
