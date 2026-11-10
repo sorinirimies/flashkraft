@@ -1,18 +1,26 @@
 //! Selection Panels Component
 //!
-//! This module contains the three main selection panels:
-//! - Image selection panel
-//! - Target drive selection panel
-//! - Flash button panel
+//! Compact horizontal "chooser bar": icon badge + two lines of text per
+//! card, image → target → flash, connected by a calm static line so the
+//! flow reads left to right and lights up as each step completes. This *is*
+//! the step indicator — there is no separate row of near-identical cards
+//! duplicating it above.
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Alignment, Element, Length};
+use iced::{Alignment, Element, Length, Theme};
 
 use crate::core::message::Message;
 use crate::domain::{DriveInfo, ImageInfo};
+use crate::ui::components::progress_line;
 use crate::ui::theme as style;
-use crate::utils::icons;
 use iced_fonts::bootstrap;
+
+/// Icon size inside a chooser card's badge.
+const ICON_SIZE: f32 = 20.0;
+/// Diameter of the round icon badge.
+const BADGE_SIZE: f32 = 36.0;
+/// Longest connecting line between cards: they link the cards, they are not a rule.
+const MAX_LINE: f32 = 40.0;
 
 /// Three buttons section
 pub fn view_buttons<'a>(
@@ -22,23 +30,31 @@ pub fn view_buttons<'a>(
     is_ready_to_flash: bool,
     m: crate::ui::layout::Metrics,
 ) -> Element<'a, Message> {
+    let has_image = selected_image.is_some();
+    let has_target = selected_target.is_some() || !marked.is_empty();
+
     let image_button = view_image_section(selected_image, m.card_w);
     let target_button = view_target_section(selected_target, marked, m.card_w);
     let flash_button = view_flash_section(is_ready_to_flash, m.card_w);
 
+    // Narrow window: the three cards stack; otherwise a row joined by short lines.
     let buttons: Element<'a, Message> = if m.stacked {
         column![image_button, target_button, flash_button]
             .spacing(m.gap)
             .align_x(Alignment::Center)
             .into()
     } else {
-        row![image_button, target_button, flash_button]
-            .spacing(m.gap)
-            .align_y(Alignment::Start)
+        let line1 = progress_line::view_progress_line(has_image, m.line_w.min(MAX_LINE));
+        let line2 = progress_line::view_progress_line(has_target, m.line_w.min(MAX_LINE));
+        row![image_button, line1, target_button, line2, flash_button]
+            .spacing(style::SPACE_SM)
+            .align_y(Alignment::Center)
             .into()
     };
 
-    let mut content = column![buttons].spacing(20).align_x(Alignment::Center);
+    let mut content = column![buttons]
+        .spacing(style::SPACE_MD)
+        .align_x(Alignment::Center);
 
     // Show cancel button if something is selected
     if selected_image.is_some() || selected_target.is_some() {
@@ -52,107 +68,126 @@ pub fn view_buttons<'a>(
 
     container(content)
         .width(Length::Fill)
-        .height(Length::Fill)
         .center_x(Length::Fill)
-        .center_y(Length::Fill)
         .into()
 }
 
+/// A compact icon-badge-left, text-right chooser card.
+fn chooser_card<'a>(
+    icon: iced::widget::Text<'a, Theme, iced::Renderer>,
+    title: String,
+    subtitle: String,
+    active: bool,
+    width: f32,
+) -> container::Container<'a, Message> {
+    let badge = container(icon.size(ICON_SIZE))
+        .width(BADGE_SIZE)
+        .height(BADGE_SIZE)
+        .center_x(BADGE_SIZE)
+        .center_y(BADGE_SIZE)
+        .style(move |t: &Theme| style::icon_badge(t, active));
+
+    let text_col = column![
+        text(title).size(14),
+        text(subtitle).size(11).style(style::muted_text),
+    ]
+    .spacing(2);
+
+    container(
+        row![badge, text_col]
+            .spacing(style::SPACE_SM)
+            .align_y(Alignment::Center),
+    )
+    .width(width)
+    .padding([10, 12])
+    .style(move |t| style::card(t, active))
+}
+
 /// Image selection panel
-fn view_image_section(image: &Option<ImageInfo>, card_w: f32) -> Element<'_, Message> {
+fn view_image_section(image: &Option<ImageInfo>, width: f32) -> Element<'_, Message> {
     let active = image.is_some();
-    let content = if let Some(img) = image {
-        column![
-            icons::icon(bootstrap::check_circle(), 50.0),
-            text(&img.name).size(16),
-            text(flashkraft_core::fmt_bytes(img.size_bytes())).size(12),
-        ]
+    let card = if let Some(img) = image {
+        chooser_card(
+            bootstrap::check_circle(),
+            img.name.clone(),
+            flashkraft_core::fmt_bytes(img.size_bytes()),
+            active,
+            width,
+        )
     } else {
-        column![
-            icons::icon(bootstrap::plus_circle(), 50.0),
-            text("Flash from file").size(16),
-            text("Click to select").size(12),
-        ]
+        chooser_card(
+            bootstrap::plus_circle(),
+            "Flash from file".into(),
+            "Click to select".into(),
+            active,
+            width,
+        )
     };
 
-    button(
-        container(content.spacing(10).align_x(Alignment::Center))
-            .width(card_w)
-            .height(90)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
-    )
-    .on_press(Message::SelectImageClicked)
-    .padding(10)
-    .style(move |t, s| style::card_button(t, s, active))
-    .into()
+    button(card)
+        .on_press(Message::SelectImageClicked)
+        .padding(0)
+        .style(move |t, s| style::card_button(t, s, active))
+        .into()
 }
 
 /// Target drive selection panel
 fn view_target_section<'a>(
     selected: &'a Option<DriveInfo>,
     marked: &'a [DriveInfo],
-    card_w: f32,
+    width: f32,
 ) -> Element<'a, Message> {
     let active = selected.is_some() || !marked.is_empty();
     let total: f64 = marked.iter().map(|d| d.size_gb).sum();
-    let content = if marked.len() > 1 {
-        column![
-            icons::icon(bootstrap::collection_fill(), 50.0),
-            text(format!("{} drives", marked.len())).size(16),
-            text(format!("{total:.1} GB total")).size(12),
-            text("flashed at once").size(10),
-        ]
+
+    let card = if marked.len() > 1 {
+        chooser_card(
+            bootstrap::collection_fill(),
+            format!("{} drives", marked.len()),
+            format!("{total:.1} GB total"),
+            active,
+            width,
+        )
     } else if let Some(target) = marked.first().or(selected.as_ref()) {
-        column![
-            icons::icon(bootstrap::check_circle(), 50.0),
-            text(&target.name).size(16),
-            text(flashkraft_core::fmt_bytes(target.size_bytes())).size(12),
-            text(&target.mount_point).size(10),
-        ]
+        chooser_card(
+            bootstrap::check_circle(),
+            target.name.clone(),
+            flashkraft_core::fmt_bytes(target.size_bytes()),
+            active,
+            width,
+        )
     } else {
-        column![
-            icons::icon(bootstrap::device_hdd(), 50.0),
-            text("Select target").size(16),
-            text("Click to choose").size(12),
-        ]
+        chooser_card(
+            bootstrap::device_hdd(),
+            "Select target".into(),
+            "Click to choose".into(),
+            active,
+            width,
+        )
     };
 
-    button(
-        container(content.spacing(10).align_x(Alignment::Center))
-            .width(card_w)
-            .height(90)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
-    )
-    .on_press(Message::OpenDeviceSelection)
-    .padding(10)
-    .style(move |t, s| style::card_button(t, s, active))
-    .into()
+    button(card)
+        .on_press(Message::OpenDeviceSelection)
+        .padding(0)
+        .style(move |t, s| style::card_button(t, s, active))
+        .into()
 }
 
 /// Flash button panel
-fn view_flash_section(is_ready: bool, card_w: f32) -> Element<'static, Message> {
-    let content = column![
-        icons::icon(bootstrap::lightning_fill(), 50.0),
-        text("Flash!").size(16),
-        text(if is_ready {
-            "Ready to flash"
+fn view_flash_section(is_ready: bool, width: f32) -> Element<'static, Message> {
+    let card = chooser_card(
+        bootstrap::lightning_fill(),
+        "Flash!".into(),
+        if is_ready {
+            "Ready to flash".into()
         } else {
-            "Select image & target"
-        })
-        .size(12),
-    ];
+            "Select image & target".into()
+        },
+        false,
+        width,
+    );
 
-    let btn = button(
-        container(content.spacing(10).align_x(Alignment::Center))
-            .width(card_w)
-            .height(90)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
-    )
-    .padding(10)
-    .style(move |t, s| {
+    let btn = button(card).padding(0).style(move |t, s| {
         if is_ready {
             style::primary_button(t, s)
         } else {

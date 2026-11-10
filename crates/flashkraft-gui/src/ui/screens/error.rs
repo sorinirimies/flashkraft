@@ -5,11 +5,11 @@
 //! which are rendered in a styled card.
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Alignment, Border, Color, Element, Length, Theme};
+use iced::{Alignment, Element, Length};
 
 use crate::core::FlashKraft;
 use crate::core::message::Message;
-use crate::utils::icons;
+use crate::ui::theme as style;
 use iced_fonts::bootstrap;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -50,9 +50,16 @@ fn normalise_spaces(s: &str) -> String {
 pub fn view_error<'a>(state: &'a FlashKraft, error: &'a str) -> Element<'a, Message> {
     let (headline, detail_lines) = split_error(error);
 
+    let hero = container(bootstrap::exclamation_triangle_fill().size(32.0))
+        .width(80.0)
+        .height(80.0)
+        .center_x(80.0)
+        .center_y(80.0)
+        .style(move |t: &iced::Theme| style::badge(t, style::Tone::Danger));
+
     // ── Headline ──────────────────────────────────────────────────────────────
     let mut body: iced::widget::Column<'a, Message> = column![
-        icons::icon(bootstrap::exclamation_triangle_fill(), 64.0),
+        hero,
         Space::new().height(4),
         text("Error").size(28),
         Space::new().height(12),
@@ -76,7 +83,7 @@ pub fn view_error<'a>(state: &'a FlashKraft, error: &'a str) -> Element<'a, Mess
 
     for line in &prose {
         body = body.push(Space::new().height(6));
-        body = body.push(container(text(*line).size(13)).max_width(520));
+        body = body.push(container(text(*line).size(13).style(style::muted_text)).max_width(520));
     }
 
     if !commands.is_empty() {
@@ -90,31 +97,7 @@ pub fn view_error<'a>(state: &'a FlashKraft, error: &'a str) -> Element<'a, Mess
             );
         }
 
-        let card = container(card_col)
-            .style(|theme: &Theme| {
-                let base = theme.palette().background;
-                let darkened = Color {
-                    r: (base.r * 0.6).clamp(0.0, 1.0),
-                    g: (base.g * 0.6).clamp(0.0, 1.0),
-                    b: (base.b * 0.6).clamp(0.0, 1.0),
-                    a: 1.0,
-                };
-                container::Style {
-                    background: Some(iced::Background::Color(darkened)),
-                    border: Border {
-                        color: Color {
-                            r: 1.0,
-                            g: 1.0,
-                            b: 1.0,
-                            a: 0.15,
-                        },
-                        width: 1.0,
-                        radius: 6.0.into(),
-                    },
-                    ..Default::default()
-                }
-            })
-            .max_width(480);
+        let card = container(card_col).style(style::code_card).max_width(480);
 
         body = body.push(Space::new().height(16));
         body = body.push(container(card).width(Length::Fill).center_x(Length::Fill));
@@ -126,11 +109,13 @@ pub fn view_error<'a>(state: &'a FlashKraft, error: &'a str) -> Element<'a, Mess
         row![
             button(text("Go Back").size(14))
                 .on_press(Message::CancelClicked)
-                .padding([8, 20]),
+                .padding([8, 20])
+                .style(style::ghost_button),
             Space::new().width(12),
             button(text("Try Again").size(14))
                 .on_press(Message::ResetClicked)
-                .padding([8, 20]),
+                .padding([8, 20])
+                .style(style::primary_button),
         ]
         .align_y(Alignment::Center),
     );

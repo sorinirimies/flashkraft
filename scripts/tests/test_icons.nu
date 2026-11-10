@@ -5,7 +5,7 @@
 use std/assert
 use runner.nu *
 use ../project.nu [APP]
-use ../icons.nu [MASTER SMALL_MAX ICO_SIZES GUI_ASSETS WINDOW_RGBA WINDOW_ICON_SIZE variant kind-for iconset-entries outputs]
+use ../icons.nu [MASTER SMALL_MAX ICO_SIZES GUI_ASSETS WINDOW_RGBA WINDOW_ICON_SIZE variant kind-for iconset-entries outputs ICNS_TYPES u32-be icns-entry icns-bytes pick-rasteriser raster-args]
 use ../ci/package_desktop.nu [ICON_SIZES]
 
 const ROOT = path self ../..
@@ -82,6 +82,44 @@ def "test icons: the ico entries are bmp, which nsis needs" [] {
         let offset = $ico | bytes at ($at + 12)..($at + 15) | into int --endian little
         assert equal ($ico | bytes at $offset..($offset + 3)) 0x[28000000] $"entry ($i) starts with a BITMAPINFOHEADER"
     }
+}
+
+def "test icons: u32-be writes four big-endian bytes" [] {
+    assert equal (u32-be 258) 0x[00 00 01 02]
+}
+
+def "test icons: an icns entry and the file carry their lengths" [] {
+    let e = icns-entry icp4 0x[01 02 03]
+    assert equal $e 0x[69637034 0000000B 010203]
+    assert equal (icns-bytes [$e]) 0x[69636E73 00000013 69637034 0000000B 010203]
+}
+
+def "test icons: the icns covers 16 to 1024 px with retina pairs" [] {
+    assert equal ($ICNS_TYPES | length) 11
+    assert equal ($ICNS_TYPES | get px | math max) 1024
+}
+
+def "test icons: the committed icns is a valid icns with a png in every entry" [] {
+    let b = open --raw ($ROOT | path join packaging macos $"($APP.id).icns") | into binary
+    assert equal ($b | bytes at 0..3 | decode utf-8) icns
+    let total = $b | bytes at 4..7 | into int --endian big
+    assert equal ($b | bytes length) $total
+    mut at = 8
+    mut n = 0
+    while $at < $total {
+        let len = $b | bytes at ($at + 4)..($at + 7) | into int --endian big
+        assert equal ($b | bytes at ($at + 8)..($at + 11)) 0x[89504E47] "a PNG signature"
+        $at += $len
+        $n += 1
+    }
+    assert equal $n ($ICNS_TYPES | length)
+}
+
+def "test icons: either rasteriser works" [] {
+    assert equal (pick-rasteriser [rsvg-convert]) rsvg-convert
+    assert equal (pick-rasteriser [resvg rsvg-convert]) resvg
+    assert equal (pick-rasteriser []) null
+    assert equal (raster-args rsvg-convert a.svg 32 o.png) ["-w" "32" "-h" "32" a.svg "-o" o.png]
 }
 
 def main [] { run-tests }

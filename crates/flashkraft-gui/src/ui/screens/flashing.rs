@@ -3,13 +3,25 @@
 //! Shows the animated progress bar, speed, ETA, and cancel button
 //! while the flash (and optional verification) pipeline is running.
 
-use iced::widget::{Space, button, column, row, text};
+use iced::widget::{Space, button, column, container, row, text};
 use iced::{Alignment, Element};
 
 use crate::core::FlashKraft;
 use crate::core::message::Message;
+use crate::ui::theme as style;
 use crate::utils::icons;
 use iced_fonts::bootstrap;
+
+/// Big round "hero icon" shown above the headline on a status screen.
+fn hero_icon(icon: iced::widget::Text<'static>, tone: style::Tone) -> Element<'static, Message> {
+    container(icon.size(40.0))
+        .width(96.0)
+        .height(96.0)
+        .center_x(96.0)
+        .center_y(96.0)
+        .style(move |t: &iced::Theme| style::badge(t, tone))
+        .into()
+}
 
 /// Flashing progress view
 pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
@@ -113,9 +125,9 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
         .map(|_| Message::AnimationTick);
 
     let mut progress_content = column![
-        icons::icon(headline_icon, 80.0),
+        hero_icon(headline_icon, style::Tone::Accent),
         text(headline_text).size(32),
-        text(stage_label).size(14),
+        text(stage_label).size(14).style(style::muted_text),
         Space::new().height(20),
         main_bar,
     ]
@@ -172,7 +184,8 @@ pub fn view_flashing(state: &FlashKraft) -> Element<'_, Message> {
         .push(
             button(text("Cancel").size(14))
                 .on_press(Message::CancelFlash)
-                .padding(10),
+                .padding(10)
+                .style(style::ghost_button),
         );
 
     super::status_page(

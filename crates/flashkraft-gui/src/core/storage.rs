@@ -119,10 +119,19 @@ pub struct GuiSettings {
     /// don't hit the network on every single launch.
     #[serde(default)]
     pub last_update_check_unix: u64,
+
+    /// UI scale factor (1.0 = 100%), adjusted from the Settings panel or the
+    /// `Ctrl`/`Cmd` `+`/`-`/`0` shortcuts. Clamped to `0.5..=2.0`.
+    #[serde(default = "default_ui_scale")]
+    pub ui_scale: f32,
 }
 
 fn default_theme_name() -> String {
     "Default".to_string()
+}
+
+fn default_ui_scale() -> f32 {
+    1.0
 }
 
 impl Default for GuiSettings {
@@ -132,6 +141,7 @@ impl Default for GuiSettings {
             last_image_dir: None,
             flash_history: Vec::new(),
             last_update_check_unix: 0,
+            ui_scale: default_ui_scale(),
         }
     }
 }
@@ -165,6 +175,18 @@ impl Storage {
     /// Returns `Err` only if the file cannot be written.
     pub fn save_theme(&mut self, theme: &Theme) -> Result<(), String> {
         self.settings.theme = theme_to_string(theme);
+        self.flush()
+    }
+
+    /// Return the saved UI scale factor (1.0 = 100%), already clamped to a
+    /// sane `0.5..=2.0` range.
+    pub fn ui_scale(&self) -> f32 {
+        self.settings.ui_scale.clamp(0.5, 2.0)
+    }
+
+    /// Persist a new UI scale factor.
+    pub fn save_ui_scale(&mut self, scale: f32) -> Result<(), String> {
+        self.settings.ui_scale = scale.clamp(0.5, 2.0);
         self.flush()
     }
 
@@ -306,6 +328,28 @@ mod tests {
         storage.save_theme(&nord).unwrap();
         let contents = std::fs::read_to_string(&storage.path).unwrap();
         assert!(contents.contains("Nord"), "JSON should contain theme name");
+    }
+
+    #[test]
+    fn test_ui_scale_defaults_to_one() {
+        let (storage, _tmp) = temp_storage();
+        assert_eq!(storage.ui_scale(), 1.0);
+    }
+
+    #[test]
+    fn test_save_and_load_ui_scale_roundtrips() {
+        let (mut storage, _tmp) = temp_storage();
+        storage.save_ui_scale(1.3).unwrap();
+        assert!((storage.ui_scale() - 1.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_ui_scale_is_clamped_on_save() {
+        let (mut storage, _tmp) = temp_storage();
+        storage.save_ui_scale(9.0).unwrap();
+        assert_eq!(storage.ui_scale(), 2.0);
+        storage.save_ui_scale(-5.0).unwrap();
+        assert_eq!(storage.ui_scale(), 0.5);
     }
 
     #[test]

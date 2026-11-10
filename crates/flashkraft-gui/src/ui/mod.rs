@@ -60,12 +60,22 @@ pub fn view(state: &FlashKraft) -> Element<'_, Message> {
         .center_x(Length::Fill)
         .center_y(Length::Fill);
 
-    match &state.update_banner {
+    let base: Element<'_, Message> = match &state.update_banner {
         Some(banner) => column![components::update_banner::view_update_banner(banner), body]
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
         None => body.into(),
+    };
+
+    // About / Settings overlay everything else, including mid-flash and error screens,
+    // so they are reachable (and closeable) whatever the app is doing underneath.
+    if state.show_about {
+        iced::widget::stack![base, components::about::view_about()].into()
+    } else if state.show_settings {
+        iced::widget::stack![base, components::settings_panel::view_settings(state)].into()
+    } else {
+        base
     }
 }
 
@@ -94,7 +104,6 @@ fn view_main_sized(state: &FlashKraft, m: layout::Metrics) -> Element<'_, Messag
     }
 
     let header = components::header::view_header(state, m);
-    let step_indicators = components::step_indicators::view_step_indicators(state, m);
     let buttons = screens::select_image::view_buttons(
         &state.selected_image,
         &state.selected_target,
@@ -102,10 +111,16 @@ fn view_main_sized(state: &FlashKraft, m: layout::Metrics) -> Element<'_, Messag
         state.is_ready_to_flash(),
         m,
     );
+    let drives_panel = components::drives_panel::view_drives_panel(
+        &state.available_drives,
+        &state.selected_target,
+        &state.selected_image,
+        &state.marked_targets,
+    );
 
     // Scrollable so short windows never clip content.
     iced::widget::scrollable(
-        column![header, step_indicators, buttons]
+        column![header, buttons, drives_panel]
             .spacing(if m.stacked { 16 } else { 30 })
             .padding(m.padding)
             .width(Length::Fill),

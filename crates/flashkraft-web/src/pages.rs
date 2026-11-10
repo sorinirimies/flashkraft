@@ -37,6 +37,7 @@ pub(crate) async fn document(
                 <meta name="flashkraft-token" content=(crate::flash::config().token.clone())>
                 <meta name="flashkraft-flash" content=(if crate::flash::config().enabled { "on" } else { "off" })>
                 <title>(title)</title>
+                <link rel="icon" type="image/svg+xml" href="/icon.svg">
                 <link rel="stylesheet" href="/style.css">
                 theme_style(index: theme)
                 topcoat::dev::script()

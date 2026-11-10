@@ -23,6 +23,7 @@ pub mod utils;
 pub mod core;
 pub mod privileged_helper;
 pub mod ui;
+pub mod window;
 
 // ── Core re-exports ───────────────────────────────────────────────────────────
 
@@ -69,6 +70,8 @@ pub fn run_gui() -> iced::Result {
                     Message::UpdateCheckCompleted,
                 ));
             }
+            // macOS: Dock icon and Window menu (a no-op elsewhere).
+            tasks.push(window::setup());
             (initial_state, Task::batch(tasks))
         },
         FlashKraft::update,
@@ -77,6 +80,7 @@ pub fn run_gui() -> iced::Result {
     .title("FlashKraft - OS Image Writer")
     .subscription(FlashKraft::subscription)
     .theme(|state: &FlashKraft| state.theme.clone())
+    .scale_factor(|state: &FlashKraft| state.ui_scale)
     .settings(Settings {
         fonts: vec![iced_fonts::BOOTSTRAP_FONT_BYTES.into()],
         ..Default::default()

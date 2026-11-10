@@ -1,70 +1,107 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- FlashKraft app icon: a disc image streams into a drive's sectors, one written, one being written, one empty.
-       Master artwork. `just icons` derives every platform icon from this file:
-       the small sizes drop the construction and detail blocks, macOS adds its margin and shadow. -->
+  <!-- FlashKraft app icon: a graphite USB stick lit cyan on one edge and orange on the
+       other, with a bolt-shaped tank about two thirds full of glowing orange (the write
+       level). Master artwork; `nu scripts/icons.nu` derives every platform icon from it.
+       Marked blocks are dropped in the small variant (see the skill `app-icon`). -->
   <defs>
-    <clipPath id="fk-tile"><rect width="1024" height="1024" rx="228"/></clipPath>
-    <radialGradient id="fk-bg" cx="0.35" cy="0.25" r="1">
-      <stop offset="0" stop-color="#22252d"/>
-      <stop offset="1" stop-color="#0a0b0e"/>
+    <radialGradient id="bg" cx="0.3" cy="0.12" r="1.15">
+      <stop offset="0" stop-color="#2b3050"/>
+      <stop offset="1" stop-color="#090910"/>
     </radialGradient>
-    <linearGradient id="fk-rim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
-      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.03"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff6a1e" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#ff6a1e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.06"/>
     </linearGradient>
-    <linearGradient id="fk-ivory" gradientUnits="userSpaceOnUse" x1="0" y1="180" x2="0" y2="850">
-      <stop offset="0" stop-color="#fbf6ec"/>
-      <stop offset="1" stop-color="#d6cab4"/>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7783b4"/>
+      <stop offset="0.45" stop-color="#394167"/>
+      <stop offset="1" stop-color="#1a1f36"/>
     </linearGradient>
-    <linearGradient id="fk-accent" gradientUnits="userSpaceOnUse" x1="300" y1="250" x2="740" y2="800">
-      <stop offset="0" stop-color="#8be4f4"/>
-      <stop offset="0.5" stop-color="#2fb0d4"/>
-      <stop offset="1" stop-color="#1a76a0"/>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8fe9ff"/>
+      <stop offset="0.4" stop-color="#4cc3ff" stop-opacity="0.55"/>
+      <stop offset="0.62" stop-color="#4cc3ff" stop-opacity="0"/>
+      <stop offset="0.75" stop-color="#ff7a2a" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#ffa253"/>
     </linearGradient>
-    <filter id="fk-lift" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.5"/>
+    <linearGradient id="chrome" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8e9bb2"/>
+      <stop offset="0.28" stop-color="#f5f9ff"/>
+      <stop offset="0.55" stop-color="#b8c4d8"/>
+      <stop offset="0.8" stop-color="#eef3fb"/>
+      <stop offset="1" stop-color="#7f8ca3"/>
+    </linearGradient>
+    <linearGradient id="fill" x1="0" y1="850" x2="0" y2="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff4d0a"/>
+      <stop offset="1" stop-color="#ffb066"/>
+    </linearGradient>
+    <path id="shape"
+          d="M450 360 H574 A78 78 0 0 1 652 438 V732 L564 820 H450 A78 78 0 0 1 372 742 V438 A78 78 0 0 1 450 360 Z"/>
+    <path id="bolt" d="M566 500 L440 690 H514 L478 850 L612 650 H534 L592 500 Z"/>
+    <clipPath id="bodyclip"><use href="#shape"/></clipPath>
+    <clipPath id="boltclip"><use href="#bolt"/></clipPath>
+    <clipPath id="level"><rect x="400" y="598" width="260" height="270"/></clipPath>
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#000" flood-opacity="0.6"/>
     </filter>
-    <!-- fine grain: dithers the dark gradient so large sizes show no banding -->
-    <filter id="fk-grain" x="0" y="0" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7"/>
-      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 -0.4"/>
+    <filter id="neon" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="led" x="-300%" y="-300%" width="700%" height="700%">
+      <feGaussianBlur stdDeviation="6"/>
     </filter>
   </defs>
 
-  <rect width="1024" height="1024" rx="228" fill="url(#fk-bg)"/>
-  <rect width="1024" height="1024" filter="url(#fk-grain)" clip-path="url(#fk-tile)" opacity="0.06"/>
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <ellipse cx="560" cy="640" rx="400" ry="400" fill="url(#halo)"/>
 
   <!-- construction:start -->
-  <g clip-path="url(#fk-tile)" fill="none" stroke="#93d3e2" stroke-width="2.5">
-    <circle cx="512" cy="512" r="400" stroke-opacity="0.22"/>
-    <circle cx="512" cy="300" r="190" stroke-opacity="0.14"/>
-    <path d="M512 40 V 984 M300 40 V 984 M724 40 V 984" stroke-opacity="0.13"/>
-    <path d="M40 600 H 984 M40 700 H 984 M40 800 H 984" stroke-opacity="0.13"/>
-    <path d="M40 300 H 984" stroke-opacity="0.22" stroke-dasharray="6 10"/>
-    <g stroke-opacity="0.45">
-      <path d="M300 880 H 724 M300 868 V 892 M724 868 V 892"/>
-      <path d="M580 660 V 740"/><rect x="573" y="693" width="14" height="14"/>
-    </g>
-  <g fill="#93d3e2" fill-opacity="0.5"><circle cx="512" cy="512" r="5"/><circle cx="300" cy="300" r="5"/><circle cx="724" cy="300" r="5"/></g>
-  </g>
+  <circle cx="512" cy="512" r="436" fill="none" stroke="#8fe9ff" stroke-opacity="0.16" stroke-width="3" stroke-dasharray="2 16" stroke-linecap="round"/>
   <!-- construction:end -->
 
   <!-- mark:start -->
-  <g filter="url(#fk-lift)">
-    <path d="M512 410 V 600" fill="none" stroke="url(#fk-accent)" stroke-width="64" stroke-linecap="round"/>
-    <path d="M300 600 H 724" fill="none" stroke="url(#fk-accent)" stroke-width="64" stroke-linecap="round"/>
-    <path d="M300 700 H 560" fill="none" stroke="url(#fk-accent)" stroke-width="64" stroke-linecap="round"/>
-    <path d="M640 700 H 724" fill="none" stroke="url(#fk-ivory)" stroke-width="64" stroke-linecap="round" stroke-opacity="0.9"/>
-    <path d="M300 800 H 724" fill="none" stroke="url(#fk-ivory)" stroke-width="64" stroke-linecap="round" stroke-opacity="0.9"/>
-    <circle cx="512" cy="300" r="120" fill="url(#fk-ivory)"/>
-  </g>
-  <g fill="#121419">
-    <circle cx="512" cy="300" r="40"/>
+  <g transform="translate(490 520) rotate(-22) scale(1.38) translate(-512 -528)" filter="url(#lift)">
+    <!-- plug: chrome shell, two contact slots, a dark collar where it meets the body -->
+    <rect x="428" y="232" width="168" height="178" rx="26" fill="url(#chrome)"/>
+    <rect x="462" y="270" width="32" height="46" rx="10" fill="#161b30"/>
+    <rect x="530" y="270" width="32" height="46" rx="10" fill="#161b30"/>
+    <!-- detail:start -->
+    <rect x="428" y="232" width="168" height="178" rx="26" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3"/>
+    <rect x="428" y="372" width="168" height="38" fill="#0b0d1a" opacity="0.28"/>
+    <!-- detail:end -->
+
+    <!-- body: graphite glass, chamfered bottom corner -->
+    <use href="#shape" fill="url(#body)"/>
+    <!-- detail:start -->
+    <path clip-path="url(#bodyclip)" d="M372 360 H652 V470 L372 650 Z" fill="#fff" opacity="0.09"/>
+    <!-- detail:end -->
+
+    <!-- bolt tank: dark well, neon glow, orange fill -->
+    <use href="#bolt" transform="translate(512 592) scale(1.12) translate(-526 -675)" fill="#05060d"/>
+    <g transform="translate(512 592) scale(1.12) translate(-526 -675)">
+      <g clip-path="url(#level)" filter="url(#neon)" opacity="0.85"><use href="#bolt" fill="#ff6a1e"/></g>
+      <g clip-path="url(#level)"><use href="#bolt" fill="url(#fill)"/></g>
+      <!-- detail:start -->
+      <path d="M400 598 H660" stroke="#ffe3c4" stroke-width="5" clip-path="url(#boltclip)"/>
+      <use href="#bolt" fill="none" stroke="#8fe9ff" stroke-opacity="0.35" stroke-width="3"/>
+      <!-- detail:end -->
+    </g>
+
+    <!-- lit edge: cyan top-left, orange bottom-right -->
+    <use href="#shape" fill="none" stroke="url(#edge)" stroke-width="10"/>
+    <!-- detail:start -->
+    <circle cx="612" cy="404" r="11" fill="#7fe9ff" filter="url(#led)"/>
+    <circle cx="612" cy="404" r="7" fill="#d9fbff"/>
+    <!-- detail:end -->
   </g>
   <!-- mark:end -->
 
   <!-- rim:start -->
-  <rect x="5" y="5" width="1014" height="1014" rx="223" fill="none" stroke="url(#fk-rim)" stroke-width="10"/>
+  <rect x="5" y="5" width="1014" height="1014" rx="223" fill="none" stroke="url(#rim)" stroke-width="10"/>
   <!-- rim:end -->
 </svg>

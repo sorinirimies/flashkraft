@@ -41,7 +41,43 @@ struct CrateInfo {
 /// to date *or* the check failed for any reason (network error, timeout,
 /// parse failure) — an update check must never be disruptive, so errors are
 /// swallowed rather than surfaced to the user.
+///
+/// `reqwest`'s async client needs a live Tokio reactor to drive its sockets
+/// and timeouts. The GUI's own async tasks run on Iced's executor, which is
+/// a plain `futures::executor::ThreadPool` — *not* Tokio — so calling
+/// `reqwest` directly from here panics with "there is no reactor running".
+/// On a multi-core dev box that panic just kills one spare worker thread
+/// and goes unnoticed, but `ThreadPool` never replaces dead workers: on a
+/// single/low-core machine it can exhaust the pool on the very first frame
+/// and silently stall every other async command (drive scanning, the file
+/// picker, …) for the rest of the run.
+///
+/// To stay isolated from whatever executor the caller is on, the whole
+/// request runs on a dedicated OS thread with its own single-threaded Tokio
+/// runtime, and the result is bridged back through a plain (non-Tokio)
+/// oneshot channel.
 pub async fn check_for_update(current_version: &str) -> Option<String> {
+    let current_version = current_version.to_string();
+    let (tx, rx) = futures::channel::oneshot::channel();
+
+    std::thread::spawn(move || {
+        let result = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .ok()
+            .and_then(|rt| rt.block_on(fetch_latest_version(&current_version)));
+        // Ignore send errors: the receiver may have been dropped if the
+        // caller no longer cares about the result.
+        let _ = tx.send(result);
+    });
+
+    rx.await.ok().flatten()
+}
+
+/// Fetch `max_stable_version` from crates.io and compare it to
+/// `current_version`. Must run inside a Tokio runtime (see
+/// [`check_for_update`]).
+async fn fetch_latest_version(current_version: &str) -> Option<String> {
     let client = reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .user_agent(USER_AGENT)

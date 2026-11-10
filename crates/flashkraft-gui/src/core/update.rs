@@ -453,6 +453,82 @@ pub fn update(state: &mut FlashKraft, message: Message) -> Task<Message> {
             state.update_banner = None;
             Task::none()
         }
+
+        Message::ToggleAbout => {
+            state.show_about = !state.show_about;
+            if state.show_about {
+                state.show_settings = false;
+            }
+            Task::none()
+        }
+
+        Message::ToggleSettings => {
+            state.show_settings = !state.show_settings;
+            if state.show_settings {
+                state.show_about = false;
+            }
+            Task::none()
+        }
+
+        Message::ZoomIn => {
+            set_ui_scale(state, state.ui_scale + 0.1);
+            Task::none()
+        }
+
+        Message::ZoomOut => {
+            set_ui_scale(state, state.ui_scale - 0.1);
+            Task::none()
+        }
+
+        Message::ZoomReset => {
+            set_ui_scale(state, 1.0);
+            Task::none()
+        }
+
+        Message::OpenUrl(url) => {
+            open_url(&url);
+            Task::none()
+        }
+
+        Message::Noop => Task::none(),
+    }
+}
+
+/// Clamp to `0.5..=2.0`, round to one decimal (so repeated +/- steps land on
+/// clean percentages like 110% rather than drifting with float error), apply
+/// and persist.
+fn set_ui_scale(state: &mut FlashKraft, scale: f32) {
+    let scale = ((scale * 10.0).round() / 10.0).clamp(0.5, 2.0);
+    state.ui_scale = scale;
+    if let Some(storage) = state.storage.as_mut()
+        && let Err(e) = storage.save_ui_scale(scale)
+    {
+        eprintln!("Failed to save UI scale preference: {e}");
+    }
+}
+
+/// Open a URL with the OS's default handler. Best-effort: failures are
+/// logged, never surfaced as an application error (it's just an About-dialog
+/// link).
+fn open_url(url: &str) {
+    let result = {
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open").arg(url).spawn()
+        }
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", url])
+                .spawn()
+        }
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            std::process::Command::new("xdg-open").arg(url).spawn()
+        }
+    };
+    if let Err(e) = result {
+        eprintln!("Failed to open {url}: {e}");
     }
 }
 
@@ -1132,5 +1208,76 @@ mod tests {
         state.batch = Some(flashkraft_core::MultiState::new(&["x".into()]));
         let _ = update(&mut state, Message::CancelFlash);
         assert!(state.batch.is_none());
+    }
+
+    /// A state that never touches the real `~/.config/flashkraft/gui-settings.json`
+    /// (zoom persists `ui_scale`; parallel tests would race and pollute the user's file).
+    fn isolated_state() -> FlashKraft {
+        let mut state = FlashKraft::new();
+        state.storage = None;
+        state.ui_scale = 1.0;
+        state
+    }
+
+    #[test]
+    fn test_toggle_about_opens_and_closes_and_closes_settings() {
+        let mut state = isolated_state();
+        state.show_settings = true;
+
+        let _ = update(&mut state, Message::ToggleAbout);
+        assert!(state.show_about);
+        assert!(!state.show_settings, "opening About should close Settings");
+
+        let _ = update(&mut state, Message::ToggleAbout);
+        assert!(!state.show_about);
+    }
+
+    #[test]
+    fn test_toggle_settings_opens_and_closes_and_closes_about() {
+        let mut state = isolated_state();
+        state.show_about = true;
+
+        let _ = update(&mut state, Message::ToggleSettings);
+        assert!(state.show_settings);
+        assert!(!state.show_about, "opening Settings should close About");
+
+        let _ = update(&mut state, Message::ToggleSettings);
+        assert!(!state.show_settings);
+    }
+
+    #[test]
+    fn test_zoom_in_out_reset_clamp_and_step() {
+        let mut state = isolated_state();
+        assert_eq!(state.ui_scale, 1.0);
+
+        let _ = update(&mut state, Message::ZoomIn);
+        assert!((state.ui_scale - 1.1).abs() < 1e-6, "{}", state.ui_scale);
+
+        let _ = update(&mut state, Message::ZoomOut);
+        let _ = update(&mut state, Message::ZoomOut);
+        assert!((state.ui_scale - 0.9).abs() < 1e-6, "{}", state.ui_scale);
+
+        let _ = update(&mut state, Message::ZoomReset);
+        assert_eq!(state.ui_scale, 1.0);
+
+        // Clamp at the top.
+        for _ in 0..20 {
+            let _ = update(&mut state, Message::ZoomIn);
+        }
+        assert_eq!(state.ui_scale, 2.0);
+
+        // Clamp at the bottom.
+        for _ in 0..40 {
+            let _ = update(&mut state, Message::ZoomOut);
+        }
+        assert_eq!(state.ui_scale, 0.5);
+    }
+
+    #[test]
+    fn test_noop_does_nothing() {
+        let mut state = isolated_state();
+        let before = state.ui_scale;
+        let _ = update(&mut state, Message::Noop);
+        assert_eq!(state.ui_scale, before);
     }
 }

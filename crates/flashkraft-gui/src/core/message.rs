@@ -109,6 +109,34 @@ pub enum Message {
     /// User dismissed the "update available" banner before its auto-hide
     /// timer elapsed.
     DismissUpdateBanner,
+
+    // ========================================================================
+    // About / Settings / Zoom
+    // ========================================================================
+    /// Toggle the About dialog (gear/info icons in the header).
+    ToggleAbout,
+
+    /// Toggle the Settings panel.
+    ToggleSettings,
+
+    /// Increase the UI scale by one step (`Ctrl`/`Cmd` `+`, or the Settings
+    /// panel's "+" button).
+    ZoomIn,
+
+    /// Decrease the UI scale by one step (`Ctrl`/`Cmd` `-`, or the Settings
+    /// panel's "-" button).
+    ZoomOut,
+
+    /// Reset the UI scale to 100% (`Ctrl`/`Cmd` `0`, or the Settings panel's
+    /// "Reset" button).
+    ZoomReset,
+
+    /// Open a URL in the OS default browser (About dialog links).
+    OpenUrl(String),
+
+    /// No-op: used to swallow a click (e.g. on a modal panel) without it
+    /// falling through to whatever is behind it.
+    Noop,
 }
 
 // ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@
 #   GUI_ASSETS/<id>-128.rgba         the window icon (Windows, X11), when WINDOW_RGBA
 #   GUI_ASSETS/<id>-512.png          the window icon as PNG, when WINDOW_PNG
 #
-# Needs resvg and ImageMagick (`magick`); the .icns also needs macOS `iconutil`.
+# Needs resvg or rsvg-convert, and ImageMagick (`magick`), on any OS: the .icns is built here.
 # Usage: nu scripts/icons.nu   (or: just icons)
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -37,6 +37,8 @@ export const GUI_ASSETS = "crates/flashkraft-gui/assets"
 # Which window-icon formats the GUI embeds.
 export const WINDOW_RGBA = true
 export const WINDOW_PNG = false
+# The macOS Dock icon a bare binary sets at run time (set_dock_icon): the art on Apple's grid.
+export const DOCK_PNG = true
 
 # Apple's macOS icon grid: the body is 824 of 1024 px, centred.
 const MAC_BODY = 824
@@ -113,6 +115,7 @@ export def outputs []: nothing -> list<string> {
     let window = (
         (if $WINDOW_RGBA { [$"($GUI_ASSETS)/($id)-($WINDOW_ICON_SIZE).rgba"] } else { [] })
         ++ (if $WINDOW_PNG { [$"($GUI_ASSETS)/($id)-512.png"] } else { [] })
+        ++ (if $DOCK_PNG { [$"($GUI_ASSETS)/($id)-macos-512.png"] } else { [] })
     )
     $pngs ++ [
         $"packaging/macos/($id).icns"
@@ -121,19 +124,59 @@ export def outputs []: nothing -> list<string> {
     ] ++ $window
 }
 
+# The PNG entries of an .icns: OSType and pixel size, 16 px to 1024 px (retina pairs included).
+export const ICNS_TYPES = [
+    {ostype: icp4, px: 16} {ostype: icp5, px: 32} {ostype: icp6, px: 64}
+    {ostype: ic07, px: 128} {ostype: ic08, px: 256} {ostype: ic09, px: 512} {ostype: ic10, px: 1024}
+    {ostype: ic11, px: 32} {ostype: ic12, px: 64} {ostype: ic13, px: 256} {ostype: ic14, px: 512}
+]
+
+# A 32-bit big-endian integer as 4 bytes.
+export def u32-be [n: int]: nothing -> binary {
+    [24 16 8 0] | each {|shift| ($n // (2 ** $shift)) mod 256 | into binary | bytes at 0..0 } | bytes collect
+}
+
+# One .icns entry: its OSType, its length (header included), then the PNG bytes.
+export def icns-entry [ostype: string, png: binary]: nothing -> binary {
+    [($ostype | into binary) (u32-be (($png | bytes length) + 8)) $png] | bytes collect
+}
+
+# An .icns file: the `icns` magic, the total length, then the entries.
+export def icns-bytes [entries: list<binary>]: nothing -> binary {
+    let body = $entries | bytes collect
+    [("icns" | into binary) (u32-be (($body | bytes length) + 8)) $body] | bytes collect
+}
+
+# The first installed SVG rasteriser out of resvg and rsvg-convert, or null.
+export def pick-rasteriser [installed: list<string>]: nothing -> any {
+    [resvg rsvg-convert] | where {|t| $t in $installed } | get 0?
+}
+
+# The rasteriser's argv for svg -> png at px × px.
+export def raster-args [tool: string, svg: string, px: int, out: string]: nothing -> list<string> {
+    match $tool {
+        "resvg" => ["--width" ($px | into string) "--height" ($px | into string) $svg $out]
+        "rsvg-convert" => ["-w" ($px | into string) "-h" ($px | into string) $svg "-o" $out]
+        _ => { error make {msg: $"unknown rasteriser: ($tool)"} }
+    }
+}
+
 def need [tool: string, hint: string] {
     if (which $tool | is-empty) { error make {msg: $"($tool) not found: ($hint)"} }
 }
 
 # Rasterise variant `kind` at `px` × `px` into `out`.
 def render [variants: record, kind: string, px: int, out: string] {
-    ^resvg --width $px --height $px ($variants | get $kind) $out
+    let tool = pick-rasteriser (which resvg rsvg-convert | get command)
+    ^$tool ...(raster-args $tool ($variants | get $kind) $px $out)
 }
 
 def main [] {
     let root = $env.FILE_PWD | path dirname
     cd $root
-    need resvg "brew install resvg  /  cargo install resvg"
+    if (pick-rasteriser (which resvg rsvg-convert | get command)) == null {
+        error make {msg: "no SVG rasteriser: brew install resvg  /  apt install librsvg2-bin  /  cargo install resvg"}
+    }
     need magick "brew install imagemagick  /  apt install imagemagick"
     let id = $APP.id
 
@@ -166,16 +209,17 @@ def main [] {
     }
     if $WINDOW_PNG { render $variants full 512 $"($GUI_ASSETS)/($id)-512.png" }
 
-    # macOS .icns
-    if (which iconutil | is-empty) {
-        print -e $"⚠️  iconutil not found \(macOS only\): packaging/macos/($id).icns left as it is"
-    } else {
-        let set = $"($tmp)/($id).iconset"
-        mkdir $set
-        for e in (iconset-entries) { render $variants (kind-for $e.px true) $e.px $"($set)/($e.name)" }
-        mkdir packaging/macos
-        ^iconutil --convert icns --output $"packaging/macos/($id).icns" $set
+    # The Dock icon a bare binary (cargo install) sets on macOS: the art on Apple's grid
+    if $DOCK_PNG { render $variants macos 512 $"($GUI_ASSETS)/($id)-macos-512.png" }
+
+    # macOS .icns, written here: no Mac and no iconutil needed
+    mkdir packaging/macos
+    let entries = $ICNS_TYPES | each {|e|
+        let p = $"($tmp)/icns-($e.ostype).png"
+        render $variants (kind-for $e.px true) $e.px $p
+        icns-entry $e.ostype (open --raw $p)
     }
+    icns-bytes $entries | save --force --raw $"packaging/macos/($id).icns"
 
     rm --recursive $tmp
     print $"✅ icons written:\n(outputs | each {|f| $'  ($f)' } | str join "\n")"

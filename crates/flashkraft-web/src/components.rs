@@ -16,7 +16,7 @@ pub(crate) async fn brand(active: String) -> Result<impl View> {
     let (c_drives, c_hist, c_about) = (pick("drives"), pick("history"), pick("about"));
     Ok(view! {
         <div class="brand">
-            <h1><a href="/" class="logo"><span class="bolt">"⚡"</span> "Flash" <span class="kraft">"Kraft"</span></a> <small class="ver">(concat!("v", env!("CARGO_PKG_VERSION")))</small></h1>
+            <h1><a href="/" class="logo"><img class="logo-img" src="/icon.svg" alt="" width="40" height="40"><span>"Flash" <span class="kraft">"Kraft"</span></span></a> <small class="ver">(concat!("v", env!("CARGO_PKG_VERSION")))</small></h1>
             <nav class="tabs" aria-label="Pages">
                 <a class=(c_drives) href="/">"Drives"</a>
                 <a class=(c_hist) href="/history">"History"</a>
@@ -26,7 +26,8 @@ pub(crate) async fn brand(active: String) -> Result<impl View> {
     })
 }
 
-/// Three step cards (image → drive → flash) that light up as each is satisfied.
+/// Compact step breadcrumb (image → drive → flash) — a single text line, not
+/// another row of boxed tiles sitting on top of the stat cards below it.
 #[component]
 pub(crate) async fn steps(s: &Snapshot) -> Result<impl View> {
     let has_image = s.image.is_some();
@@ -41,23 +42,13 @@ pub(crate) async fn steps(s: &Snapshot) -> Result<impl View> {
     } else {
         "step"
     };
-    let t1 = s
-        .image
-        .as_ref()
-        .map(|i| i.name.clone())
-        .unwrap_or_else(|| "Choose an image".into());
-    let t2 = if has_drive {
-        "A drive fits".to_string()
-    } else {
-        "Pick a drive".to_string()
-    };
     Ok(view! {
         <section class="steps" aria-label="Flash steps">
-            <div class=(c1)><span class="n">"1"</span><div><b>"Select image"</b><span class="sub">(t1)</span></div></div>
+            <span class=(c1)>(if has_image { "✓" } else { "1" }) " Select image"</span>
             <span class="arrow">"▸"</span>
-            <div class=(c2)><span class="n">"2"</span><div><b>"Select drive"</b><span class="sub">(t2)</span></div></div>
+            <span class=(c2)>(if has_drive { "✓" } else { "2" }) " Select drive"</span>
             <span class="arrow">"▸"</span>
-            <div class=(c3)><span class="n">"3"</span><div><b>"Flash!"</b><span class="sub">(if has_image && has_drive { "tick drives below" } else { "tick drives, then flash" })</span></div></div>
+            <span class=(c3)>"3 Flash!"</span>
         </section>
     })
 }

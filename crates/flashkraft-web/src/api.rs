@@ -4,9 +4,9 @@ use topcoat::{
     Result,
     context::Cx,
     router::{
-        StatusCode,
+        Body, HeaderValue, StatusCode,
         content::{Css, Js, Json},
-        query_params,
+        header, query_params,
         request::headers,
         route,
     },
@@ -130,7 +130,49 @@ async fn themes() -> Result<Json<serde_json::Value>> {
     Ok(Json(crate::theme::catalogue()))
 }
 
+/// The app icon (the master SVG), used by the header and as the favicon.
+const ICON_SVG: &str = include_str!("../assets/flashkraft.svg");
+
+#[route(GET "/icon.svg")]
+async fn icon() -> Result<([(header::HeaderName, HeaderValue); 2], Body)> {
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("image/svg+xml"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=86400"),
+            ),
+        ],
+        Body::from(ICON_SVG),
+    ))
+}
+
 #[route(GET "/style.css")]
 async fn style() -> Result<Css<&'static str>> {
     Ok(Css(CSS))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ICON_SVG;
+
+    #[test]
+    fn icon_is_the_master_svg() {
+        assert!(ICON_SVG.trim_start().starts_with("<svg"));
+        assert!(ICON_SVG.contains("</svg>"));
+    }
+
+    /// The crate-local copy must not drift from `assets/icons/flashkraft.svg`
+    /// (`just icons` refreshes it). Skipped when built from the published crate.
+    #[test]
+    fn icon_copy_matches_the_workspace_master() {
+        let master = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/icons/flashkraft.svg");
+        if let Ok(m) = std::fs::read_to_string(master) {
+            assert_eq!(m, ICON_SVG, "run `just icons`");
+        }
+    }
 }

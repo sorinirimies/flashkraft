@@ -352,6 +352,11 @@ lfs-pull:
 
 # ── Icons ─────────────────────────────────────────────────────────────────────
 
-# Regenerate every app icon (PNGs, .icns, .ico, window icon) from the master SVG in assets/icons (needs resvg, magick; iconutil for the .icns)
+# Regenerate every app icon (PNGs, .icns, .ico, window icon) from the master SVG in assets/icons (any OS; needs resvg or rsvg-convert, and magick)
 icons:
     nu scripts/icons.nu
+    cp assets/icons/flashkraft.svg crates/flashkraft-web/assets/flashkraft.svg
+
+# Show the icon in the terminal (kitty graphics / half-blocks)
+show-icon:
+    nu scripts/show_icon.nu assets/icons/flashkraft-256.png

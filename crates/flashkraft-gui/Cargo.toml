@@ -41,11 +41,22 @@ dirs       = { workspace = true }
 
 # ── Update checker (crates.io) ────────────────────────────────────────────────
 reqwest    = { workspace = true }
+# `reqwest`'s async client needs a Tokio reactor to drive sockets/timeouts.
+# Iced's own task executor is a plain `futures::executor::ThreadPool` — not
+# Tokio — so the update checker spins up its own single-threaded Tokio
+# runtime on a dedicated OS thread (see `core/commands/update_check.rs`).
+tokio      = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Explicitly enable both Wayland and X11 backends so the app works on any
 # Linux display server without needing env vars pre-set at build time.
 iced_winit = { version = "0.14", features = ["x11", "wayland"] }
+
+# macOS: Window menu (Minimize / Zoom / Move & Resize) and Dock icon.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2            = "0.6"
+objc2-app-kit    = { version = "0.3", features = ["NSApplication", "NSImage", "NSMenu", "NSMenuItem", "NSResponder"] }
+objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSObject"] }
 
 # ── Build dependencies ────────────────────────────────────────────────────────
 # winres embeds the UAC manifest into the Windows PE binary at compile time

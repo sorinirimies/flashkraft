@@ -1,6 +1,8 @@
 <div align="center">
 
-# ⚡ FlashKraft
+<img src="assets/icons/flashkraft-256.png" width="128" alt="FlashKraft icon">
+
+# FlashKraft
 
 **Write an OS image to one USB stick — or ten at once — from your terminal, your desktop or your browser.**
 

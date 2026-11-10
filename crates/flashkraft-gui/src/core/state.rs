@@ -118,6 +118,16 @@ pub struct FlashKraft {
     /// one currently running. `None` when no update is known/pending, or
     /// after the user dismissed the banner / its auto-hide timer elapsed.
     pub update_banner: Option<UpdateBanner>,
+
+    /// UI scale factor (1.0 = 100%). Adjusted with the Settings panel or
+    /// `Ctrl`/`Cmd` `+`/`-`/`0`; persisted across restarts.
+    pub ui_scale: f32,
+
+    /// Whether the About dialog is open (overlays everything else).
+    pub show_about: bool,
+
+    /// Whether the Settings panel is open (overlays everything else).
+    pub show_settings: bool,
 }
 
 /// State backing the dismissible "a new version is available" banner.
@@ -157,6 +167,8 @@ impl FlashKraft {
         let verify_animated_progress =
             AnimatedProgress::new_with_color(Color::from_rgb(0.18, 0.78, 0.45));
 
+        let ui_scale = storage.as_ref().map(|s| s.ui_scale()).unwrap_or(1.0);
+
         let mut this = Self {
             selected_image: None,
             selected_target: None,
@@ -182,6 +194,9 @@ impl FlashKraft {
             verify_animated_progress,
             animation_time: 0.0,
             update_banner: None,
+            ui_scale,
+            show_about: false,
+            show_settings: false,
         };
         if flashkraft_core::commands::demo::is_demo() {
             this.apply_demo_scene(std::env::var("FLASHKRAFT_SCENE").ok().as_deref());
@@ -480,6 +495,25 @@ impl FlashKraft {
 
         // Animation tick — always active for progress-line glow and spinner effects
         subscriptions.push(iced::window::frames().map(|_| Message::AnimationTick));
+
+        // Ctrl/Cmd +/-/0 zoom shortcuts — `command()` covers Cmd on macOS and
+        // Ctrl everywhere else, so the same handler works cross-platform.
+        subscriptions.push(iced::event::listen_with(|event, _status, _window| {
+            let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) =
+                event
+            else {
+                return None;
+            };
+            if !(modifiers.control() || modifiers.command()) {
+                return None;
+            }
+            match key.as_ref() {
+                iced::keyboard::Key::Character("+" | "=") => Some(Message::ZoomIn),
+                iced::keyboard::Key::Character("-") => Some(Message::ZoomOut),
+                iced::keyboard::Key::Character("0") => Some(Message::ZoomReset),
+                _ => None,
+            }
+        }));
 
         Subscription::batch(subscriptions)
     }
