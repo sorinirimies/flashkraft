@@ -1507,7 +1507,7 @@ checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "flashkraft"
-version = "2.4.0"
+version = "2.5.0"
 dependencies = [
  "dirs",
  "flashkraft-core",
@@ -1516,17 +1516,21 @@ dependencies = [
  "iced_fonts",
  "iced_winit",
  "nix 0.31.3",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
  "reqwest",
  "rfd",
  "serde",
  "serde_json",
+ "tokio",
  "tui-spinner",
  "winres",
 ]
 
 [[package]]
 name = "flashkraft-core"
-version = "2.4.0"
+version = "2.5.0"
 dependencies = [
  "dirs",
  "futures",
@@ -1555,7 +1559,7 @@ dependencies = [
 
 [[package]]
 name = "flashkraft-tui"
-version = "2.4.0"
+version = "2.5.0"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -2186,6 +2190,7 @@ dependencies = [
  "iced_runtime",
  "iced_widget",
  "iced_winit",
+ "image",
  "thiserror 2.0.21",
 ]
 
@@ -2267,6 +2272,8 @@ dependencies = [
  "half",
  "iced_core",
  "iced_futures",
+ "image",
+ "kamadak-exif",
  "log",
  "lyon_path",
  "raw-window-handle",
@@ -2712,6 +2719,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kamadak-exif"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8772c92c0f41c4a672cbdee6728253e5ae8fcc1c5eb5c6c676579565684bbf68"
+dependencies = [
+ "mutate_once",
+]
+
+[[package]]
 name = "kasuari"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3122,6 +3138,12 @@ dependencies = [
  "windows 0.62.2",
  "zbus",
 ]
+
+[[package]]
+name = "mutate_once"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13d2233c9842d08cfe13f9eac96e207ca6a2ea10b80259ebe8ad0268be27d2af"
 
 [[package]]
 name = "naga"

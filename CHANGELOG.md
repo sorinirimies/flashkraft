@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [2.5.0](https://github.com/sorinirimies/flashkraft/compare/v2.4.0...v2.5.0) — 2026-11-10
+
+### ✨ Features
+
+- **gui:** Redesign, About/Settings/zoom, resizable window, new app icon ([`4ef2e0c`](https://github.com/sorinirimies/flashkraft/commit/4ef2e0ce84b0757ce6b697c7adbed6d64c8eb40d))
+
 ## [2.4.0](https://github.com/sorinirimies/flashkraft/compare/v2.3.7...v2.4.0) — 2026-11-07
 
 ### ✨ Features
