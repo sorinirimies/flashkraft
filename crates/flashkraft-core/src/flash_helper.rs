@@ -2450,10 +2450,19 @@ mod tests {
         let dir = std::env::temp_dir();
         let empty = dir.join("fk_empty.img");
         std::fs::write(&empty, b"").unwrap();
+        // Portable stand-in for a device node: `/dev/null` does not exist on
+        // Windows, which would trip the "device not found" check first.
+        let device = dir.join("fk_empty_target.bin");
+        std::fs::write(&device, b"").unwrap();
 
         let (tx, rx) = make_channel();
         let cancel = Arc::new(AtomicBool::new(false));
-        run_pipeline(empty.to_str().unwrap(), "/dev/null", tx, cancel);
+        run_pipeline(
+            empty.to_str().unwrap(),
+            device.to_str().unwrap(),
+            tx,
+            cancel,
+        );
 
         let events = drain(&rx);
         let err = find_error(&events);
@@ -2461,6 +2470,7 @@ mod tests {
         assert!(err.unwrap().contains("empty"), "err={err:?}");
 
         let _ = std::fs::remove_file(empty);
+        let _ = std::fs::remove_file(device);
     }
 
     #[test]
