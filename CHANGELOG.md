@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [2.5.2](https://github.com/sorinirimies/flashkraft/compare/v2.5.1...v2.5.2) — 2026-11-12
+
+### 🧪 Tests
+
+- **core:** Use portable device placeholder in empty-image test ([`78cecca`](https://github.com/sorinirimies/flashkraft/commit/78ceccad3e394e0458fbe8aed2cb2383ba1717fb))
+
 ## [2.5.1](https://github.com/sorinirimies/flashkraft/compare/v2.5.0...v2.5.1) — 2026-11-10
 
 ### 📦 Dependencies
