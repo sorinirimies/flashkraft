@@ -214,13 +214,7 @@ mod tests {
         std::fs::File::create(&dev).unwrap();
 
         let (tx, mut rx) = make_channel();
-        run_flash(
-            img,
-            dev,
-            Arc::new(AtomicBool::new(true)),
-            tx,
-        )
-        .await;
+        run_flash(img, dev, Arc::new(AtomicBool::new(true)), tx).await;
 
         let events = drain(&mut rx);
         only_terminal_is_last(&events);
