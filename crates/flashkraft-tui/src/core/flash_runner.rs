@@ -205,14 +205,18 @@ mod tests {
 
     #[tokio::test]
     async fn run_flash_cancelled_before_start_reports_cancelled() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(tmp.path(), vec![1u8; 1024 * 1024]).unwrap();
-        let dev = tempfile::NamedTempFile::new().unwrap();
+        // Plain paths (no open handles): Windows denies exclusive access
+        // to a file that a NamedTempFile still holds open.
+        let dir = tempfile::tempdir().unwrap();
+        let img = dir.path().join("a.img");
+        let dev = dir.path().join("dev.bin");
+        std::fs::write(&img, vec![1u8; 1024 * 1024]).unwrap();
+        std::fs::File::create(&dev).unwrap();
 
         let (tx, mut rx) = make_channel();
         run_flash(
-            tmp.path().to_path_buf(),
-            dev.path().to_path_buf(),
+            img,
+            dev,
             Arc::new(AtomicBool::new(true)),
             tx,
         )
