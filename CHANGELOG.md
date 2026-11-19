@@ -4,6 +4,21 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [2.5.3](https://github.com/sorinirimies/flashkraft/compare/v2.5.2...v2.5.3) — 2026-11-19
+
+### 🧪 Tests
+
+- **tui:** Avoid open temp handles in cancel test (Windows sharing violation) ([`05b74f5`](https://github.com/sorinirimies/flashkraft/commit/05b74f5bf0bd35ca82bf24814bac42f6cdc84a6f))
+
+### 📦 Dependencies
+
+- Pin notify-types to 2.2.0 to keep MSRV 1.90 ([`06e6b83`](https://github.com/sorinirimies/flashkraft/commit/06e6b8364db818d03d5df27ef525965bb634a3ec))
+- Nightly cargo update 2026-11-13 ([`082c4f2`](https://github.com/sorinirimies/flashkraft/commit/082c4f258b3e6e002dc49c9559173d0685975780))
+
+### 💄 Style
+
+- **tui:** Cargo fmt flash_runner test ([`b106701`](https://github.com/sorinirimies/flashkraft/commit/b10670187ece44835755b5af8bad93161cc06eaa))
+
 ## [2.5.2](https://github.com/sorinirimies/flashkraft/compare/v2.5.1...v2.5.2) — 2026-11-12
 
 ### 🧪 Tests
