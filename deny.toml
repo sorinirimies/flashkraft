@@ -2,6 +2,7 @@
 yanked = "deny"
 # Unmaintained crates deep in the Iced GUI stack; nothing to upgrade to here.
 ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained: direct/transitive dep, no drop-in replacement adopted yet" },
     { id = "RUSTSEC-2024-0436", reason = "paste: via iced_wgpu → wgpu → metal" },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser: via iced → cosmic-text → fontdb" },
     { id = "RUSTSEC-2026-0370", reason = "zvariant: via iced_winit → mundy → zbus" },
