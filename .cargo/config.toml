@@ -6,3 +6,7 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
+
+# cargo update picks versions that build on the workspace rust-version (MSRV job).
+[resolver]
+incompatible-rust-versions = "fallback"
